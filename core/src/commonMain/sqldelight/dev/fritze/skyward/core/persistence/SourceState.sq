@@ -1,0 +1,18 @@
+-- §11: per-source persisted state (next_run_at, backoff_count, etags, ovation_grid, diagnostics_json).
+CREATE TABLE source_state (
+  source_id TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL,
+  updated_at TEXT NOT NULL, PRIMARY KEY (source_id, key)
+);
+
+selectBySource:
+SELECT * FROM source_state WHERE source_id = ?;
+
+selectValue:
+SELECT * FROM source_state WHERE source_id = ? AND key = ?;
+
+upsert:
+INSERT OR REPLACE INTO source_state(source_id, key, value, updated_at)
+VALUES (?, ?, ?, ?);
+
+deleteBySourceAndKey:
+DELETE FROM source_state WHERE source_id = ? AND key = ?;

@@ -1,0 +1,111 @@
+Skyward — Location-based reminders for natural & sky events
+Copyright (C) 2026 the Skyward contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version. See LICENSE for the full text.
+
+This NOTICE file enumerates third-party components and data bundled
+with or fetched by the app at runtime, per §16 of docs/design-doc.md.
+The About screen (§13.1) renders this list to the user.
+
+================================================================================
+Astronomy Engine — astronomy.kt
+================================================================================
+Source:    https://github.com/cosinekitty/astronomy
+Author:    Don Cross <cosinekitty@gmail.com>
+License:   MIT
+Bundled:   Yes — vendored source file at
+           core/src/commonMain/kotlin/dev/fritze/skyward/core/astro/vendored/astronomy.kt
+Notes:     Copyright and license header retained in the vendored file, per the
+           MIT license's attribution requirement. Not fetched from JitPack;
+           the upstream Kotlin/JVM artifact is JVM-only, but the source file
+           itself is pure Kotlin and compiles unmodified in commonMain.
+
+================================================================================
+Stellarium meteor-shower catalog — showers.json
+================================================================================
+Source:    https://github.com/Stellarium/stellarium (plugins/MeteorShowers)
+License:   GPL-2.0-or-later
+Bundled:   Yes — as a :core resource (core/src/commonMain/resources/showers.json)
+Notes:     Meteor shower data from the Stellarium project. This dependency is
+           why Skyward is licensed GPL-3.0-or-later (D8) — GPLv3+ is
+           compatible with GPL-2.0-or-later, so bundling is permitted.
+
+================================================================================
+Natural Earth 1:50m cultural/physical vectors
+================================================================================
+Source:    https://www.naturalearthdata.com/downloads/
+License:   Public domain
+Bundled:   Yes — converted at build time to a compact binary resource
+           (desktopApp map layer, §14.1)
+Notes:     Courtesy credit: "Made with Natural Earth."
+
+================================================================================
+NOAA Space Weather Prediction Center (SWPC) — Kp index & OVATION aurora data
+================================================================================
+Source:    https://services.swpc.noaa.gov/
+License:   US Government work, public domain
+Bundled:   No — fetched at runtime over HTTPS
+Notes:     Courtesy credit; no restriction.
+
+================================================================================
+NASA EONET — Earth Observatory Natural Event Tracker
+================================================================================
+Source:    https://eonet.gsfc.nasa.gov/
+License:   US Government / NASA open data
+Bundled:   No — fetched at runtime over HTTPS
+Notes:     Credit: "Event data: NASA EONET." EONET states its positions and
+           dates are approximations for general information purposes; the
+           app surfaces this disclaimer in the UI.
+
+================================================================================
+NASA/JPL Small-Body Database (SBDB) — comet orbital elements
+================================================================================
+Source:    https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html
+License:   US Government work, public domain
+Bundled:   No — fetched at runtime (monthly) over HTTPS
+Notes:     Credit: "Comet orbital data: NASA/JPL Small-Body Database." The
+           app sends a descriptive User-Agent per JPL's request.
+
+================================================================================
+NASA/JPL Horizons ephemerides
+================================================================================
+Source:    https://ssd-api.jpl.nasa.gov/doc/horizons.html
+License:   US Government work, public domain
+Bundled:   Test fixtures only (§17.3b) — not fetched at runtime by the app
+Notes:     Courtesy credit in test sources.
+
+================================================================================
+NASA GSFC Five Millennium Canon of Solar/Lunar Eclipses (Espenak & Meeus)
+================================================================================
+Source:    https://eclipse.gsfc.nasa.gov/SEpubs/5MKSE.html
+License:   Free with acknowledgment
+Bundled:   Test fixtures only (§17.1) — not fetched at runtime by the app
+Notes:     "Eclipse predictions courtesy of Fred Espenak and Jean Meeus,
+           NASA/GSFC."
+
+================================================================================
+~~COBS comet data~~ — EXCLUDED, not bundled or fetched (D12)
+================================================================================
+COBS (Comet OBServation database) is licensed CC BY-NC-SA 4.0. Its
+NonCommercial term would foreclose future monetization (P6) and its
+ShareAlike term is incompatible with GPL-3.0. It is deliberately not used
+anywhere in this project. Do not reintroduce it — see docs/design-doc.md
+§7.4 and §19 (R12) for the rationale and the permitted path forward.
+
+================================================================================
+Trademark note
+================================================================================
+NASA/NOAA logos and marks are not used anywhere in this app; attribution
+above is text-only.
+
+================================================================================
+Other Maven dependencies
+================================================================================
+Standard OSS libraries (Kotlin stdlib/coroutines/serialization/datetime,
+Ktor, SQLDelight, Jetpack Compose/AndroidX, Compose Multiplatform,
+ComposeNativeTray, two-slices) under Apache-2.0/MIT/BSD-style licenses —
+see the generated Gradle license report for the authoritative, version-pinned
+list.

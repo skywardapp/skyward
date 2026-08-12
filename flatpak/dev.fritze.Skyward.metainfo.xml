@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.fritze.Skyward</id>
+  <name>Skyward</name>
+  <summary>Location-based reminders for natural &amp; sky events</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Skyward tells you, ahead of time, about natural events worth seeing
+      from where you are — or from where you'd be willing to travel:
+      eclipses, aurora, meteor showers, comets, supermoons, and
+      conjunctions.
+    </p>
+  </description>
+  <launchable type="desktop-id">dev.fritze.Skyward.desktop</launchable>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-08-12">
+      <description>
+        <p>Initial scaffold — not yet a usable release (M0).</p>
+      </description>
+    </release>
+  </releases>
+</component>

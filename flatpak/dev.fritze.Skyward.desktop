@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Skyward
+Comment=Location-based reminders for natural & sky events
+Exec=skyward
+Icon=dev.fritze.Skyward
+Categories=Science;Education;
+Terminal=false

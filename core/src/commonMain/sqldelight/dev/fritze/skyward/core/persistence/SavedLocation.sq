@@ -1,0 +1,13 @@
+-- §11: saved locations. modified_at drives sync merge (§12.3).
+CREATE TABLE saved_location (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL,
+  lat_deg REAL NOT NULL, lon_deg REAL NOT NULL,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, modified_at TEXT NOT NULL
+);
+
+selectAll:
+SELECT * FROM saved_location ORDER BY is_primary DESC, name ASC;
+
+selectById:
+SELECT * FROM saved_location WHERE id = ?;

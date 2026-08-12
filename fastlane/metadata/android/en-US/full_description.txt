@@ -1,0 +1,36 @@
+Skyward tells you, ahead of time, about natural events worth seeing from
+where you are — or from where you'd be willing to travel.
+
+"A total solar eclipse crosses 180 km south of you next August — here's when
+to leave." "Kp is forecast at 6 tonight; aurora may be visible from your
+latitude." "Perseids peak Thursday night, new moon, radiant high after
+23:00."
+
+FEATURES
+
+* Solar and lunar eclipses, computed on-device — exact timing, obscuration,
+  and (for total/annular eclipses) the path of totality, with no network
+  access required.
+* Aurora alerts from NOAA's Kp forecast and OVATION nowcast, adjusted for
+  your geomagnetic latitude.
+* Meteor showers, using the Stellarium project's shower catalog, with
+  moonlight and radiant-altitude aware viewing quality.
+* Comets, from NASA/JPL orbital elements propagated on-device — predicted
+  magnitude, sky position, and best viewing window.
+* Supermoons and planetary conjunctions.
+* A fully custom reminder rule engine: compose your own conditions (how
+  close, how bright, how good a viewing quality) and notification schedule
+  per phenomenon, or use the sensible defaults.
+* "Where's the nearest place I *can* see this, and how far is that?" — every
+  phenomenon answers the travel question, not just the "visible from home"
+  question.
+
+PRIVACY
+
+Skyward is local-only: no account, no hosted backend, no telemetry. The only
+network traffic is direct HTTPS calls from your device to public data
+providers (NOAA, NASA) to fetch aurora, comet, and terrestrial-event data —
+everything else (eclipses, meteor showers, moon events, sky positions) is
+computed entirely on-device. Your saved locations never leave your device.
+
+Free software, GPL-3.0-or-later.

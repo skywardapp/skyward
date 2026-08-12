@@ -1,0 +1,22 @@
+.gradle/
+build/
+out/
+*.iml
+.idea/
+.kotlin/
+local.properties
+captures/
+.cxx/
+*.hprof
+.DS_Store
+
+# SQLDelight generated schema verification artifacts
+**/build/generated/
+
+# Desktop packaging output
+desktopApp/build/
+
+# fastlane screenshots are checked in under fastlane/metadata; but not local fastlane cache
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png.orig

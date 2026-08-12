@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder launcher foreground — a simple five-point star. Replace with
+     real brand artwork before first publication (R9). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M54,24 L61.5,45 L84,45 L65.7,58.5 L72.9,80 L54,66.7 L35.1,80 L42.3,58.5 L24,45 L46.5,45 Z" />
+</vector>

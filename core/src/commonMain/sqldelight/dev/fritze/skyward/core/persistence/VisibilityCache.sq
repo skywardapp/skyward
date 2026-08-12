@@ -1,0 +1,19 @@
+-- §11, §8.6: cached VisibilityModel.evaluate() results, keyed by a data_version
+-- hash so date-dependent models (comets) don't serve a stale verdict for a
+-- whole refresh cycle.
+CREATE TABLE visibility_cache (
+  occurrence_id TEXT NOT NULL, location_id TEXT NOT NULL,
+  data_version TEXT NOT NULL,
+  result_json TEXT NOT NULL, computed_at TEXT NOT NULL,
+  PRIMARY KEY (occurrence_id, location_id)
+);
+
+select_:
+SELECT * FROM visibility_cache WHERE occurrence_id = ? AND location_id = ?;
+
+upsert:
+INSERT OR REPLACE INTO visibility_cache(occurrence_id, location_id, data_version, result_json, computed_at)
+VALUES (?, ?, ?, ?, ?);
+
+deleteByOccurrence:
+DELETE FROM visibility_cache WHERE occurrence_id = ?;

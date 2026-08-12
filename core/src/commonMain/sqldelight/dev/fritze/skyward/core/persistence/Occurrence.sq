@@ -1,0 +1,26 @@
+-- §11: occurrences, the source-agnostic event records (§5, §6.3).
+CREATE TABLE occurrence (
+  id TEXT PRIMARY KEY, phenomenon TEXT NOT NULL, source_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  window_start TEXT NOT NULL, window_end TEXT NOT NULL, peak_time TEXT,
+  certainty TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL, expires_at TEXT, first_seen_at TEXT NOT NULL
+);
+CREATE INDEX occ_by_window ON occurrence(window_start, window_end);
+CREATE INDEX occ_by_source ON occurrence(source_id);
+
+selectAll:
+SELECT * FROM occurrence ORDER BY window_start ASC;
+
+selectById:
+SELECT * FROM occurrence WHERE id = ?;
+
+selectBySource:
+SELECT * FROM occurrence WHERE source_id = ?;
+
+selectIdsBySource:
+SELECT id FROM occurrence WHERE source_id = ?;
+
+deleteById:
+DELETE FROM occurrence WHERE id = ?;

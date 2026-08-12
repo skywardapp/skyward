@@ -1,0 +1,38 @@
+-- §10.4: planned reminders and their dedup/delivery state.
+CREATE TABLE planned_notification (
+  id TEXT PRIMARY KEY,
+  occurrence_id TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  location_id TEXT NOT NULL,
+  fire_at TEXT NOT NULL,
+  status TEXT NOT NULL,
+  precision TEXT NOT NULL DEFAULT 'EXACT',
+  title TEXT NOT NULL, body TEXT NOT NULL,
+  created_at TEXT NOT NULL, fired_at TEXT
+);
+CREATE INDEX notif_by_occurrence ON planned_notification(occurrence_id);
+CREATE INDEX notif_by_status_fire_at ON planned_notification(status, fire_at);
+
+selectAll:
+SELECT * FROM planned_notification ORDER BY fire_at ASC;
+
+selectById:
+SELECT * FROM planned_notification WHERE id = ?;
+
+selectByOccurrence:
+SELECT * FROM planned_notification WHERE occurrence_id = ?;
+
+selectPendingDue:
+SELECT * FROM planned_notification WHERE status IN ('PENDING', 'REGISTERED') AND fire_at <= ?;
+
+updateStatus:
+UPDATE planned_notification SET status = ?, fired_at = ? WHERE id = ?;
+
+updatePrecision:
+UPDATE planned_notification SET precision = ? WHERE id = ?;
+
+deleteById:
+DELETE FROM planned_notification WHERE id = ?;
+
+pruneFiredBefore:
+DELETE FROM planned_notification WHERE status = 'FIRED' AND fired_at < ?;

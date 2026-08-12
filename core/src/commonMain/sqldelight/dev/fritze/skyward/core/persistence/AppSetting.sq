@@ -1,0 +1,16 @@
+-- §11: flat key/value app settings. Keys include horizon_years, units,
+-- source.<id>.enabled, source.<id>.settings_json, aurora_tier_state,
+-- onboarding_done, background_mode (desktop), theme, schema_version.
+CREATE TABLE app_setting ( key TEXT PRIMARY KEY, value TEXT NOT NULL );
+
+selectAll:
+SELECT * FROM app_setting;
+
+selectByKey:
+SELECT * FROM app_setting WHERE key = ?;
+
+upsert:
+INSERT OR REPLACE INTO app_setting(key, value) VALUES (?, ?);
+
+deleteByKey:
+DELETE FROM app_setting WHERE key = ?;

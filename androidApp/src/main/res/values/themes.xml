@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pure Compose UI (Material 3 in-Compose, §13); this platform theme only
+         sets the window background/status bar before Compose takes over. -->
+    <style name="Theme.Skyward" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+</resources>

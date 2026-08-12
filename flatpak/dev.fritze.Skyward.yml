@@ -1,0 +1,33 @@
+## PLACEHOLDER — not built or tested by CI yet (M6/M7 work, §15.5).
+##
+## Intended shape: repackage desktopApp's `createReleaseDistributable`
+## jlinked tree with flatpak-builder rather than running Gradle inside the
+## (network-isolated) Flathub build sandbox — the FeedFlow-proven pattern
+## §15.5 references. This file is not that yet; it's a placeholder that
+## records the target runtime/permissions so M6 starts from something.
+
+app-id: dev.fritze.Skyward
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: skyward
+
+finish-args:
+  # Direct HTTPS to NOAA/NASA/JPL only (P1) — no other network use.
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # Background portal, for optional autostart (§10.3) — not blanket background access.
+  - --talk-name=org.freedesktop.portal.Background
+
+modules:
+  - name: skyward
+    buildsystem: simple
+    build-commands:
+      # TODO(M6/M7): copy the prebuilt createReleaseDistributable tree into
+      # /app and install dev.fritze.Skyward.desktop + metainfo.xml. Left
+      # unimplemented deliberately — there's nothing real to package yet.
+      - "echo 'flatpak build not implemented yet — see flatpak/README.md' && false"
+    sources: []

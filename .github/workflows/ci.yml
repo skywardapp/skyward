@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# M0 scope only (§18). §17.5b's release-build checks (assembleFossRelease /
+# assemblePlayRelease, reproducibility diffoscope diff, dependency-set-parity
+# between flavours) need a real signing config and land with M7.
+jobs:
+  check:
+    name: Build & check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform & build-tools
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # M0 (§18): commonTest on JVM, both flavours assemble, manifest-diff
+      # and licence-allowlist checks (§17.5b). Later milestones extend this
+      # job rather than replace it — see §17 for the full testing strategy.
+      - name: Check (commonTest, lint, manifest parity, dependency licences)
+        run: ./gradlew check --stacktrace
+
+      - name: Assemble both Android flavours (debug)
+        run: ./gradlew :androidApp:assembleFossDebug :androidApp:assemblePlayDebug --stacktrace
+
+      - name: Compile desktop app
+        run: ./gradlew :desktopApp:compileKotlin --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/build/reports/tests/
+            **/build/reports/lint-results-*.html
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Google Play flavour (§10.2, §15.1). This file, together with
+  src/foss/AndroidManifest.xml, must be the ONLY place the two flavours
+  diverge (D13) — the CI manifest-diff check (§17.5b) enforces this.
+
+  Note: the design doc's §15.1 layout names this src/playMain/ — corrected to
+  match AGP's actual flavor source-set convention; see
+  docs/adr/0001-flavor-source-set-naming.md.
+
+  USE_EXACT_ALARM is deliberately absent here: Play restricts it to "alarm or
+  timer" and "calendar apps that show event notifications" categories and
+  requires a Console declaration. SCHEDULE_EXACT_ALARM is user-grantable and
+  needs no declaration; the app asks for it in onboarding and degrades to the
+  APPROXIMATE path (§10.2) if refused.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+</manifest>

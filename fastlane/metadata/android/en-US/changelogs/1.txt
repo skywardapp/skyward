@@ -1,0 +1,2 @@
+Initial scaffold — not yet a usable release. Tracking milestone M0 of the
+implementation plan (see docs/design-doc.md §18).
