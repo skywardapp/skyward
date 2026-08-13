@@ -132,7 +132,7 @@ class SolarEclipseVisibilityModelTest {
         val farLoc = loc(GeoPoint(-payload.greatestEclipsePoint.latDeg, payload.greatestEclipsePoint.lonDeg + 150.0))
         val visResult = model.evaluate(partialOnly, farLoc, ctx)
 
-        val target = visResult.nearestVisiblePoint ?: return@runTest // this probe happened to already be visible; nothing to check
+        val target = assertNotNull(visResult.nearestVisiblePoint, "expected partial-only travel guidance")
         // Whatever the search found, it must describe *this* eclipse's own
         // local circumstances -- re-searching at the target must land a peak
         // within this occurrence's own window, not some other, later
