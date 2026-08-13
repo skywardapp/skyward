@@ -45,4 +45,17 @@ class RuleLimitsTest {
             assertTrue(RuleLimits.violations(rule).isEmpty(), "default rule '${rule.name}' violates limits: ${RuleLimits.violations(rule)}")
         }
     }
+
+    @Test
+    fun aRuleSetWithinTheCountLimitPassesCleanly() {
+        val rules = (1..RuleLimits.MAX_RULES).map { ruleWith(Cond.VisibleAtLocation()) }
+        assertTrue(RuleLimits.violations(rules).isEmpty())
+    }
+
+    @Test
+    fun aRuleSetExceedingTheCountLimitFails() {
+        val rules = (1..RuleLimits.MAX_RULES + 1).map { ruleWith(Cond.VisibleAtLocation()) }
+        val violations = RuleLimits.violations(rules)
+        assertTrue(violations.any { it.contains("rules") }, "expected a rule-count violation, got $violations")
+    }
 }

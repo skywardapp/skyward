@@ -123,8 +123,36 @@ class AuroraVisibilityModelTest {
         assertNull(noGridResult.travelDistanceKm, "no grid data means no travel guidance either")
     }
 
+    @Test
+    fun nowcastTravelTargetReachesTheGoodThresholdItWasSearchedFor() {
+        // Uniformly below-threshold except a high-probability band from
+        // latitude 53 north -- close enough to Munich (~556km) to fall
+        // within the NOWCAST travel search radius.
+        val grid = latitudeBandGrid(highLatThreshold = 53, highProbability = 60, lowProbability = 5)
+        val occ = nowcastOccurrence(tromsoWinterNight)
+        val result = model.evaluate(occ, loc(munich), VisibilityContext(now = tromsoWinterNight.start, ovationGrid = grid))
+
+        assertTrue(!result.visibleAtLocation)
+        assertEquals(Quality.NONE, result.quality)
+        assertNotNull(result.travelDistanceKm)
+        // The travel target was searched for at the probability>=50 (GOOD)
+        // threshold, not the THREE_DAY regime's MARGINAL one -- the two
+        // regimes must not share a hardcoded qualityAtNearestPoint.
+        assertEquals(Quality.GOOD, result.qualityAtNearestPoint)
+    }
+
     private fun uniformGrid(probability: Int): OvationGrid {
         val bytes = ByteArray(360 * 181) { probability.toByte() }
+        return OvationGrid(tromsoWinterNight.start, tromsoWinterNight.start, bytes)
+    }
+
+    private fun latitudeBandGrid(highLatThreshold: Int, highProbability: Int, lowProbability: Int): OvationGrid {
+        val bytes = ByteArray(360 * 181)
+        for (lon in 0 until 360) {
+            for (lat in -90..90) {
+                bytes[(lon * 181) + (lat + 90)] = (if (lat >= highLatThreshold) highProbability else lowProbability).toByte()
+            }
+        }
         return OvationGrid(tromsoWinterNight.start, tromsoWinterNight.start, bytes)
     }
 }

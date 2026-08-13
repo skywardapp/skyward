@@ -13,6 +13,25 @@ import io.github.cosinekitty.astronomy.horizon
 import io.github.cosinekitty.astronomy.searchAltitude
 import io.github.cosinekitty.astronomy.searchRiseSet
 import io.github.cosinekitty.astronomy.siderealTime
+import kotlin.time.Duration
+
+/**
+ * `[start, end]` sampled every [step], always including `end` itself even
+ * when it doesn't fall on an exact step boundary. Shared by the visibility
+ * models that scan a window at a fixed cadence looking for the best/any
+ * qualifying instant (meteor showers, comets, conjunctions).
+ */
+fun timeSamples(start: Time, end: Time, step: Duration): List<Time> {
+    val stepDays = step.inWholeSeconds / 86_400.0
+    val times = mutableListOf<Time>()
+    var t = start
+    while (t.tt <= end.tt) {
+        times += t
+        t = t.addDays(stepDays)
+    }
+    if (times.last().tt < end.tt) times += end
+    return times
+}
 
 /** Apparent altitude of [body] above the horizon at [observer], in degrees, refraction-corrected. */
 fun altitudeDeg(body: Body, time: Time, observer: Observer): Double {

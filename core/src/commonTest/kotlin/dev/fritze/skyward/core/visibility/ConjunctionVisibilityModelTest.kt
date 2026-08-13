@@ -1,7 +1,10 @@
 package dev.fritze.skyward.core.visibility
 
+import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.ConjunctionPayload
 import dev.fritze.skyward.core.model.GeoPoint
+import dev.fritze.skyward.core.model.Occurrence
+import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TimeWindow
@@ -51,14 +54,46 @@ class ConjunctionVisibilityModelTest {
 
         assertNull(visResult.travelDistanceKm)
         assertNull(visResult.nearestVisiblePoint)
-        if (visResult.quality != Quality.NONE) {
-            val expected = when {
-                payload.minSeparationDeg < 0.5 -> Quality.EXCELLENT
-                payload.minSeparationDeg < 1.0 -> Quality.GOOD
-                else -> Quality.MARGINAL
-            }
-            assertEquals(expected, visResult.quality)
+        // The documented March 2023 Venus-Jupiter conjunction is a real,
+        // well-known evening apparition -- if this evaluates to NONE, the
+        // gate logic (or the 15-min sampling window) is broken, not the fixture.
+        assertTrue(visResult.quality != Quality.NONE, "expected the documented Venus-Jupiter conjunction to be visible from Munich")
+        val expected = when {
+            payload.minSeparationDeg < 0.5 -> Quality.EXCELLENT
+            payload.minSeparationDeg < 1.0 -> Quality.GOOD
+            else -> Quality.MARGINAL
         }
+        assertEquals(expected, visResult.quality)
+    }
+
+    @Test
+    fun anUnrecognizedBodyNameIsNoneRatherThanACrash() {
+        val occ = Occurrence(
+            id = "cj:test",
+            phenomenon = Phenomenon.CONJUNCTION,
+            sourceId = "test",
+            title = "Conjunction",
+            window = TimeWindow(Instant.parse("2023-01-01T00:00:00Z"), Instant.parse("2023-01-02T00:00:00Z")),
+            peakTime = Instant.parse("2023-01-01T12:00:00Z"),
+            certainty = Certainty.CERTAIN,
+            // Simulates a stale/legacy persisted body name the vendored
+            // `Body` enum no longer recognizes (§6.4: payloads persist
+            // plain strings, not the enum, for exactly this reason).
+            payload = ConjunctionPayload(
+                body1 = "Venus",
+                body2 = "NoLongerARealBody",
+                minSeparationDeg = 0.3,
+                timeOfClosest = Instant.parse("2023-01-01T12:00:00Z"),
+            ),
+            fetchedAt = Instant.parse("2023-01-01T00:00:00Z"),
+            expiresAt = null,
+        )
+        val ctx = VisibilityContext(now = Instant.parse("2023-01-01T00:00:00Z"), ovationGrid = null)
+
+        val result = model.evaluate(occ, loc(GeoPoint(48.1351, 11.5820)), ctx)
+
+        assertEquals(Quality.NONE, result.quality)
+        assertTrue(!result.visibleAtLocation)
     }
 
     @Test
@@ -77,10 +112,12 @@ class ConjunctionVisibilityModelTest {
         val ctx = VisibilityContext(now = Instant.parse("2024-01-01T00:00:00Z"), ovationGrid = null)
         val here = loc(GeoPoint(48.1351, 11.5820))
 
+        var sawVisible = false
         for (occ in result.occurrences) {
             val payload = occ.payload as ConjunctionPayload
             val visResult = model.evaluate(occ, here, ctx)
             if (visResult.quality != Quality.NONE) {
+                sawVisible = true
                 val expected = when {
                     payload.minSeparationDeg < 0.5 -> Quality.EXCELLENT
                     payload.minSeparationDeg < 1.0 -> Quality.GOOD
@@ -89,5 +126,8 @@ class ConjunctionVisibilityModelTest {
                 assertEquals(expected, visResult.quality, "occ=${occ.id} sep=${payload.minSeparationDeg}")
             }
         }
+        // Otherwise a model that always returns NONE would pass this test
+        // vacuously -- a full year from Munich has real visible conjunctions.
+        assertTrue(sawVisible, "expected at least one visible conjunction across a full year")
     }
 }

@@ -94,7 +94,7 @@ class PlannerTest {
     }
 
     @Test
-    fun notifyOnFirstSeenAnchorsOnPeakTimeIndependentOfScheduleAnchor() {
+    fun notifyOnFirstSeenFiresAtDiscoveryTimeButKeysOnPeakTimeIndependentOfScheduleAnchor() {
         val home = loc("home", "Home")
         val r = rule("r", leads = emptyList(), notifyOnFirstSeen = true)
         val matches = listOf(Match(r, occ(), home, visres(Quality.GOOD)))
@@ -102,8 +102,12 @@ class PlannerTest {
         val desired = Planner.desiredNotifications(matches, now, utc)
 
         assertEquals(1, desired.size)
-        assertEquals(peak, desired.first().fireAt)
-        assertTrue(desired.first().id.endsWith("|first"))
+        // "fire as soon as occurrence first matches" (§9.6) -- discovery
+        // time, not the (possibly-distant) peak.
+        assertEquals(now, desired.first().fireAt)
+        // The dedup key still anchors on peakTime (not `now`), so exactly
+        // one first-seen notification is ever produced per occurrence.
+        assertEquals("se:test|${peak.epochSeconds}|first", desired.first().id)
     }
 
     @Test
@@ -119,6 +123,26 @@ class PlannerTest {
         assertEquals(1, desired.size)
         val fireAt = desired.first().fireAt
         assertEquals(Instant.parse("2026-02-01T06:00:00Z"), fireAt, "expected deferral to the end of the quiet window")
+    }
+
+    @Test
+    fun quietHoursDeferralIsDstSafe() {
+        val nyZone = TimeZone.of("America/New_York")
+        val home = loc("home", "Home")
+        // 2026-03-08T06:00:00Z = 01:00 EST (America/New_York, before that
+        // day's 02:00-local spring-forward transition) -- inside the
+        // 00:00-06:00 local quiet window. The deferred target, 06:00 local
+        // *that same day*, falls after the transition (EDT, UTC-4): 10:00Z,
+        // not 11:00Z -- the wrong answer elapsed-minutes-from-midnight
+        // arithmetic would give by ignoring the hour DST skips.
+        val rawFireAt = Instant.parse("2026-03-08T06:00:00Z")
+        val r = rule("r", leads = listOf(kotlin.time.Duration.ZERO), quietHours = QuietHours(0, 6))
+        val matches = listOf(Match(r, occ(peakTime = rawFireAt, windowEnd = rawFireAt + 12.hours), home, visres(Quality.GOOD)))
+
+        val desired = Planner.desiredNotifications(matches, now, nyZone)
+
+        assertEquals(1, desired.size)
+        assertEquals(Instant.parse("2026-03-08T10:00:00Z"), desired.first().fireAt)
     }
 
     @Test
@@ -204,6 +228,25 @@ class PlannerTest {
         val pastWindowNow = Instant.parse("2026-02-01T16:00:00Z") // after window end
         val missed = Planner.reconcile(listOf(overdue), stillDesired, pastWindowNow, mapOf(theOcc.id to theOcc))
         assertEquals(NotificationStatus.MISSED, missed.first().status)
+    }
+
+    @Test
+    fun reconcileUpdatesFireAtWhenTheSameKeyResolvesToADifferentTimeWithoutChangingStatus() {
+        // The dedup key doesn't encode `fireAt` -- if a re-plan resolves the
+        // same key to a different time (e.g. the device timezone changed,
+        // shifting a quiet-hours deferral), reconcile must still propagate
+        // the new time into an already-PENDING row rather than freezing it.
+        val home = loc("home", "Home")
+        val theOcc = occ()
+        val matches = listOf(Match(rule("r"), theOcc, home, visres(Quality.GOOD)))
+        val previous = Planner.desiredNotifications(matches, now, utc)
+        val shifted = previous.map { it.copy(fireAt = it.fireAt + 1.hours) }
+
+        val result = Planner.reconcile(previous, shifted, now, mapOf(theOcc.id to theOcc))
+
+        assertEquals(1, result.size)
+        assertEquals(NotificationStatus.PENDING, result.first().status)
+        assertEquals(shifted.first().fireAt, result.first().fireAt)
     }
 
     @Test

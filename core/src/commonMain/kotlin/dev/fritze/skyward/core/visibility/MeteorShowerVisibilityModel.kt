@@ -2,6 +2,7 @@ package dev.fritze.skyward.core.visibility
 
 import dev.fritze.skyward.core.astro.altitudeDeg
 import dev.fritze.skyward.core.astro.darknessWindow
+import dev.fritze.skyward.core.astro.timeSamples
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.model.LocalDetails
@@ -52,7 +53,7 @@ class MeteorShowerVisibilityModel : VisibilityModel {
             )
         }
 
-        val hourTimes = hourlySamples(night.start, night.end)
+        val hourTimes = timeSamples(night.start, night.end, 1.hours)
         val radiantAlts = hourTimes.map { radiantAltitudeDeg(payload, it, observer) }
         val moonAlts = hourTimes.map { altitudeDeg(Body.Moon, it, observer) }
         val maxRadiantAlt = radiantAlts.max()
@@ -92,17 +93,6 @@ class MeteorShowerVisibilityModel : VisibilityModel {
             travelBearingDeg = null,
             qualityAtNearestPoint = null,
         )
-    }
-
-    private fun hourlySamples(start: Time, end: Time): List<Time> {
-        val times = mutableListOf<Time>()
-        var t = start
-        while (t.tt <= end.tt) {
-            times += t
-            t = t.addDays(1.hours.inWholeSeconds / 86_400.0)
-        }
-        if (times.last().tt < end.tt) times += end
-        return times
     }
 
     /**

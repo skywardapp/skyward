@@ -41,6 +41,7 @@ class MoonEventVisibilityModelTest {
         assertTrue(result.occurrences.isNotEmpty(), "expected at least one supermoon in this span")
 
         val ctx = VisibilityContext(now = Instant.parse("2023-01-01T00:00:00Z"), ovationGrid = null)
+        var sawVisible = false
         for (occ in result.occurrences) {
             val payload = occ.payload as MoonEventPayload
             // Munich, at a longitude/latitude combination that virtually
@@ -50,9 +51,13 @@ class MoonEventVisibilityModelTest {
             assertNull(visResult.travelDistanceKm)
             assertNull(visResult.nearestVisiblePoint)
             if (visResult.quality != Quality.NONE) {
+                sawVisible = true
                 val expected = if (payload.perigeeDistanceKm < 357_000.0) Quality.EXCELLENT else Quality.GOOD
                 assertEquals(expected, visResult.quality, "occ=${occ.id} perigee=${payload.perigeeDistanceKm}")
             }
         }
+        // Otherwise a model that always returns NONE would pass this test
+        // vacuously -- a documented supermoon from Munich is visible.
+        assertTrue(sawVisible, "expected at least one visible supermoon across this span")
     }
 }

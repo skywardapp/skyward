@@ -41,7 +41,7 @@ class LunarEclipseVisibilityModel : VisibilityModel {
         } else {
             0.0
         }
-        val hasUmbralPhase = payload.partialBegin != null
+        val hasUmbralPhase = payload.partialBegin != null && payload.partialEnd != null
 
         val quality = when {
             hasUmbralPhase && umbralFraction >= 1.0 -> Quality.EXCELLENT

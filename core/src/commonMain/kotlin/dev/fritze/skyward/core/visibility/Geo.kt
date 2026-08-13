@@ -17,8 +17,8 @@ import kotlin.math.sqrt
 /** Mean Earth radius, km (§8.1). */
 const val EARTH_RADIUS_KM = 6371.0088
 
-private fun Double.toRadians() = this * PI / 180.0
-private fun Double.toDegrees() = this * 180.0 / PI
+internal fun Double.toRadians() = this * PI / 180.0
+internal fun Double.toDegrees() = this * 180.0 / PI
 
 /** Great-circle distance between [a] and [b], in km. */
 fun haversineDistanceKm(a: GeoPoint, b: GeoPoint): Double {

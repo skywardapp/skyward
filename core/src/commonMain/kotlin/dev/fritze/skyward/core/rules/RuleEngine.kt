@@ -35,9 +35,9 @@ object RuleEngine {
             is Cond.Or -> cond.any.any(::rec)
             is Cond.Not -> !rec(cond.inner)
 
-            is Cond.VisibleAtLocation -> visres.quality >= cond.minQuality
+            is Cond.VisibleAtLocation -> visres.visibleAtLocation && visres.quality >= cond.minQuality
             is Cond.ReachableWithin -> {
-                val locallyGood = visres.quality >= cond.minQualityThere
+                val locallyGood = visres.visibleAtLocation && visres.quality >= cond.minQualityThere
                 val travelKm = visres.travelDistanceKm
                 val travelGood = travelKm != null && travelKm <= cond.km &&
                     (visres.qualityAtNearestPoint?.let { it >= cond.minQualityThere } ?: false)
@@ -81,6 +81,10 @@ object RuleLimits {
         if (nodes > MAX_NODES_PER_RULE) violations += "condition tree has $nodes nodes, exceeds max $MAX_NODES_PER_RULE"
         return violations
     }
+
+    /** Save-time cap on the whole rule set, in addition to each rule's own [violations]. */
+    fun violations(rules: List<Rule>): List<String> =
+        if (rules.size > MAX_RULES) listOf("rule set has ${rules.size} rules, exceeds max $MAX_RULES") else emptyList()
 
     private fun depthOf(cond: Cond): Int = when (cond) {
         is Cond.And -> 1 + (cond.all.maxOfOrNull(::depthOf) ?: 0)

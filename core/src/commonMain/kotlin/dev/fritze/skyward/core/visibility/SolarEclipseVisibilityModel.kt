@@ -18,6 +18,7 @@ import io.github.cosinekitty.astronomy.Observer
 import io.github.cosinekitty.astronomy.Time
 import io.github.cosinekitty.astronomy.searchLocalSolarEclipse
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 /**
  * §8.2. Travel target for TOTAL/ANNULAR eclipses is the central path (people
@@ -73,8 +74,13 @@ class SolarEclipseVisibilityModel : VisibilityModel {
         val travelTarget = if (payload.centralPath.isNotEmpty()) {
             refineNearestCentralPathPoint(loc.point, payload.centralPath) to Quality.EXCELLENT
         } else {
-            nearestObscurationAtLeast(loc.point, payload.greatestEclipsePoint, PARTIAL_TRAVEL_TARGET_OBSCURATION, searchStart)
-                ?.let { it to Quality.GOOD }
+            nearestObscurationAtLeast(
+                loc.point,
+                payload.greatestEclipsePoint,
+                PARTIAL_TRAVEL_TARGET_OBSCURATION,
+                searchStart,
+                occ.window.start..occ.window.end,
+            )?.let { it to Quality.GOOD }
         }
 
         return VisibilityResult(
@@ -148,10 +154,24 @@ class SolarEclipseVisibilityModel : VisibilityModel {
      * `null` if even [target] itself never reaches [minObscuration] — no
      * point on Earth does, for this eclipse.
      */
-    private fun nearestObscurationAtLeast(loc: GeoPoint, target: GeoPoint, minObscuration: Double, searchStart: Time): GeoPoint? {
+    private fun nearestObscurationAtLeast(
+        loc: GeoPoint,
+        target: GeoPoint,
+        minObscuration: Double,
+        searchStart: Time,
+        window: ClosedRange<Instant>,
+    ): GeoPoint? {
         fun obscurationAt(p: GeoPoint): Double =
             runCatching { searchLocalSolarEclipse(searchStart, Observer(p.latDeg, p.lonDeg, 0.0)) }
-                .getOrNull()?.obscuration ?: 0.0
+                .getOrNull()
+                // A probe far from this eclipse can find no local eclipse at
+                // all *for this event* (peak below horizon there) and
+                // `searchLocalSolarEclipse` then returns the *next* local
+                // solar eclipse instead -- possibly months away. Reject
+                // anything whose peak falls outside this occurrence's own
+                // window so bisection never chases a different eclipse.
+                ?.takeIf { it.peak.time.toInstant() in window }
+                ?.obscuration ?: 0.0
 
         if (obscurationAt(target) < minObscuration) return null
 

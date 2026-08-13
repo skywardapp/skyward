@@ -37,12 +37,17 @@ class RuleEngineTest {
     private val loc = SavedLocation(id = "loc", name = "Home", point = GeoPoint(52.0, 7.6), isPrimary = true, createdAt = now, modifiedAt = now)
 
     private fun visres(
-        visible: Boolean = false,
+        // Every real model keeps visibleAtLocation == (quality != NONE) --
+        // TerrestrialVisibilityModel is the sole, deliberate exception
+        // (§8.8: it always reports false and defers to ReachableWithin) --
+        // so default this the same way rather than requiring every call
+        // site to keep the two arguments in sync by hand.
+        visible: Boolean? = null,
         quality: Quality = Quality.NONE,
         travelKm: Double? = null,
         qualityAtNearest: Quality? = null,
     ) = VisibilityResult(
-        visibleAtLocation = visible,
+        visibleAtLocation = visible ?: (quality != Quality.NONE),
         quality = quality,
         localDetails = null,
         nearestVisiblePoint = null,
@@ -150,6 +155,22 @@ class RuleEngineTest {
         assertFalse(RuleEngine.evaluate(cond, solarOcc(), loc, visres(quality = Quality.MARGINAL, travelKm = 900.0, qualityAtNearest = Quality.EXCELLENT), now))
         // No travel data at all.
         assertFalse(RuleEngine.evaluate(cond, solarOcc(), loc, visres(quality = Quality.MARGINAL), now))
+    }
+
+    @Test
+    fun visibleAtLocationAndReachableWithinIgnoreQualityWhenTheModelSaysNotLocallyVisible() {
+        // TerrestrialVisibilityModel (§8.8) always reports visibleAtLocation
+        // = false with a fixed non-NONE quality, deliberately, so that
+        // ReachableWithin's *local* branch never trusts quality alone --
+        // only the travel (distance + qualityAtNearestPoint) branch may
+        // pass such a result.
+        val notLocallyVisible = visres(visible = false, quality = Quality.GOOD)
+        assertFalse(RuleEngine.evaluate(Cond.VisibleAtLocation(Quality.GOOD), solarOcc(), loc, notLocallyVisible, now))
+
+        val cond = Cond.ReachableWithin(km = 300.0, minQualityThere = Quality.GOOD)
+        assertFalse(RuleEngine.evaluate(cond, solarOcc(), loc, notLocallyVisible, now), "quality alone must not satisfy the local branch")
+        val reachableByTravel = visres(visible = false, quality = Quality.GOOD, travelKm = 100.0, qualityAtNearest = Quality.GOOD)
+        assertTrue(RuleEngine.evaluate(cond, solarOcc(), loc, reachableByTravel, now), "the travel branch is unaffected")
     }
 
     // ---- phenomenon-parameter conditions, including the missing-field=false rule ----

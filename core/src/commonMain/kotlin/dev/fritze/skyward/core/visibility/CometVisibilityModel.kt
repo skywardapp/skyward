@@ -6,6 +6,7 @@ import dev.fritze.skyward.core.astro.apparentMagnitude
 import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.earthHeliocentricPositionEcliptic
 import dev.fritze.skyward.core.astro.heliocentricPosition
+import dev.fritze.skyward.core.astro.timeSamples
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.model.CometPayload
@@ -65,7 +66,7 @@ class CometVisibilityModel : VisibilityModel {
             )
         }
 
-        val hourTimes = hourlySamples(night.start, night.end)
+        val hourTimes = timeSamples(night.start, night.end, 1.hours)
         val altitudes = hourTimes.map { altitudeAt(payload, it, observer) ?: -90.0 }
         val maxAltIdx = altitudes.indices.maxBy { altitudes[it] }
         val maxAlt = altitudes[maxAltIdx]
@@ -131,17 +132,6 @@ class CometVisibilityModel : VisibilityModel {
      */
     private fun eclipticVecToEquatorial(v: Vec3, time: Time) =
         rotationEclEqj().rotate(Vector(v.x, v.y, v.z, time)).toEquatorial()
-
-    private fun hourlySamples(start: Time, end: Time): List<Time> {
-        val times = mutableListOf<Time>()
-        var t = start
-        while (t.tt <= end.tt) {
-            times += t
-            t = t.addDays(1.hours.inWholeSeconds / 86_400.0)
-        }
-        if (times.last().tt < end.tt) times += end
-        return times
-    }
 
     private companion object {
         const val MAGNITUDE_GATE = 6.0

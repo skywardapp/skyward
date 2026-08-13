@@ -1,5 +1,7 @@
 package dev.fritze.skyward.core.visibility
 
+import dev.fritze.skyward.core.astro.toAstroTime
+import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Quality
@@ -11,12 +13,16 @@ import dev.fritze.skyward.core.sources.DerivedThresholds
 import dev.fritze.skyward.core.sources.EclipseSource
 import dev.fritze.skyward.core.sources.RefreshRequest
 import dev.fritze.skyward.core.sources.SourceSettings
+import io.github.cosinekitty.astronomy.Observer
+import io.github.cosinekitty.astronomy.searchLocalSolarEclipse
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class SolarEclipseVisibilityModelTest {
@@ -102,6 +108,42 @@ class SolarEclipseVisibilityModelTest {
         // Either genuinely below horizon (NONE) or a valid low-obscuration
         // partial — either way it must not claim EXCELLENT/visible totality.
         assertTrue(result.quality != Quality.EXCELLENT)
+    }
+
+    @Test
+    fun partialOnlyTravelGuidanceNeverPointsAtADifferentEclipse() = runTest {
+        // Reuse the fast, narrow-horizon August 2026 total-eclipse fixture
+        // rather than searching a wide horizon for a genuinely partial-only
+        // eclipse (rare enough within a couple of years that it forces a
+        // slow multi-year EclipseSource query -- see the other tests'
+        // comments on refresh() path-sampling every total/annular eclipse
+        // in the horizon). Clearing centralPath forces the same
+        // partial-only code path (nearestObscurationAtLeast) this fix
+        // targets, against this real eclipse's real geometry --
+        // `searchLocalSolarEclipse` inside the model only cares about the
+        // occurrence's window/observer, not the payload's centralPath.
+        val totalEclipse = august2026TotalEclipse()
+        val payload = totalEclipse.payload as SolarEclipsePayload
+        val partialOnly = totalEclipse.copy(payload = payload.copy(centralPath = emptyList()))
+
+        // Antipodal-ish to the point of greatest eclipse, to land somewhere
+        // this eclipse likely isn't locally visible at all -- exercising the
+        // travel-guidance search path.
+        val farLoc = loc(GeoPoint(-payload.greatestEclipsePoint.latDeg, payload.greatestEclipsePoint.lonDeg + 150.0))
+        val visResult = model.evaluate(partialOnly, farLoc, ctx)
+
+        val target = visResult.nearestVisiblePoint ?: return@runTest // this probe happened to already be visible; nothing to check
+        // Whatever the search found, it must describe *this* eclipse's own
+        // local circumstances -- re-searching at the target must land a peak
+        // within this occurrence's own window, not some other, later
+        // eclipse that `searchLocalSolarEclipse` returns for a probe point
+        // where this eclipse isn't visible at all.
+        val searchStart = (partialOnly.window.start - 1.hours).toAstroTime()
+        val localAtTarget = searchLocalSolarEclipse(searchStart, Observer(target.latDeg, target.lonDeg, 0.0))
+        assertTrue(
+            localAtTarget.peak.time.toInstant() in partialOnly.window.start..partialOnly.window.end,
+            "expected travel guidance to describe occurrence ${partialOnly.id}'s own eclipse",
+        )
     }
 
     @Test

@@ -17,12 +17,13 @@ import dev.fritze.skyward.core.rules.RuleEngine
 import dev.fritze.skyward.core.rules.isInLocalHourRange
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** §9.2 step 3: a rule matching an (occurrence, location). */
@@ -86,12 +87,15 @@ object Planner {
                 }
             }
             if (m.rule.schedule.notifyOnFirstSeen) {
-                // §10.4: first-seen rows anchor on peakTime, or window.start
-                // when peakTime is null — deliberately not `schedule.anchor`,
-                // so the key stays stable regardless of which anchor mode
-                // the rule otherwise uses for its leads.
+                // §10.4: first-seen rows *key* on peakTime, or window.start
+                // when peakTime is null — deliberately not `now` — so the
+                // key stays stable and only ever produces one first-seen
+                // notification per occurrence, ever. The *fire time* is
+                // `now` itself: "fire as soon as occurrence first matches"
+                // (§9.6) means discovery time, not the (possibly distant)
+                // anchor.
                 val firstSeenAnchor = m.occ.peakTime ?: m.occ.window.start
-                val fireAt = applyQuietHours(firstSeenAnchor, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
+                val fireAt = applyQuietHours(now, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
                 val key = "${m.occ.id}|${firstSeenAnchor.epochSeconds}|first"
                 candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt)
             }
@@ -147,6 +151,11 @@ object Planner {
                         prev.copy(status = NotificationStatus.MISSED)
                     }
                 }
+                // Same dedup key, still pending, still in the future, but the
+                // desired fire time moved (e.g. device timezone change shifts
+                // a quiet-hours deferral) -- the key doesn't encode `fireAt`,
+                // so without this the stale time would stick forever.
+                prev.fireAt != d.fireAt -> prev.copy(fireAt = d.fireAt)
                 else -> prev // unchanged: still pending, still in the future
             }
         }
@@ -186,16 +195,14 @@ object Planner {
         val local = fireAt.toLocalDateTime(zone)
         if (!isInLocalHourRange(local, quietHours.fromHour, quietHours.toHour)) return fireAt
 
-        val startOfDay = LocalDateTime(local.date, LocalTime(0, 0)).toInstant(zone)
-        val minutesIntoDay = (fireAt - startOfDay).inWholeMinutes
-        val fromMinutes = quietHours.fromHour * 60L
-        val toMinutes = quietHours.toHour * 60L
-        val deferredMinutes = when {
-            quietHours.fromHour <= quietHours.toHour -> toMinutes
-            minutesIntoDay >= fromMinutes -> toMinutes + 24 * 60 // wrapped window, evening half -> next day
-            else -> toMinutes // wrapped window, early-morning half -> same day
-        }
-        val deferred = startOfDay + deferredMinutes.minutes
+        // Build the deferred *wall-clock* time and convert that to an
+        // Instant directly (rather than adding elapsed minutes to
+        // start-of-day), so a DST transition between `fireAt` and the
+        // deferred time doesn't shift the result by an hour.
+        val wrapped = quietHours.fromHour > quietHours.toHour
+        val eveningHalf = wrapped && local.hour >= quietHours.fromHour
+        val deferredDate = if (eveningHalf) local.date.plus(1, DateTimeUnit.DAY) else local.date
+        val deferred = LocalDateTime(deferredDate, LocalTime(quietHours.toHour, 0)).toInstant(zone)
 
         return if (occ.certainty == Certainty.FORECAST && deferred > occ.window.end) null else deferred
     }
