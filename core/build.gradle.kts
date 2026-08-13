@@ -28,6 +28,7 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
         val androidMain by getting {
@@ -68,4 +69,29 @@ sqldelight {
             verifyMigrations.set(false)
         }
     }
+}
+
+// core/src/androidMain/resources/showers.json is a hand-maintained duplicate of
+// core/src/commonMain/resources/showers.json (see ShowersResource.android.kt for
+// why AGP needs its own copy). Nothing else keeps the two in sync, so a catalog
+// update that only touches one of them would silently make Android and desktop
+// emit different meteor-shower data under identical occurrence ids.
+val verifyShowerCatalogsMatch by tasks.registering {
+    description = "Fails if the commonMain and androidMain showers.json copies have diverged."
+    val commonFile = layout.projectDirectory.file("src/commonMain/resources/showers.json")
+    val androidFile = layout.projectDirectory.file("src/androidMain/resources/showers.json")
+    inputs.file(commonFile)
+    inputs.file(androidFile)
+    doLast {
+        val commonText = commonFile.asFile.readText()
+        val androidText = androidFile.asFile.readText()
+        check(commonText == androidText) {
+            "core/src/commonMain/resources/showers.json and core/src/androidMain/resources/showers.json " +
+                "have diverged. Update both together (see the comment in ShowersResource.android.kt)."
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyShowerCatalogsMatch)
 }
