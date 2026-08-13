@@ -14,8 +14,6 @@ import io.github.cosinekitty.astronomy.Time
 import io.github.cosinekitty.astronomy.nextLunarApsis
 import io.github.cosinekitty.astronomy.searchLunarApsis
 import io.github.cosinekitty.astronomy.searchMoonPhase
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -105,16 +103,4 @@ class MoonEventSource : EventSource {
     private companion object {
         const val SUPERMOON_MAX_DISTANCE_KM = 360_000.0
     }
-}
-
-/**
- * UTC-calendar `yyyymmdd` of this instant. Deviates from §6.4's `yyyymm`
- * (month only) — see the note at its call site and
- * docs/adr/0002-supermoon-natural-key.md.
- */
-private fun Instant.toYearMonthDayKey(): String {
-    val dt = toLocalDateTime(TimeZone.UTC)
-    val mm = dt.monthNumber.toString().padStart(2, '0')
-    val dd = dt.dayOfMonth.toString().padStart(2, '0')
-    return "${dt.year}$mm$dd"
 }
