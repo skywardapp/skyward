@@ -53,11 +53,12 @@ class MeteorShowerSourceTest {
         val qua = result.occurrences.first { it.id.startsWith("ms:QUA:") }
         val payload = qua.payload as MeteorShowerPayload
 
-        val peakYear = qua.peakTime!!.toLocalDateTime(TimeZone.UTC).year
+        val peak = requireNotNull(qua.peakTime)
+        val peakYear = peak.toLocalDateTime(TimeZone.UTC).year
         val startYear = payload.activityStart.toLocalDateTime(TimeZone.UTC).year
         assertTrue(startYear < peakYear, "expected QUA's activity start ($startYear) before its peak year ($peakYear)")
         assertEquals(12, payload.activityStart.toLocalDateTime(TimeZone.UTC).monthNumber, "expected a December start")
-        assertEquals(1, qua.peakTime!!.toLocalDateTime(TimeZone.UTC).monthNumber, "expected a January peak")
+        assertEquals(1, peak.toLocalDateTime(TimeZone.UTC).monthNumber, "expected a January peak")
     }
 
     @Test
@@ -66,7 +67,7 @@ class MeteorShowerSourceTest {
         // reliably peak within a couple of days of August 12-13 every year.
         val result = refresh(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-12-31T00:00:00Z"))
         val per = result.occurrences.first { it.id == "ms:PER:2026" }
-        val peakDate = per.peakTime!!.toLocalDateTime(TimeZone.UTC)
+        val peakDate = requireNotNull(per.peakTime).toLocalDateTime(TimeZone.UTC)
         assertEquals(8, peakDate.monthNumber)
         assertTrue(peakDate.dayOfMonth in 10..15, "expected PER 2026 peak around Aug 12-13, got $peakDate")
     }
@@ -78,7 +79,7 @@ class MeteorShowerSourceTest {
         val payload = gem.payload as MeteorShowerPayload
         assertEquals(120, payload.zhr)
         assertNull(payload.zhrNote)
-        val peakDate = gem.peakTime!!.toLocalDateTime(TimeZone.UTC)
+        val peakDate = requireNotNull(gem.peakTime).toLocalDateTime(TimeZone.UTC)
         assertEquals(12, peakDate.monthNumber)
         assertTrue(peakDate.dayOfMonth in 12..15, "expected GEM 2026 peak around Dec 13-14, got $peakDate")
     }
@@ -89,8 +90,9 @@ class MeteorShowerSourceTest {
         val eta = result.occurrences.first { it.id == "ms:ETA:2026" }
         val payload = eta.payload as MeteorShowerPayload
         assertNull(payload.zhr)
-        assertNotNull(payload.zhrNote)
-        assertTrue(payload.zhrNote!!.startsWith("variable,"))
+        val zhrNote = payload.zhrNote
+        assertNotNull(zhrNote)
+        assertTrue(zhrNote.startsWith("variable,"))
     }
 
     @Test
