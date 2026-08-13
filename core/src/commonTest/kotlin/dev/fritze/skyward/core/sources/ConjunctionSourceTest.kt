@@ -71,10 +71,15 @@ class ConjunctionSourceTest {
         assertEquals("cj:jupiter-venus:${payload.timeOfClosest.toYearMonthDayKey()}", conjunction.id)
     }
 
+    // Shared by both checks below — each steps a full year at 6h across 15
+    // body pairs, so refreshing once for both assertions halves the work.
     @Test
-    fun everyEmittedConjunctionIsBelowItsOwnThresholdAndObservable() = runTest {
+    fun everyEmittedConjunctionIsBelowItsOwnThresholdAndObservableAndIdsAreUnique() = runTest {
         val result = refresh(Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2025-01-01T00:00:00Z"))
         assertTrue(result.occurrences.isNotEmpty(), "expected at least one conjunction across a full year")
+
+        val ids = result.occurrences.map { it.id }
+        assertEquals(ids.toSet().size, ids.size, "expected all conjunction ids to be unique, got $ids")
 
         for (occ in result.occurrences) {
             val payload = occ.payload as ConjunctionPayload
@@ -87,12 +92,5 @@ class ConjunctionSourceTest {
             assertTrue(io.github.cosinekitty.astronomy.angleFromSun(bodyA, t) > 15.0, "${payload.body1} should be >15deg from Sun")
             assertTrue(io.github.cosinekitty.astronomy.angleFromSun(bodyB, t) > 15.0, "${payload.body2} should be >15deg from Sun")
         }
-    }
-
-    @Test
-    fun idsAreUniqueAcrossAFullYear() = runTest {
-        val result = refresh(Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2025-01-01T00:00:00Z"))
-        val ids = result.occurrences.map { it.id }
-        assertEquals(ids.toSet().size, ids.size, "expected all conjunction ids to be unique, got $ids")
     }
 }

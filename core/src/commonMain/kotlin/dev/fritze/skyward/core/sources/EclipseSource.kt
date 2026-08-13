@@ -22,6 +22,9 @@ import io.github.cosinekitty.astronomy.globalSolarEclipsesAfter
 import io.github.cosinekitty.astronomy.lunarEclipsesAfter
 import io.github.cosinekitty.astronomy.searchLocalSolarEclipse
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -158,8 +161,14 @@ class EclipseSource : EventSource {
     private fun coarseScan(eclipse: GlobalSolarEclipseInfo): List<GridHit> {
         val hits = mutableListOf<GridHit>()
         val searchStart = eclipse.peak.addDays(-4.0 / 24.0)
-        var lat = -85.0
-        while (lat <= 85.0) {
+        // A total/annular central path stays close to the greatest-eclipse
+        // latitude (eclipse.latitude is already known from the global search)
+        // — scanning the full -85..85 band for every eclipse is ~9,900
+        // searchLocalSolarEclipse calls per eclipse for no benefit.
+        val latMin = (eclipse.latitude - LAT_BAND_DEG).coerceAtLeast(-85.0)
+        val latMax = (eclipse.latitude + LAT_BAND_DEG).coerceAtMost(85.0)
+        var lat = latMin
+        while (lat <= latMax) {
             var lon = -180.0
             while (lon < 180.0) {
                 val local = tryLocalEclipse(lat, lon, searchStart)
@@ -192,7 +201,9 @@ class EclipseSource : EventSource {
     private fun refineBucket(pointsInBucket: List<GridHit>): PathSample? {
         val searchStart = pointsInBucket.first().local.peak.time.addDays(-4.0 / 24.0)
         var lat = pointsInBucket.map { it.point.latDeg }.average()
-        var lon = pointsInBucket.map { it.point.lonDeg }.average()
+        // Circular (not arithmetic) mean: a bucket whose grid hits straddle
+        // the antimeridian (e.g. -179 and 179) must average to ~180, not ~0.
+        var lon = circularMeanDeg(pointsInBucket.map { it.point.lonDeg })
         var best = pointsInBucket.first().local
 
         var step = COARSE_GRID_STEP_DEG
@@ -205,7 +216,7 @@ class EclipseSource : EventSource {
                     for (dLon in doubleArrayOf(-step, 0.0, step)) {
                         if (dLat == 0.0 && dLon == 0.0) continue
                         val candidateLat = (lat + dLat).coerceIn(-90.0, 90.0)
-                        val candidateLon = lon + dLon
+                        val candidateLon = normalizeLonDeg(lon + dLon)
                         val candidate = tryLocalEclipse(candidateLat, candidateLon, searchStart) ?: continue
                         if (!isCentralPathPoint(candidate)) continue
                         val duration = centralDurationDays(candidate)
@@ -228,11 +239,23 @@ class EclipseSource : EventSource {
 
         return PathSample(
             time = best.peak.time.toInstant(),
-            point = GeoPoint(lat, lon),
+            point = GeoPoint(lat, normalizeLonDeg(lon)),
             pathWidthKm = null, // §7.1.3: acceptable in v1; visibility uses the +/-edge search (§8.2)
             centralDurationSec = durationSec,
         )
     }
+
+    private fun circularMeanDeg(lonsDeg: List<Double>): Double {
+        val sinSum = lonsDeg.sumOf { sin(it.toRadiansLocal()) }
+        val cosSum = lonsDeg.sumOf { cos(it.toRadiansLocal()) }
+        return atan2(sinSum, cosSum).toDegreesLocal()
+    }
+
+    /** Normalizes to `[-180, 180)`, matching [GeoPoint.lonDeg]'s documented range. */
+    private fun normalizeLonDeg(lonDeg: Double): Double = ((lonDeg + 540.0) % 360.0) - 180.0
+
+    private fun Double.toRadiansLocal() = this * kotlin.math.PI / 180.0
+    private fun Double.toDegreesLocal() = this * 180.0 / kotlin.math.PI
 
     /** In days (`Time.tt` units) — fine for the hill-climb's relative comparisons; see [refineBucket] for the seconds conversion. */
     private fun centralDurationDays(local: LocalSolarEclipseInfo): Double {
@@ -246,5 +269,6 @@ class EclipseSource : EventSource {
         const val HILL_CLIMB_ROUNDS = 4
         const val BUCKET_MINUTES = 2.0
         const val MINUTES_PER_DAY = 1440.0
+        const val LAT_BAND_DEG = 60.0
     }
 }

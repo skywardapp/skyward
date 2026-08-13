@@ -21,7 +21,8 @@ import kotlin.time.Instant
  * fixed-rate correction steps converges comfortably past the precision
  * this app needs (shower peaks are inherently broad — see §7.2.2 step 3).
  */
-private const val MEAN_SOLAR_LONGITUDE_RATE_DEG_PER_DAY = 360.0 / 365.2422 // tropical year
+internal const val TROPICAL_YEAR_DAYS = 365.2422
+private const val MEAN_SOLAR_LONGITUDE_RATE_DEG_PER_DAY = 360.0 / TROPICAL_YEAR_DAYS
 
 /**
  * The first instant on/after Jan 1 of [year] (UTC) at which the Sun's

@@ -72,14 +72,17 @@ fun heliocentricPosition(el: CometElements, t: Instant): Vec3? {
         return value to derivative
     }
 
-    var x = if (alpha != 0.0) {
-        GAUSS_K * dt * sqrt(abs(alpha))
-    } else {
-        // Barker seed: at alpha=0, z=0 identically, so the equation is exactly
-        // the parabolic (Barker) cubic x^3/6 + q*x = GAUSS_K*dt. The linear
-        // term dominates for a first guess; Newton-Raphson refines from there.
-        GAUSS_K * dt / q
-    }
+    // Seed: exactly one Newton-Raphson step from x=0, using f(0) = -GAUSS_K*dt
+    // and f'(0) = q (both independent of alpha, since z=alpha*x^2=0 there) —
+    // i.e. x = 0 - f(0)/f'(0) = GAUSS_K*dt/q. Dimensionally consistent (AU^(1/2))
+    // and, unlike a per-conic-branch seed, needs no special case for alpha's
+    // sign or magnitude: it's derived from the equation itself, not a
+    // conic-specific approximation, so it holds equally for elliptical,
+    // parabolic, and hyperbolic orbits. A prior `GAUSS_K*dt*sqrt(abs(alpha))`
+    // seed (dimensionally AU, not AU^(1/2)) failed to converge for
+    // near-parabolic orbits (alpha ~ 0) at large |dt| — see
+    // KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans.
+    var x = GAUSS_K * dt / q
 
     var converged = false
     for (iteration in 0 until KEPLER_MAX_ITERATIONS) {
@@ -89,12 +92,25 @@ fun heliocentricPosition(el: CometElements, t: Instant): Vec3? {
             break
         }
         if (derivative == 0.0) return null
-        x -= value / derivative
+        val step = value / derivative
+        x -= step
+        // A vanishing Newton step is an equally valid convergence signal as a
+        // small residual: f(x) sums terms of very different magnitude (the
+        // Stumpff cubic term vs. GAUSS_K*dt), so for some regimes (observed:
+        // near-parabolic orbits at large |dt|, i.e. alpha ~ 0 with dt in the
+        // thousands of days — see
+        // KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans)
+        // floating-point cancellation keeps |f(x)| a couple of ULPs above
+        // KEPLER_TOLERANCE forever even once x itself has stopped moving.
+        if (abs(step) < 1e-12 * maxOf(1.0, abs(x))) {
+            converged = true
+            break
+        }
     }
     if (!converged) return null
 
     val z = alpha * x * x
-    val (c2, _) = stumpff(z)
+    val (c2, c3) = stumpff(z)
     val oneMinusAlphaQ = 1.0 - alpha * q
     val r = oneMinusAlphaQ * x * x * c2 + q // radius at the solution == f'(x)
 
@@ -102,9 +118,8 @@ fun heliocentricPosition(el: CometElements, t: Instant): Vec3? {
     // (r0 = q along the periapsis axis, v0 purely tangential):
     //   f = 1 - (x^2/q) c2(z),   g = dt - (x^3/GAUSS_K) c3(z)
     //   X = f*q  (== r*cos(nu)),   Y = g*v_peri  (== r*sin(nu))
-    val (_, c3ForG) = stumpff(z)
     val fCoef = 1.0 - (x * x / q) * c2
-    val gCoef = dt - (x * x * x / GAUSS_K) * c3ForG
+    val gCoef = dt - (x * x * x / GAUSS_K) * c3
     val vPeri = GAUSS_K * sqrt((1.0 + e) / q) // speed at perihelion
     val perifocalX = fCoef * q // == r * cos(nu)
     val perifocalY = gCoef * vPeri // == r * sin(nu)
@@ -154,16 +169,19 @@ fun earthHeliocentricPositionEcliptic(t: Instant): Vec3 {
 }
 
 /**
- * Predicted apparent magnitude: `m = M1 + 5*log10(delta) + 2.5*K1*log10(r)`
- * (§7.4.2). Returns `null` if the propagator can't converge on a position
- * for [t] (see [heliocentricPosition]).
+ * Predicted apparent magnitude: `m = M1 + 5*log10(delta) + K1*log10(r)`.
+ * §7.4.2 states this as `2.5*K1*log10(r)`, but JPL SBDB's `K1` is already
+ * the full slope term (`K1 = 2.5*n` in the MPC "M1, K1" comet-magnitude
+ * convention this data comes from) — applying an extra `2.5*` double-counts
+ * it. See docs/adr/0004-comet-magnitude-formula.md. Returns `null` if the
+ * propagator can't converge on a position for [t] (see [heliocentricPosition]).
  */
 fun apparentMagnitude(el: CometElements, mp: CometMagParams, t: Instant): Double? {
     val cometHelio = heliocentricPosition(el, t) ?: return null
     val earthHelio = earthHeliocentricPositionEcliptic(t)
     val r = cometHelio.length() // comet-Sun distance, AU
     val delta = (cometHelio - earthHelio).length() // comet-Earth distance, AU
-    return mp.m1 + 5 * log10(delta) + 2.5 * mp.k1 * log10(r)
+    return mp.m1 + 5 * log10(delta) + mp.k1 * log10(r)
 }
 
 private fun Double.toRadians() = this * kotlin.math.PI / 180.0

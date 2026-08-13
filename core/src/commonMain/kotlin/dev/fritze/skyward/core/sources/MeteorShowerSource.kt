@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.sources
 
+import dev.fritze.skyward.core.astro.TROPICAL_YEAR_DAYS
 import dev.fritze.skyward.core.astro.instantForSolarLongitudeInYear
 import dev.fritze.skyward.core.astro.instantForSolarLongitudeNear
 import dev.fritze.skyward.core.astro.toAstroTime
@@ -12,6 +13,7 @@ import io.github.cosinekitty.astronomy.Body
 import io.github.cosinekitty.astronomy.illumination
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 /**
@@ -28,8 +30,26 @@ class MeteorShowerSource : EventSource {
 
     override fun schedule(settings: SourceSettings): Schedule = Schedule.OnHorizonChange
 
+    // Parsed once per instance and reused across refresh() calls — loadShowersJsonText()
+    // is blocking resource IO, and the bundled catalog never changes at runtime.
+    private val catalogResult: Result<ShowerCatalogJson> by lazy {
+        runCatching { parseShowerCatalog(loadShowersJsonText()) }
+    }
+
     override suspend fun refresh(req: RefreshRequest): RefreshResult {
-        val catalog = parseShowerCatalog(loadShowersJsonText())
+        val catalog = catalogResult.getOrElse { error ->
+            return RefreshResult(
+                occurrences = emptyList(),
+                newState = req.state,
+                nextRefreshHint = null,
+                diagnostics = SourceDiagnostics(
+                    ok = false,
+                    message = "failed to load shower catalog: ${error.message}",
+                    itemCount = 0,
+                    lastSuccessAt = null,
+                ),
+            )
+        }
         val includeMinor = req.settings.params["includeMinor"] == "true"
 
         val startYear = req.horizon.start.toLocalDateTime(TimeZone.UTC).year
@@ -38,7 +58,7 @@ class MeteorShowerSource : EventSource {
         val occurrences = mutableListOf<Occurrence>()
         for ((iauCode, shower) in catalog.showers) {
             if (shower.activity.isEmpty()) continue
-            val generic = shower.activity.first()
+            val generic = shower.activity.firstOrNull { it.year == "generic" } ?: continue
             if (!includeMinor && !isCurated(iauCode, generic.zhr)) continue
 
             for (year in startYear..endYear) {
@@ -79,7 +99,17 @@ class MeteorShowerSource : EventSource {
 
         val peakTime = instantForSolarLongitudeInYear(peakDeg, year)
         val activityStart = instantForSolarLongitudeNear(startDeg, peakTime)
-        val activityEnd = instantForSolarLongitudeNear(finishDeg, peakTime)
+        val activityEnd = if (finishDeg - startDeg >= 360.0) {
+            // Full-circle activity (e.g. ANT: start=0, finish=360 — active
+            // essentially year-round). instantForSolarLongitudeNear(0) and
+            // instantForSolarLongitudeNear(360) both resolve to the same
+            // solar-longitude crossing (0 == 360 mod 360), which would
+            // otherwise collapse this window to zero width instead of
+            // spanning the year it's meant to describe.
+            activityStart + TROPICAL_YEAR_DAYS.days
+        } else {
+            instantForSolarLongitudeNear(finishDeg, peakTime)
+        }
 
         // Radiant drift (§7.2.2 step 4): Stellarium's own model
         // (`MeteorShower::update`) advances the radiant by

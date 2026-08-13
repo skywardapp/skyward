@@ -4,10 +4,11 @@ import dev.fritze.skyward.core.model.LunarEclipsePayload
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.measureTimedValue
 
@@ -35,7 +36,7 @@ class EclipseSourceTest {
     )
 
     @Test
-    fun august2026TotalEclipseGreatestPointMatchesPublishedCoordinates() = runBlocking {
+    fun august2026TotalEclipseGreatestPointMatchesPublishedCoordinates() = runTest(timeout = 180.seconds) {
         val result = refresh(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-20T00:00:00Z"))
         val eclipse = result.occurrences.first { it.id == "se:20260812" }
         val payload = eclipse.payload as SolarEclipsePayload
@@ -49,7 +50,7 @@ class EclipseSourceTest {
     }
 
     @Test
-    fun august2026PathSamplingFindsCloseToThePublishedMaxDuration() = runBlocking {
+    fun august2026PathSamplingFindsCloseToThePublishedMaxDuration() = runTest(timeout = 180.seconds) {
         val (result, elapsed) = measureTimedValue {
             refresh(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-20T00:00:00Z"))
         }
@@ -82,7 +83,7 @@ class EclipseSourceTest {
     // (§7.1.2's own default) already contains a lunar eclipse and, per this
     // file's other test, at least one total solar eclipse.
     @Test
-    fun lunarEclipsesHaveConsistentPhaseOrderingAndAllIdsAreUnique() = runBlocking {
+    fun lunarEclipsesHaveConsistentPhaseOrderingAndAllIdsAreUnique() = runTest(timeout = 180.seconds) {
         val result = refresh(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2029-06-01T00:00:00Z"))
 
         val ids = result.occurrences.map { it.id }

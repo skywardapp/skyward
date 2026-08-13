@@ -29,14 +29,40 @@ data class DerivedThresholds(
     val maxTravelKm: Double?,
 )
 
-data class RefreshRequest(
+class RefreshRequest(
     val now: Instant,
     val horizon: TimeWindow, // how far ahead the app plans; default now..now+3 years (settings)
     val locations: List<SavedLocation>, // some sources tailor queries (EONET bbox) — may be ignored
     val state: Map<String, ByteArray>, // persisted per-source state (source_state BLOBs, §11)
     val settings: SourceSettings,
     val derivedThresholds: DerivedThresholds,
-)
+) {
+    // Not a data class: the default-generated equals()/hashCode() would compare
+    // `state`'s ByteArray values by reference, not content (a well-known Kotlin
+    // data-class-over-ByteArray pitfall), which would break change detection
+    // once a runner starts comparing requests/results (M2).
+    override fun equals(other: Any?): Boolean =
+        this === other || (
+            other is RefreshRequest &&
+                now == other.now &&
+                horizon == other.horizon &&
+                locations == other.locations &&
+                state.keys == other.state.keys &&
+                state.all { (k, v) -> other.state[k]?.contentEquals(v) == true } &&
+                settings == other.settings &&
+                derivedThresholds == other.derivedThresholds
+            )
+
+    override fun hashCode(): Int {
+        var result = now.hashCode()
+        result = 31 * result + horizon.hashCode()
+        result = 31 * result + locations.hashCode()
+        result = 31 * result + state.entries.sumOf { (k, v) -> k.hashCode() * 31 + v.contentHashCode() }
+        result = 31 * result + settings.hashCode()
+        result = 31 * result + derivedThresholds.hashCode()
+        return result
+    }
+}
 
 @Serializable
 data class SourceDiagnostics(
@@ -47,12 +73,31 @@ data class SourceDiagnostics(
     val lastSuccessAt: Instant? = null,
 )
 
-data class RefreshResult(
+class RefreshResult(
     val occurrences: List<Occurrence>, // FULL current truth for this source within horizon (§6.3)
     val newState: Map<String, ByteArray>,
     val nextRefreshHint: Instant?, // POLLED sources may suggest next poll (e.g. SWPC cadence)
     val diagnostics: SourceDiagnostics,
-)
+) {
+    // See RefreshRequest — same ByteArray-content-equality fix for newState.
+    override fun equals(other: Any?): Boolean =
+        this === other || (
+            other is RefreshResult &&
+                occurrences == other.occurrences &&
+                newState.keys == other.newState.keys &&
+                newState.all { (k, v) -> other.newState[k]?.contentEquals(v) == true } &&
+                nextRefreshHint == other.nextRefreshHint &&
+                diagnostics == other.diagnostics
+            )
+
+    override fun hashCode(): Int {
+        var result = occurrences.hashCode()
+        result = 31 * result + newState.entries.sumOf { (k, v) -> k.hashCode() * 31 + v.contentHashCode() }
+        result = 31 * result + (nextRefreshHint?.hashCode() ?: 0)
+        result = 31 * result + diagnostics.hashCode()
+        return result
+    }
+}
 
 sealed class Schedule {
     /** Recompute when horizon/locations/settings change. */

@@ -1,7 +1,6 @@
 package dev.fritze.skyward.core.visibility
 
 import dev.fritze.skyward.core.model.GeoPoint
-import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -32,10 +31,10 @@ class GeoTest {
     }
 
     @Test
-    fun munsterToBordeauxIsInAppendixBsOrderOfMagnitude() {
-        // Appendix B: "≈ 300-400 km from the same path" — the doc explicitly
-        // warns this prose figure isn't a test oracle, so this only checks the
-        // computed distance lands in the right ballpark, not an exact value.
+    fun munsterToBordeauxIsAboutOneThousandKm() {
+        // Appendix B's "≈ 300-400 km" figure is a distance-*from-path* value,
+        // not this city-to-city distance, so it is not the oracle here.
+        // Münster to Bordeaux is ~1000 km; assert the order of magnitude only.
         val d = haversineDistanceKm(GeoPoint(52.0, 7.6), GeoPoint(44.84, -0.58))
         assertTrue(d in 900.0..1100.0, "expected roughly 900-1100 km, got $d")
     }
@@ -61,7 +60,7 @@ class GeoTest {
     @Test
     fun bearingIsAlwaysInRange() {
         val bearing = initialBearingDeg(GeoPoint(10.0, 10.0), GeoPoint(-10.0, -170.0))
-        assertTrue(bearing in 0.0..360.0)
+        assertTrue(bearing >= 0.0 && bearing < 360.0, "expected [0, 360), got $bearing")
     }
 
     @Test
@@ -108,8 +107,7 @@ class GeoTest {
     fun antipodalPointsAreHalfEarthCircumferenceApart() {
         val a = GeoPoint(10.0, 20.0)
         val b = GeoPoint(-10.0, -160.0) // antipode
-        val expected = EARTH_RADIUS_KM * kotlin.math.PI
-        assertEquals(expected, haversineDistanceKm(a, b), 0.5)
-        assertTrue(abs(expected - 20015.09) < 1.0)
+        // Half the mean-radius great circle: 6371.0088 * PI ~= 20015.09 km.
+        assertEquals(20015.09, haversineDistanceKm(a, b), 0.5)
     }
 }

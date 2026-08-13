@@ -120,5 +120,34 @@ class MeteorShowerSourceTest {
         val result = refresh(Instant.parse("2025-01-01T00:00:00Z"), Instant.parse("2026-12-31T00:00:00Z"), includeMinor = true)
         val ids = result.occurrences.map { it.id }
         assertEquals(ids.toSet().size, ids.size, "expected all meteor shower ids to be unique, got $ids")
+
+        // Every occurrence's window must be non-degenerate and actually contain
+        // its own peak — the specific bug the ANT (Antihelion) shower's
+        // full-circle start=0/finish=360 catalog entry would otherwise trigger
+        // (see the note in MeteorShowerSource.buildOccurrenceForYear).
+        for (occ in result.occurrences) {
+            val payload = occ.payload as MeteorShowerPayload
+            assertTrue(
+                payload.activityStart < payload.activityEnd,
+                "${occ.id}: expected activityStart < activityEnd, got ${payload.activityStart}..${payload.activityEnd}",
+            )
+            val peak = requireNotNull(occ.peakTime)
+            assertTrue(
+                peak in payload.activityStart..payload.activityEnd,
+                "${occ.id}: expected peak $peak within [${payload.activityStart}, ${payload.activityEnd}]",
+            )
+        }
+    }
+
+    @Test
+    fun antihelionsFullCircleActivityWindowSpansTheYearNotZeroWidth() = runTest {
+        // ANT's generic catalog entry is start=0, finish=360, peak=0 — a
+        // full-circle solar-longitude span meaning "active essentially
+        // year-round", not a MM.DD-style zero-length window.
+        val result = refresh(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-12-31T00:00:00Z"), includeMinor = true)
+        val ant = result.occurrences.first { it.id.startsWith("ms:ANT:") }
+        val payload = ant.payload as MeteorShowerPayload
+        val spanDays = (payload.activityEnd - payload.activityStart).inWholeDays
+        assertTrue(spanDays > 300, "expected ANT's activity window to span nearly a year, got $spanDays days")
     }
 }

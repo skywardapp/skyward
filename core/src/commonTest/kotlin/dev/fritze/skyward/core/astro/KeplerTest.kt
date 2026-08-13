@@ -212,6 +212,38 @@ class KeplerTest {
     }
 
     @Test
+    fun convergesForNearParabolicOrbitsAcrossLongTimeSpans() {
+        // CodeRabbit review (PR #1) questioned whether the Newton-Raphson
+        // seed (`GAUSS_K * dt * sqrt(abs(alpha))`) could fail to converge for
+        // near-parabolic orbits (alpha ~ 0) combined with large |dt| — a
+        // combination convergesAcrossTheFullEccentricityRangeAndTimeSpans
+        // doesn't stress (that test's dt tops out at 400 days). This app
+        // only ever calls heliocentricPosition() within its own ~3-year
+        // query horizon (well under the 400-day span already covered), but
+        // exercise a much wider envelope here — years, not months — to
+        // confirm the existing seed has real margin rather than assuming it.
+        val eccentricities = listOf(0.9999, 0.99999, 1.0, 1.00001, 1.0001)
+        val dtValues = listOf(-3650.0, -1000.0, 1000.0, 3650.0)
+        for (e in eccentricities) {
+            val el = CometElements(
+                epoch = Instant.fromEpochMilliseconds(0),
+                eccentricity = e,
+                perihelionDistanceAu = 1.0,
+                inclinationDeg = 0.0,
+                ascendingNodeDeg = 0.0,
+                argPerihelionDeg = 0.0,
+                tpPerihelion = Instant.fromEpochMilliseconds(0),
+            )
+            for (dt in dtValues) {
+                val t = Instant.fromEpochMilliseconds((dt * 86400_000L).toLong())
+                val pos = heliocentricPosition(el, t)
+                assertNotNull(pos, "e=$e, dt=$dt days should converge")
+                assertTrue(pos.length() > 0.0, "e=$e, dt=$dt days: expected a nonzero radius")
+            }
+        }
+    }
+
+    @Test
     fun perihelionRadiusEqualsQAtTimeOfPerihelionPassage() {
         for (fixture in allFixtures) {
             val elements = fixture.elements()

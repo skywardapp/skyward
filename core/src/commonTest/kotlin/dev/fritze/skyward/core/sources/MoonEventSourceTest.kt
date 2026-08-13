@@ -105,7 +105,7 @@ class MoonEventSourceTest {
 
             assertEquals(payload.fullMoonTime, occ.peakTime)
             assertEquals(TimeWindow(payload.fullMoonTime - 12.hours, payload.fullMoonTime + 12.hours), occ.window)
-            assertTrue(occ.id.startsWith("sm:"), "expected natural key sm:<yyyymm>, got ${occ.id}")
+            assertTrue(occ.id.startsWith("sm:"), "expected natural key sm:<yyyymmdd>, got ${occ.id}")
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.sources
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -19,7 +20,7 @@ internal data class ShowerCatalogJson(
 @Serializable
 internal data class ShowerJson(
     val designation: String,
-    val IAUNo: String? = null,
+    @SerialName("IAUNo") val iauNo: String? = null,
     val activity: List<ShowerActivityJson> = emptyList(),
     val speed: Double? = null,
     val radiantAlpha: Double = 0.0,

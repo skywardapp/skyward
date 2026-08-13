@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -7,6 +8,11 @@ import kotlin.time.Instant
  * Phenomenon-specific data. Sealed so the compiler forces every visibility
  * model and UI renderer to handle exactly its phenomenon (§5 design note) —
  * never stringly-type payload data.
+ *
+ * Every subtype pins an explicit [SerialName] rather than relying on the
+ * default fully-qualified-class-name discriminator, since `payload_json`
+ * is persisted (§11) and a future package/class rename must not silently
+ * break deserialization of already-stored rows.
  */
 @Serializable
 sealed class OccurrencePayload
@@ -25,6 +31,7 @@ data class PathSample(
 )
 
 @Serializable
+@SerialName("solar_eclipse")
 data class SolarEclipsePayload(
     val kind: SolarEclipseKind,
     val greatestEclipsePoint: GeoPoint,
@@ -35,6 +42,7 @@ data class SolarEclipsePayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("lunar_eclipse")
 data class LunarEclipsePayload(
     val kind: LunarEclipseKind,
     val penumbralBegin: Instant,
@@ -46,6 +54,7 @@ data class LunarEclipsePayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("meteor_shower")
 data class MeteorShowerPayload(
     val iauCode: String, // "PER", "GEM", "QUA"
     val name: String, // "Perseids"
@@ -61,6 +70,7 @@ data class MeteorShowerPayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("aurora")
 data class AuroraPayload(
     val kpForecast: Double, // max Kp in the occurrence window
     val forecastKind: AuroraForecastKind,
@@ -81,11 +91,16 @@ data class CometElements(
     val tpPerihelion: Instant, // Tp - time of perihelion passage
 )
 
-/** Standard comet photometric parameters: m = M1 + 5*log10(delta) + 2.5*K1*log10(r) */
+/**
+ * Standard comet photometric parameters: `m = M1 + 5*log10(delta) + K1*log10(r)`.
+ * `K1` is already the full slope term as published by JPL SBDB — see
+ * docs/adr/0004-comet-magnitude-formula.md.
+ */
 @Serializable
 data class CometMagParams(val m1: Double, val k1: Double)
 
 @Serializable
+@SerialName("comet")
 data class CometPayload(
     val designation: String, // "C/2025 K1", "12P"
     val name: String?, // "(Pons-Brooks)"
@@ -99,6 +114,7 @@ data class CometPayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("moon_event")
 data class MoonEventPayload(
     val kind: MoonEventKind, // SUPERMOON (v1); MICROMOON reserved
     val fullMoonTime: Instant,
@@ -107,6 +123,7 @@ data class MoonEventPayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("conjunction")
 data class ConjunctionPayload(
     val body1: String,
     val body2: String, // "Venus", "Moon", "Jupiter"
@@ -115,6 +132,7 @@ data class ConjunctionPayload(
 ) : OccurrencePayload()
 
 @Serializable
+@SerialName("terrestrial")
 data class TerrestrialPayload(
     val eonetId: String,
     val categoryId: String, // "volcanoes", "wildfires", "severeStorms", ...

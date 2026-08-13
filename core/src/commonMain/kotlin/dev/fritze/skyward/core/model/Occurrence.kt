@@ -26,4 +26,20 @@ data class Occurrence(
     val payload: OccurrencePayload,
     val fetchedAt: Instant,
     val expiresAt: Instant?, // null for ephemeris events, which never go stale
-)
+) {
+    init {
+        val matches = when (phenomenon) {
+            Phenomenon.SOLAR_ECLIPSE -> payload is SolarEclipsePayload
+            Phenomenon.LUNAR_ECLIPSE -> payload is LunarEclipsePayload
+            Phenomenon.AURORA -> payload is AuroraPayload
+            Phenomenon.METEOR_SHOWER -> payload is MeteorShowerPayload
+            Phenomenon.COMET -> payload is CometPayload
+            Phenomenon.MOON_EVENT -> payload is MoonEventPayload
+            Phenomenon.CONJUNCTION -> payload is ConjunctionPayload
+            Phenomenon.TERRESTRIAL -> payload is TerrestrialPayload
+        }
+        require(matches) {
+            "Occurrence $id: phenomenon $phenomenon does not accept payload type ${payload::class.simpleName}"
+        }
+    }
+}
