@@ -219,10 +219,9 @@ class KeplerTest {
         // seed (`GAUSS_K * dt * sqrt(abs(alpha))`) could fail to converge for
         // near-parabolic orbits (alpha ~ 0) combined with large |dt| — a
         // combination convergesAcrossTheFullEccentricityRangeAndTimeSpans
-        // doesn't stress (that test's dt tops out at 400 days). This app
-        // only ever calls heliocentricPosition() within its own ~3-year
-        // query horizon (well under the 400-day span already covered), but
-        // exercise a much wider envelope here — years, not months — to
+        // doesn't stress (that test's dt tops out at 400 days, which the
+        // app's own ~3-year default query horizon already exceeds) — so
+        // exercise a much wider envelope here, years rather than months, to
         // confirm the existing seed has real margin rather than assuming it.
         val eccentricities = listOf(0.9999, 0.99999, 1.0, 1.00001, 1.0001)
         val dtValues = listOf(-3650.0, -1000.0, 1000.0, 3650.0)
@@ -264,9 +263,9 @@ class KeplerTest {
         val magParams = CometMagParams(m1 = 15.6, k1 = 4.5)
         val mag = apparentMagnitude(encke.elements(), magParams, Instant.parse(encke.tpIso))
         assertNotNull(mag)
-        // Encke reaches naked-eye-ish brightness near perihelion; a wildly off
-        // implementation (sign error, wrong exponent base) would land far
-        // outside this band. Not a precision check — see the position test.
+        // This broad range rejects non-finite values and gross magnitude
+        // errors; it does not by itself distinguish a correct coefficient
+        // from a subtly wrong one — see the regression test below for that.
         assertTrue(mag in -5.0..25.0, "expected a plausible apparent magnitude, got $mag")
     }
 
