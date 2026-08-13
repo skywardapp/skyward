@@ -2,10 +2,12 @@ package dev.fritze.skyward.core.astro
 
 import dev.fritze.skyward.core.model.CometElements
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
 import dev.fritze.skyward.core.model.CometMagParams
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
@@ -266,5 +268,40 @@ class KeplerTest {
         // implementation (sign error, wrong exponent base) would land far
         // outside this band. Not a precision check — see the position test.
         assertTrue(mag in -5.0..25.0, "expected a plausible apparent magnitude, got $mag")
+    }
+
+    @Test
+    fun apparentMagnitudeUsesTheDirectK1CoefficientNotMpcs2Point5nConvention() {
+        // Regression for docs/adr/0004-comet-magnitude-formula.md: the broad
+        // plausibility band above can't tell `m1 + K1*log10(r)` (correct, per
+        // JPL SBDB) apart from the obsolete `m1 + 2.5*K1*log10(r)` this app
+        // used to compute. `expected` is written out literally here — not by
+        // calling apparentMagnitude() — so a regression to the 2.5x form
+        // would change apparentMagnitude()'s output without changing this
+        // expectation, and the test would fail.
+        val magParams = CometMagParams(m1 = 15.6, k1 = 4.5)
+        val t = Instant.parse(encke.tpIso)
+        val elements = encke.elements()
+
+        // r == q exactly at perihelion passage (see
+        // perihelionRadiusEqualsQAtTimeOfPerihelionPassage); delta comes from
+        // the same position engine the KeplerTest fixtures above validate
+        // against live Horizons data.
+        val r = encke.perihelionDistanceAu
+        val cometHelio = heliocentricPosition(elements, t)
+        assertNotNull(cometHelio)
+        val earthHelio = earthHeliocentricPositionEcliptic(t)
+        val delta = (cometHelio - earthHelio).length()
+
+        val expected = magParams.m1 + 5.0 * log10(delta) + magParams.k1 * log10(r)
+        val actual = apparentMagnitude(elements, magParams, t)
+        assertNotNull(actual)
+        assertEquals(expected, actual, 1e-9)
+
+        val obsoleteDoubleCountedForm = magParams.m1 + 5.0 * log10(delta) + 2.5 * magParams.k1 * log10(r)
+        assertTrue(
+            abs(obsoleteDoubleCountedForm - actual) > 1.0,
+            "expected the corrected formula to differ meaningfully from the obsolete 2.5*K1 form",
+        )
     }
 }
