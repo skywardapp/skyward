@@ -26,12 +26,19 @@ Notes:     Copyright and license header retained in the vendored file, per the
 ================================================================================
 Stellarium meteor-shower catalog — showers.json
 ================================================================================
-Source:    https://github.com/Stellarium/stellarium (plugins/MeteorShowers)
+Source:    https://github.com/Stellarium/stellarium
+           (plugins/MeteorShowers/resources/MeteorShowers.json, renamed here)
 License:   GPL-2.0-or-later
-Bundled:   Yes — as a :core resource (core/src/commonMain/resources/showers.json)
+Bundled:   Yes — as a :core resource (core/src/commonMain/resources/showers.json,
+           duplicated at core/src/androidMain/resources/showers.json — see the
+           comment in ShowersResource.android.kt for why)
 Notes:     Meteor shower data from the Stellarium project. This dependency is
            why Skyward is licensed GPL-3.0-or-later (D8) — GPLv3+ is
-           compatible with GPL-2.0-or-later, so bundling is permitted.
+           compatible with GPL-2.0-or-later, so bundling is permitted. Field
+           semantics (activity start/finish/peak are solar-longitude degrees,
+           not calendar dates; drift is applied per degree of solar longitude
+           travelled, not per day) were verified against the plugin's own
+           C++ source, not assumed — see docs/adr/0003-shower-solar-longitude.md.
 
 ================================================================================
 Natural Earth 1:50m cultural/physical vectors
