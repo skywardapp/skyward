@@ -16,6 +16,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.kotlinx.datetime)
     implementation(libs.compose.native.tray)
     implementation(libs.two.slices)
 
