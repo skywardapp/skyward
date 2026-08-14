@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Android instrumented tests (§17.5) are NOT here — they need an emulator and
+# live in android-ui-tests.yml, which records the screen while they run.
+#
 # M0 scope only (§18). §17.5b's release-build checks (assembleFossRelease /
 # assemblePlayRelease, reproducibility diffoscope diff, dependency-set-parity
 # between flavours) need a real signing config and land with M7.

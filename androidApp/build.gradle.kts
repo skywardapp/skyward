@@ -16,6 +16,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // §17.5: the instrumented smoke tests run against BOTH flavours, so the
+        // runner is configured on defaultConfig rather than per-flavour.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // §15.1 / D13: the ONLY difference between the two flavours is the exact-alarm
@@ -43,6 +46,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        // Window/transition animations make Compose's idling resource wait on
+        // frames that never settle deterministically on an emulator; disabling
+        // them is what keeps connected tests from flaking under CI load. The
+        // CI emulator also disables them device-wide (belt and braces), and it
+        // does not affect the recorded video: the screen still renders, it just
+        // does not animate between states.
+        animationsDisabled = true
+    }
 }
 
 kotlin {
@@ -64,7 +77,12 @@ dependencies {
     testImplementation(kotlin("test"))
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // Supplies the debug-only manifest entry for ComponentActivity that
+    // createAndroidComposeRule<MainActivity>() launches into.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 // §17.5b / R14: the manifest-diff CI check. fossDebug and playDebug must merge
