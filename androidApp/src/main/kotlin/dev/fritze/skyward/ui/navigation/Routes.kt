@@ -21,6 +21,11 @@ object Routes {
     const val LOCATION_EDITOR_EDIT = "settings/locations/edit/{$LOCATION_EDITOR_ARG}"
     fun locationEditor(locationId: String) = "settings/locations/edit/$locationId"
 
+    const val RULE_EDITOR_ARG = "ruleId"
+    const val RULE_EDITOR_NEW = "rules/new"
+    const val RULE_EDITOR_EDIT = "rules/edit/{$RULE_EDITOR_ARG}"
+    fun ruleEditor(ruleId: String) = "rules/edit/$ruleId"
+
     /** Routes that show the bottom nav bar (§13.1: Upcoming/Rules/Settings only). */
     val BOTTOM_BAR_ROUTES = setOf(UPCOMING, RULES, SETTINGS)
 }
