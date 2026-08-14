@@ -19,5 +19,12 @@ SELECT * FROM rule WHERE enabled = 1;
 selectById:
 SELECT * FROM rule WHERE id = ?;
 
+upsert:
+INSERT OR REPLACE INTO rule(id, name, enabled, phenomena_json, location_ids_json, condition_json, schedule_json, hidden, created_at, modified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateEnabled:
+UPDATE rule SET enabled = ?, modified_at = ? WHERE id = ?;
+
 deleteById:
 DELETE FROM rule WHERE id = ?;

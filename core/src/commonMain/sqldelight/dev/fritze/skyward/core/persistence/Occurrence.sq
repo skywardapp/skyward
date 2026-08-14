@@ -22,5 +22,12 @@ SELECT * FROM occurrence WHERE source_id = ?;
 selectIdsBySource:
 SELECT id FROM occurrence WHERE source_id = ?;
 
+-- first_seen_at is a caller-supplied value, not computed here, so the
+-- upsert-preserving-first-seen algorithm (§6.3) lives in SourceRunner,
+-- which reads the existing row (if any) before calling this.
+upsert:
+INSERT OR REPLACE INTO occurrence(id, phenomenon, source_id, title, window_start, window_end, peak_time, certainty, payload_json, fetched_at, expires_at, first_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
 deleteById:
 DELETE FROM occurrence WHERE id = ?;

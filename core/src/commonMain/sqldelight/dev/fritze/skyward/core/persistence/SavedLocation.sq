@@ -11,3 +11,13 @@ SELECT * FROM saved_location ORDER BY is_primary DESC, name ASC;
 
 selectById:
 SELECT * FROM saved_location WHERE id = ?;
+
+upsert:
+INSERT OR REPLACE INTO saved_location(id, name, lat_deg, lon_deg, is_primary, created_at, modified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+clearPrimary:
+UPDATE saved_location SET is_primary = 0 WHERE id != ?;
+
+deleteById:
+DELETE FROM saved_location WHERE id = ?;
