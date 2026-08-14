@@ -156,75 +156,84 @@ fun ConditionGroupEditor(
     onChange: (ConditionNode.Group) -> Unit,
     onDeleteSelf: (() -> Unit)?,
 ) {
-    var showAddMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val availableTypes = remember(phenomena) { COND_TYPE_OPTIONS.filter { it.appliesTo(phenomena) } }
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(start = (depth * 12).dp),
         colors = CardDefaults.cardColors(containerColor = if (depth % 2 == 0) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = node.op == GroupOp.AND, onClick = { onChange(node.copy(op = GroupOp.AND)) }, label = { Text("AND") })
-                    FilterChip(selected = node.op == GroupOp.OR, onClick = { onChange(node.copy(op = GroupOp.OR)) }, label = { Text("OR") })
-                }
-                if (onDeleteSelf != null) {
-                    IconButton(onClick = { if (node.children.isEmpty()) onDeleteSelf() else confirmDelete = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete group")
-                    }
-                }
-            }
-
-            for ((index, child) in node.children.withIndex()) {
-                when (child) {
-                    is ConditionNode.Group -> ConditionGroupEditor(
-                        node = child,
-                        phenomena = phenomena,
-                        depth = depth + 1,
-                        onChange = { updated -> onChange(node.copy(children = node.children.toMutableList().apply { set(index, updated) })) },
-                        onDeleteSelf = { onChange(node.copy(children = node.children.toMutableList().apply { removeAt(index) })) },
-                    )
-                    is ConditionNode.Leaf -> ConditionLeafEditor(
-                        leaf = child,
-                        onChange = { updated -> onChange(node.copy(children = node.children.toMutableList().apply { set(index, updated) })) },
-                        onDelete = { onChange(node.copy(children = node.children.toMutableList().apply { removeAt(index) })) },
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box {
-                    TextButton(onClick = { showAddMenu = true }, enabled = availableTypes.isNotEmpty()) { Text("Add condition") }
-                    DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                        for (type in availableTypes) {
-                            DropdownMenuItem(
-                                text = { Text(type.label) },
-                                onClick = {
-                                    onChange(node.copy(children = node.children + ConditionNode.Leaf(type.default())))
-                                    showAddMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
-                TextButton(onClick = { onChange(node.copy(children = node.children + ConditionNode.Group(GroupOp.AND, emptyList()))) }) {
-                    Text("Add group")
-                }
-            }
+            GroupHeaderRow(node, onChange, onDeleteSelf, requestConfirm = { confirmDelete = true })
+            GroupChildrenList(node, phenomena, depth, onChange)
+            AddChildRow(node, phenomena, onChange)
         }
     }
 
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this group?") },
-            text = { Text("This group has ${node.children.size} condition${if (node.children.size == 1) "" else "s"} inside it. Deleting it removes all of them.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDeleteSelf?.invoke() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
-        )
+    if (confirmDelete) DeleteGroupDialog(childCount = node.children.size, onDismiss = { confirmDelete = false }, onConfirm = onDeleteSelf)
+}
+
+@Composable
+private fun GroupHeaderRow(node: ConditionNode.Group, onChange: (ConditionNode.Group) -> Unit, onDeleteSelf: (() -> Unit)?, requestConfirm: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = node.op == GroupOp.AND, onClick = { onChange(node.copy(op = GroupOp.AND)) }, label = { Text("AND") })
+            FilterChip(selected = node.op == GroupOp.OR, onClick = { onChange(node.copy(op = GroupOp.OR)) }, label = { Text("OR") })
+        }
+        if (onDeleteSelf == null) return@Row
+        val deleteNow = node.children.isEmpty()
+        IconButton(onClick = { if (deleteNow) onDeleteSelf() else requestConfirm() }) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete group")
+        }
     }
+}
+
+@Composable
+private fun GroupChildrenList(node: ConditionNode.Group, phenomena: Set<Phenomenon>, depth: Int, onChange: (ConditionNode.Group) -> Unit) {
+    for ((index, child) in node.children.withIndex()) {
+        fun replace(updated: ConditionNode) = onChange(node.copy(children = node.children.toMutableList().apply { set(index, updated) }))
+        fun remove() = onChange(node.copy(children = node.children.toMutableList().apply { removeAt(index) }))
+        when (child) {
+            is ConditionNode.Group -> ConditionGroupEditor(child, phenomena, depth + 1, onChange = ::replace, onDeleteSelf = ::remove)
+            is ConditionNode.Leaf -> ConditionLeafEditor(child, onChange = ::replace, onDelete = ::remove)
+        }
+    }
+}
+
+@Composable
+private fun AddChildRow(node: ConditionNode.Group, phenomena: Set<Phenomenon>, onChange: (ConditionNode.Group) -> Unit) {
+    var showAddMenu by remember { mutableStateOf(false) }
+    val availableTypes = remember(phenomena) { COND_TYPE_OPTIONS.filter { it.appliesTo(phenomena) } }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box {
+            TextButton(onClick = { showAddMenu = true }, enabled = availableTypes.isNotEmpty()) { Text("Add condition") }
+            DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
+                for (type in availableTypes) {
+                    DropdownMenuItem(
+                        text = { Text(type.label) },
+                        onClick = {
+                            onChange(node.copy(children = node.children + ConditionNode.Leaf(type.default())))
+                            showAddMenu = false
+                        },
+                    )
+                }
+            }
+        }
+        TextButton(onClick = { onChange(node.copy(children = node.children + ConditionNode.Group(GroupOp.AND, emptyList()))) }) {
+            Text("Add group")
+        }
+    }
+}
+
+@Composable
+private fun DeleteGroupDialog(childCount: Int, onDismiss: () -> Unit, onConfirm: (() -> Unit)?) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete this group?") },
+        text = { Text("This group has $childCount condition${if (childCount == 1) "" else "s"} inside it. Deleting it removes all of them.") },
+        confirmButton = { TextButton(onClick = { onDismiss(); onConfirm?.invoke() }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

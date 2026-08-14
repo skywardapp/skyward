@@ -34,28 +34,30 @@ private fun anchorLabel(anchor: Anchor): String = when (anchor) {
     Anchor.BEST_VIEWING -> "Best viewing"
 }
 
+/**
+ * §9.1's `NotifySchedule` minus its Instant fields, plus a UI-only
+ * `quietHoursEnabled` (so toggling quiet hours off and back on doesn't lose
+ * the previously-chosen from/to hours the way collapsing to `null` would).
+ */
+data class ScheduleDraft(
+    val leads: Set<Duration>,
+    val anchor: Anchor,
+    val notifyOnFirstSeen: Boolean,
+    val quietHoursEnabled: Boolean,
+    val quietFromHour: Int,
+    val quietToHour: Int,
+)
+
 /** §9.1's `NotifySchedule`: leads + anchor + notifyOnFirstSeen + quietHours. */
 @Composable
-fun ScheduleEditor(
-    leads: Set<Duration>,
-    onLeadsChange: (Set<Duration>) -> Unit,
-    anchor: Anchor,
-    onAnchorChange: (Anchor) -> Unit,
-    notifyOnFirstSeen: Boolean,
-    onNotifyOnFirstSeenChange: (Boolean) -> Unit,
-    quietHoursEnabled: Boolean,
-    onQuietHoursEnabledChange: (Boolean) -> Unit,
-    quietFromHour: Int,
-    quietToHour: Int,
-    onQuietHoursChange: (Int, Int) -> Unit,
-) {
+fun ScheduleEditor(draft: ScheduleDraft, onChange: (ScheduleDraft) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Remind me before", style = MaterialTheme.typography.titleSmall)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (preset in LEAD_PRESETS) {
                 FilterChip(
-                    selected = preset in leads,
-                    onClick = { onLeadsChange(if (preset in leads) leads - preset else leads + preset) },
+                    selected = preset in draft.leads,
+                    onClick = { onChange(draft.copy(leads = if (preset in draft.leads) draft.leads - preset else draft.leads + preset)) },
                     label = { Text(formatLead(preset)) },
                 )
             }
@@ -64,7 +66,7 @@ fun ScheduleEditor(
         Text("Anchor time", style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (option in Anchor.entries) {
-                FilterChip(selected = anchor == option, onClick = { onAnchorChange(option) }, label = { Text(anchorLabel(option)) })
+                FilterChip(selected = draft.anchor == option, onClick = { onChange(draft.copy(anchor = option)) }, label = { Text(anchorLabel(option)) })
             }
         }
 
@@ -76,16 +78,16 @@ fun ScheduleEditor(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Switch(checked = notifyOnFirstSeen, onCheckedChange = onNotifyOnFirstSeenChange)
+            Switch(checked = draft.notifyOnFirstSeen, onCheckedChange = { onChange(draft.copy(notifyOnFirstSeen = it)) })
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Quiet hours", style = MaterialTheme.typography.bodyMedium)
-            Switch(checked = quietHoursEnabled, onCheckedChange = onQuietHoursEnabledChange)
+            Switch(checked = draft.quietHoursEnabled, onCheckedChange = { onChange(draft.copy(quietHoursEnabled = it)) })
         }
-        if (quietHoursEnabled) {
-            LabeledIntSlider("From hour", quietFromHour, 0..23) { onQuietHoursChange(it, quietToHour) }
-            LabeledIntSlider("To hour", quietToHour, 0..23) { onQuietHoursChange(quietFromHour, it) }
+        if (draft.quietHoursEnabled) {
+            LabeledIntSlider("From hour", draft.quietFromHour, 0..23) { onChange(draft.copy(quietFromHour = it)) }
+            LabeledIntSlider("To hour", draft.quietToHour, 0..23) { onChange(draft.copy(quietToHour = it)) }
         }
     }
 }
