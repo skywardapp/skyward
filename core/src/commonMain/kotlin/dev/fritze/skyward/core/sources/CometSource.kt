@@ -38,11 +38,10 @@ class CometSource(private val httpClient: HttpClient = createHttpClient()) : Eve
         var droppedNonConvergent = 0
         val occurrences = mutableListOf<Occurrence>()
         for (candidate in candidates) {
-            val occurrence = buildCometOccurrence(candidate, ingestFloor, req.now)
-            if (occurrence == null) {
-                droppedNonConvergent++
-            } else {
-                occurrences += occurrence
+            when (val result = buildCometOccurrence(candidate, ingestFloor, req.now)) {
+                is CometBuildResult.Emitted -> occurrences += result.occurrence
+                CometBuildResult.TooDim -> Unit // normal, silent filtering -- not a propagator failure
+                CometBuildResult.NonConvergent -> droppedNonConvergent++
             }
         }
 
@@ -64,12 +63,13 @@ class CometSource(private val httpClient: HttpClient = createHttpClient()) : Eve
      * `peakMagDate` is stable across monthly refreshes -- scanning forward
      * from `now` instead would slide the peak forward every refresh once
      * perihelion has passed, and §6.3 would misread that drift as a
-     * material change. Returns `null` only when the propagator never
-     * converges anywhere in the scan range (§7.4.2's "drop with a
-     * diagnostic rather than emit garbage") -- failing the *ingest floor*
-     * is a normal, silent "not bright enough," not an error.
+     * material change. Returns [CometBuildResult.NonConvergent] only when
+     * the propagator never converges anywhere in the scan range (§7.4.2's
+     * "drop with a diagnostic rather than emit garbage") -- failing the
+     * *ingest floor* ([CometBuildResult.TooDim]) is a normal, silent "not
+     * bright enough," never reported as a propagator failure.
      */
-    private fun buildCometOccurrence(candidate: CometCandidate, ingestFloor: Double, now: Instant): Occurrence? {
+    private fun buildCometOccurrence(candidate: CometCandidate, ingestFloor: Double, now: Instant): CometBuildResult {
         val elements = candidate.elements
         val magParams = candidate.magParams
         val tp = elements.tpPerihelion
@@ -82,10 +82,10 @@ class CometSource(private val httpClient: HttpClient = createHttpClient()) : Eve
             apparentMagnitude(elements, magParams, t)?.let { samples += t to it }
             t += 1.days
         }
-        if (samples.isEmpty()) return null
+        if (samples.isEmpty()) return CometBuildResult.NonConvergent
 
         val roughPeak = samples.minBy { it.second }
-        if (roughPeak.second > ingestFloor) return null // §7.4.3 ingest filter
+        if (roughPeak.second > ingestFloor) return CometBuildResult.TooDim // §7.4.3 ingest filter
 
         val idx = samples.indexOf(roughPeak)
         val left = samples.getOrNull(idx - 1)?.first ?: (roughPeak.first - 1.days)
@@ -107,27 +107,35 @@ class CometSource(private val httpClient: HttpClient = createHttpClient()) : Eve
         // display-only, deliberately excluded from §6.3 materiality (MaterialChange.kt).
         val magAtIngest = apparentMagnitude(elements, magParams, now) ?: peakMag
 
-        return Occurrence(
-            id = "comet:${candidate.designation}",
-            phenomenon = Phenomenon.COMET,
-            sourceId = id,
-            title = "Comet ${candidate.name ?: candidate.designation}",
-            window = TimeWindow(windowStart, windowEnd + 1.days),
-            peakTime = peakMagDate,
-            certainty = Certainty.FORECAST,
-            payload = CometPayload(
-                designation = candidate.designation,
-                name = candidate.name,
-                elements = elements,
-                magParams = magParams,
-                perihelionDate = tp,
-                peakMag = peakMag,
-                peakMagDate = peakMagDate,
-                magAtIngest = magAtIngest,
+        return CometBuildResult.Emitted(
+            Occurrence(
+                id = "comet:${candidate.designation}",
+                phenomenon = Phenomenon.COMET,
+                sourceId = id,
+                title = "Comet ${candidate.name ?: candidate.designation}",
+                window = TimeWindow(windowStart, windowEnd + 1.days),
+                peakTime = peakMagDate,
+                certainty = Certainty.FORECAST,
+                payload = CometPayload(
+                    designation = candidate.designation,
+                    name = candidate.name,
+                    elements = elements,
+                    magParams = magParams,
+                    perihelionDate = tp,
+                    peakMag = peakMag,
+                    peakMagDate = peakMagDate,
+                    magAtIngest = magAtIngest,
+                ),
+                fetchedAt = now,
+                expiresAt = now + 45.days,
             ),
-            fetchedAt = now,
-            expiresAt = now + 45.days,
         )
+    }
+
+    private sealed class CometBuildResult {
+        data class Emitted(val occurrence: Occurrence) : CometBuildResult()
+        data object TooDim : CometBuildResult()
+        data object NonConvergent : CometBuildResult()
     }
 
     /** Golden-section search for the magnitude minimum inside `(left, right)`, refined to the hour (§7.4.3) -- same technique as ConjunctionSource's separation-minimum refinement, over `Instant` instead of Astronomy Engine's `Time`. */

@@ -77,5 +77,10 @@ internal fun julianDateToInstant(jd: Double): Instant {
     return Instant.fromEpochMilliseconds((unixSeconds * 1000.0).toLong())
 }
 
-private fun JsonPrimitive?.doubleOrNull(): Double? = this?.content?.toDoubleOrNull()
-private fun JsonPrimitive?.doubleOrThrow(): Double = requireNotNull(this?.content?.toDouble()) { "missing required numeric field" }
+// SBDB numeric fields are quoted JSON strings (§7.4.1), and Kotlin's
+// String.toDouble() accepts "NaN"/"Infinity"/"-Infinity" outside the JSON
+// number grammar -- reject those explicitly rather than let a corrupt
+// upstream value silently become e.g. the Unix epoch via julianDateToInstant.
+private fun JsonPrimitive?.doubleOrNull(): Double? = this?.content?.toDoubleOrNull()?.takeIf { it.isFinite() }
+private fun JsonPrimitive?.doubleOrThrow(): Double =
+    requireNotNull(this?.content?.toDouble()?.takeIf { it.isFinite() }) { "missing or non-finite required numeric field" }

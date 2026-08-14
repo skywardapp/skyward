@@ -45,6 +45,18 @@ class SourcesViewModel(private val container: AppContainer) : ViewModel() {
     fun setEnabled(sourceId: String, enabled: Boolean) {
         viewModelScope.launch {
             container.settingsRepo.setSourceEnabled(sourceId, enabled)
+            if (!enabled) {
+                // A disabled source never runs again, so SourceRunner's own
+                // withdraw-stale-FORECAST-occurrence logic (§6.3) never gets a
+                // chance to prune its rows -- without this, already-planned
+                // notifications for them would silently keep firing forever.
+                // Re-plan afterward so ReplanCoordinator sees them gone and
+                // cancels their PlannedNotification rows.
+                for (occurrenceId in container.occurrenceRepo.getIdsBySource(sourceId)) {
+                    container.occurrenceRepo.deleteById(occurrenceId)
+                }
+                container.replanAndSync()
+            }
             reload()
         }
     }

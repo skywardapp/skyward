@@ -34,9 +34,15 @@ fun parseSwpcKpForecast(raw: String): List<KpSlot> {
 
     return rows.drop(1).mapNotNull { row ->
         runCatching {
+            // Kp is a quoted string in this shape; String.toDouble() accepts
+            // "NaN"/"Infinity" outside JSON's own number grammar, so reject
+            // those explicitly rather than let a corrupt Kp value silently
+            // pass every threshold comparison downstream.
+            val kp = row[kpCol].toDouble()
+            require(kp.isFinite()) { "non-finite kp value" }
             KpSlot(
                 time = parseUtcNoZoneInstant(row[timeCol]),
-                kp = row[kpCol].toDouble(),
+                kp = kp,
                 state = observedCol?.let { row.getOrNull(it) },
             )
         }.getOrNull()
@@ -71,9 +77,15 @@ fun parseOvationGridJson(raw: String): ParsedOvationGrid {
     for (entry in response.coordinates) {
         val triple = runCatching { entry.jsonArray }.getOrNull() ?: continue
         if (triple.size < 3) continue
-        val lon = runCatching { triple[0].jsonPrimitive.double.toInt() }.getOrNull() ?: continue
-        val lat = runCatching { triple[1].jsonPrimitive.double.toInt() }.getOrNull() ?: continue
-        val prob = runCatching { triple[2].jsonPrimitive.double.toInt() }.getOrNull() ?: continue
+        // Double.toInt() maps NaN->0 and +/-Infinity->MAX/MIN_VALUE rather than
+        // throwing, so a non-finite cell wouldn't be caught by runCatching --
+        // require finiteness explicitly before converting.
+        val lonD = runCatching { triple[0].jsonPrimitive.double }.getOrNull()?.takeIf { it.isFinite() } ?: continue
+        val latD = runCatching { triple[1].jsonPrimitive.double }.getOrNull()?.takeIf { it.isFinite() } ?: continue
+        val probD = runCatching { triple[2].jsonPrimitive.double }.getOrNull()?.takeIf { it.isFinite() } ?: continue
+        val lon = lonD.toInt()
+        val lat = latD.toInt()
+        val prob = probD.toInt()
         if (lat < -90 || lat > 90) continue
         val lonIndex = lon.mod(GRID_LON)
         bytes[(lonIndex * GRID_LAT) + (lat + 90)] = prob.coerceIn(0, 100).toByte()

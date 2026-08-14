@@ -13,6 +13,7 @@ import dev.fritze.skyward.core.net.getText
 import dev.fritze.skyward.core.persistence.SourceStateRepo
 import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.haversineDistanceKm
+import dev.fritze.skyward.core.visibility.toRadians
 import io.ktor.client.HttpClient
 import kotlin.math.cos
 import kotlin.time.Duration.Companion.hours
@@ -33,7 +34,7 @@ import kotlin.time.Instant
  * not one cycle later.
  */
 class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : EventSource {
-    override val id = "swpc"
+    override val id = SOURCE_ID
     override val phenomena = setOf(Phenomenon.AURORA)
     override val kind = SourceKind.POLLED
 
@@ -47,7 +48,11 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
         val slots = parseSwpcKpForecast(httpClient.getText(KP_FORECAST_URL))
 
         val maxKpNext48h = slots
-            .filter { it.time >= req.now && it.time <= req.now + 48.hours }
+            // A slot's *start* being in the past doesn't mean it's over --
+            // include the slot currently in progress (its window still
+            // covers req.now), or the tier decision misses ongoing activity
+            // for up to a full SLOT_DURATION.
+            .filter { it.time + SLOT_DURATION > req.now && it.time <= req.now + 48.hours }
             .maxOfOrNull { it.kp } ?: 0.0
         val thresholdKp = req.derivedThresholds.minKpOfInterest
         // No enabled rule cares about Kp at all -> nothing to compare against;
@@ -89,7 +94,11 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
             occurrences = occurrences,
             newState = newState,
             nextRefreshHint = nextRefreshHint,
-            diagnostics = SourceDiagnostics(ok = ok, message = message, itemCount = occurrences.size, lastSuccessAt = req.now),
+            // `lastSuccessAt` is stamped by SourceRunner.persistRunnerState only
+            // when `ok` is true; leaving it null here on the OVATION-partial-
+            // failure path avoids reporting a success timestamp for a run that
+            // just failed, and avoids clobbering the real previous success time.
+            diagnostics = SourceDiagnostics(ok = ok, message = message, itemCount = occurrences.size, lastSuccessAt = if (ok) req.now else null),
         )
     }
 
@@ -147,8 +156,9 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
         if (grid.probabilityAt(center) >= minProbability) return true
         val latSpan = (radiusKm / KM_PER_DEGREE).toInt() + 1
         for (dLat in -latSpan..latSpan) {
-            val lat = (center.latDeg + dLat).coerceIn(-90.0, 90.0)
-            val cosLat = cos(lat.toRadiansLocal()).coerceAtLeast(0.05)
+            val lat = center.latDeg + dLat
+            if (lat < -90.0 || lat > 90.0) continue // skip rather than clamp -- clamping repeats the same polar row redundantly
+            val cosLat = cos(lat.toRadians()).coerceAtLeast(0.05)
             val lonSpan = (radiusKm / (KM_PER_DEGREE * cosLat)).toInt() + 1
             for (dLon in -lonSpan..lonSpan) {
                 val lon = ((center.lonDeg + dLon + 540.0) % 360.0) - 180.0
@@ -200,5 +210,3 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
         internal const val SOURCE_ID = "swpc"
     }
 }
-
-private fun Double.toRadiansLocal() = this * kotlin.math.PI / 180.0

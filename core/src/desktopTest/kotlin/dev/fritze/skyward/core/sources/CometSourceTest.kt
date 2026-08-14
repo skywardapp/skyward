@@ -64,6 +64,28 @@ class CometSourceTest {
         val result = CometSource(mockClient(json)).refresh(refreshRequest(now))
 
         assertEquals(0, result.occurrences.size)
+        assertTrue(result.diagnostics.ok)
+        assertEquals(null, result.diagnostics.message, "filtered-by-ingest-floor is normal, silent filtering -- not a propagator-non-convergence diagnostic")
+    }
+
+    @Test
+    fun peakMagDateStaysStableEvenWhenNowIsWellPastTpPlusNineMonths() = runTest {
+        // §7.4.3's own scan-range formula is `min(now, tp-9mo)..max(now, tp+9mo)`
+        // -- deliberately widening past the +/-9mo window when `now` sits outside
+        // it, per the design doc, rather than a fixed tp+/-9mo window. This proves
+        // that widening the scan (here, `now` is far past tp+9mo) still finds the
+        // same physical minimum: post-perihelion brightness only fades (r and
+        // delta both grow), so extending the scan can't introduce a brighter,
+        // later minimum to displace the one near perihelion.
+        val tp = now + 10.days
+        val json = sbdbFixture(tp = tp, epoch = now, e = 0.99, q = 0.4, i = 20.0, om = 50.0, w = 80.0, m1 = 4.0, k1 = 10.0, pdes = "C/2026 W1")
+
+        val firstRun = (CometSource(mockClient(json)).refresh(refreshRequest(now)).occurrences.single().payload as CometPayload)
+        val farFutureNow = tp + 400.days // well past tp + NINE_MONTHS (274.days)
+        val secondRun = (CometSource(mockClient(json)).refresh(refreshRequest(farFutureNow)).occurrences.single().payload as CometPayload)
+
+        assertEquals(firstRun.peakMagDate, secondRun.peakMagDate)
+        assertEquals(firstRun.peakMag, secondRun.peakMag)
     }
 
     @Test

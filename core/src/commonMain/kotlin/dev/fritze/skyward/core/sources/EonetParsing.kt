@@ -4,8 +4,10 @@ import dev.fritze.skyward.core.model.GeoPoint
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Instant
 
@@ -22,9 +24,6 @@ data class EonetEvent(
     val magnitudeValue: Double?,
     val magnitudeUnit: String?,
 )
-
-@Serializable
-private data class EonetResponse(val events: List<EonetEventJson> = emptyList())
 
 @Serializable
 private data class EonetEventJson(
@@ -56,11 +55,19 @@ private val eonetJson = Json { ignoreUnknownKeys = true }
  * per the doc -- not an area-weighted centroid). Events with no category or
  * no geometry entries are skipped -- there is nothing sane to build a
  * [dev.fritze.skyward.core.model.TerrestrialPayload] from otherwise.
+ *
+ * Each event element is decoded (and error-caught) individually rather than
+ * decoding the whole `events` array as one `List<EonetEventJson>` in a
+ * single `decodeFromString` call -- with the latter, one event missing a
+ * required field (`id`, a category's `id`/`title`, a geometry's `date`/
+ * `type`) throws for the *entire* response, discarding every otherwise-valid
+ * event alongside it (§19 R3: graceful degradation, not all-or-nothing).
  */
 fun parseEonetEvents(raw: String): List<EonetEvent> {
-    val response = eonetJson.decodeFromString<EonetResponse>(raw)
-    return response.events.mapNotNull { event ->
+    val eventsArray = eonetJson.parseToJsonElement(raw).jsonObject["events"]?.jsonArray ?: return emptyList()
+    return eventsArray.mapNotNull { eventElement ->
         runCatching {
+            val event = eonetJson.decodeFromJsonElement<EonetEventJson>(eventElement)
             val category = event.categories.firstOrNull() ?: return@mapNotNull null
             if (event.geometry.isEmpty()) return@mapNotNull null
             val first = event.geometry.first()
@@ -84,7 +91,10 @@ fun parseEonetEvents(raw: String): List<EonetEvent> {
 private fun parseEonetGeometryPoint(type: String, coordinates: JsonElement): GeoPoint = when (type) {
     "Point" -> {
         val arr = coordinates.jsonArray
-        GeoPoint(latDeg = arr[1].jsonPrimitive.double, lonDeg = arr[0].jsonPrimitive.double)
+        val lat = arr[1].jsonPrimitive.double
+        val lon = arr[0].jsonPrimitive.double
+        require(lat.isFinite() && lon.isFinite()) { "non-finite Point coordinate" }
+        GeoPoint(latDeg = lat, lonDeg = lon)
     }
     "Polygon" -> {
         val outerRing = coordinates.jsonArray[0].jsonArray
@@ -94,10 +104,10 @@ private fun parseEonetGeometryPoint(type: String, coordinates: JsonElement): Geo
         // arithmetic mean (§7.7: "arithmetic centroid of ring vertices",
         // i.e. the distinct vertices, not the closing point twice).
         if (points.size > 1 && points.first() == points.last()) points = points.dropLast(1)
-        GeoPoint(
-            latDeg = points.map { it[1].jsonPrimitive.double }.average(),
-            lonDeg = points.map { it[0].jsonPrimitive.double }.average(),
-        )
+        val lat = points.map { it[1].jsonPrimitive.double }.average()
+        val lon = points.map { it[0].jsonPrimitive.double }.average()
+        require(lat.isFinite() && lon.isFinite()) { "non-finite Polygon centroid" }
+        GeoPoint(latDeg = lat, lonDeg = lon)
     }
     else -> error("unsupported EONET geometry type: $type")
 }

@@ -50,6 +50,24 @@ class AuroraSourceTest {
     }
 
     @Test
+    fun noRuleCaringAboutKpStaysIdleRegardlessOfForecastAndKeepsEveryFutureSlot() = runTest {
+        // thresholdKp == null: no enabled rule has a KpAtLeast condition, so
+        // there's no basis to compare maxKpNext48h against -- goActive stays
+        // false (documented in AuroraSource.kt), and the §7.3.3 THREE_DAY
+        // pruning ("below every threshold -> nothing") has no threshold to
+        // prune by either, so every future slot survives unfiltered.
+        val requestedUrls = mutableListOf<String>()
+        val source = AuroraSource(mockClient(requestedUrls, forecast = kpForecastFixture(kp = 9.0), ovation = null))
+
+        val result = source.refresh(refreshRequest(locations = listOf(home), minKp = null))
+
+        assertEquals(now + 3.hours, result.nextRefreshHint)
+        assertTrue(requestedUrls.none { it.contains("ovation_aurora_latest") })
+        val threeDay = result.occurrences.filter { (it.payload as AuroraPayload).forecastKind == AuroraForecastKind.THREE_DAY }
+        assertEquals(1, threeDay.size, "the high-Kp slot must still survive since there's no threshold to prune it by")
+    }
+
+    @Test
     fun highMaxKpNext48hGoesActiveAndFetchesOvationInTheSamePollCycle() = runTest {
         val requestedUrls = mutableListOf<String>()
         val ovation = ovationFixture(listOf(Triple(10, 60, 80))) // exactly at `home`'s coordinates

@@ -56,6 +56,27 @@ class EonetParsingTest {
         assertEquals(0, parseEonetEvents("""{"events":[]}""").size)
     }
 
+    @Test
+    fun oneEventMissingARequiredFieldDoesNotDiscardTheOtherValidEvents() {
+        // §19 R3: one malformed element in the array must not fail the whole
+        // response -- each event is decoded independently.
+        val fixture = """
+            {"events":[
+              {"id":"EONET_GOOD","title":"Valid event","link":"x",
+               "categories":[{"id":"wildfires","title":"Wildfires"}],
+               "geometry":[{"date":"2026-08-01T00:00:00Z","type":"Point","coordinates":[1,2]}]},
+              {"title":"Missing id field entirely",
+               "categories":[{"id":"wildfires","title":"Wildfires"}],
+               "geometry":[{"date":"2026-08-01T00:00:00Z","type":"Point","coordinates":[1,2]}]}
+            ]}
+        """.trimIndent()
+
+        val events = parseEonetEvents(fixture)
+
+        assertEquals(1, events.size)
+        assertEquals("EONET_GOOD", events[0].eonetId)
+    }
+
     private companion object {
         val POINT_EVENT_FIXTURE = """
             {"title":"EONET Events","events":[
