@@ -40,12 +40,21 @@
             android:exported="false" />
 
         <!-- §10.2: "On BOOT_COMPLETED (and MY_PACKAGE_REPLACED): re-register
-             the window." Both are protected system broadcasts (only the
-             system can send them), so exported=true here is required to
-             receive them but not a security concern. -->
-        <receiver
-            android:name=".alarm.BootReceiver"
-            android:exported="true">
+             the window." Both are protected system broadcasts (AOSP declares
+             them <protected-broadcast>, so the OS refuses to let any
+             third-party app send them), and a receiver has to be exported for
+             the system to deliver to it at all.
+
+             Reviewed for Sonar xml:S5322 ("make sure intents are received
+             safely"): no android:permission is added because there is no
+             sender permission that meaningfully gates the system here, and
+             naming one risks silently dropping boot delivery, which cannot be
+             covered by our emulator tests. The residual surface is another app
+             sending an *explicit* component-targeted intent; BootReceiver
+             guards on intent.action, and the only reachable effect is an
+             idempotent re-sync of alarms already in our own DB. No data is
+             read from the intent and none leaves the app. -->
+        <receiver android:name=".alarm.BootReceiver" android:exported="true"> <!-- NOSONAR xml:S5322, reviewed above -->
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -54,10 +63,13 @@
 
         <!-- §10.2: exact-alarm permission revoked/granted mid-life; re-sync
              onto whichever path (exact/approximate) is now correct. API 31+
-             only; the intent-filter is simply inert below that. -->
-        <receiver
-            android:name=".alarm.ExactAlarmPermissionReceiver"
-            android:exported="true">
+             only; the intent-filter is simply inert below that.
+
+             Same xml:S5322 review as BootReceiver above: protected system
+             broadcast, exported only so the system can reach us, action
+             guarded in the receiver, and the only effect is an idempotent
+             AlarmSyncer pass over rows we already own. -->
+        <receiver android:name=".alarm.ExactAlarmPermissionReceiver" android:exported="true"> <!-- NOSONAR xml:S5322, reviewed above -->
             <intent-filter>
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
