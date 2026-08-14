@@ -22,20 +22,22 @@ object AlarmSyncer {
         val horizon = now + REGISTRATION_WINDOW
         for (n in reconciled) {
             when (n.status) {
-                NotificationStatus.PENDING, NotificationStatus.REGISTERED -> {
-                    if (n.fireAt < now) {
-                        // Already past due by the time this sync ran (e.g. boot recovery after
-                        // the device was off past fireAt) -- don't register an alarm that would
-                        // fire immediately; the user already missed the window.
+                NotificationStatus.PENDING, NotificationStatus.REGISTERED -> when {
+                    // Already past due by the time this sync ran (e.g. boot recovery after the
+                    // device was off past fireAt) -- don't register an alarm that would fire
+                    // immediately; the user already missed the window.
+                    n.fireAt < now -> {
                         scheduler.cancel(n.id)
                         notificationRepo.updateStatus(n.id, NotificationStatus.MISSED, firedAt = null)
-                    } else if (n.fireAt <= horizon) {
+                    }
+                    n.fireAt <= horizon -> {
                         val precision = scheduler.schedule(n)
                         notificationRepo.updatePrecision(n.id, precision)
                         notificationRepo.updateStatus(n.id, NotificationStatus.REGISTERED, firedAt = null)
-                    } else if (n.status == NotificationStatus.REGISTERED) {
-                        // Shouldn't normally happen (the window only shrinks toward `now`), but
-                        // stay correct if a re-plan ever pushes a fireAt back out past it.
+                    }
+                    // Shouldn't normally happen (the window only shrinks toward `now`), but stay
+                    // correct if a re-plan ever pushes a fireAt back out past it.
+                    n.status == NotificationStatus.REGISTERED -> {
                         scheduler.cancel(n.id)
                         notificationRepo.updateStatus(n.id, NotificationStatus.PENDING, firedAt = null)
                     }

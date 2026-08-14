@@ -18,6 +18,11 @@ import kotlin.time.Clock
  */
 class ExactAlarmPermissionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // The action is a protected broadcast, so no other app can *broadcast* it -- but this
+        // receiver has to be exported to hear the system, and an exported receiver can still be
+        // targeted by an explicit intent (by component name) carrying any action at all. Without
+        // this guard any installed app could poke us into a full alarm re-sync at will.
+        if (intent.action != ACTION_EXACT_ALARM_PERMISSION_STATE_CHANGED) return
         val container = (context.applicationContext as SkywardApplication).container
         val pendingResult = goAsync()
         container.applicationScope.launch {
@@ -30,3 +35,11 @@ class ExactAlarmPermissionReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/**
+ * `AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` as a literal: the constant
+ * itself is API 31+, and this must stay readable on minSdk 26 (where the filter simply never
+ * matches). Kept in sync with the intent-filter in AndroidManifest.xml.
+ */
+private const val ACTION_EXACT_ALARM_PERMISSION_STATE_CHANGED =
+    "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
