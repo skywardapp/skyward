@@ -13,10 +13,19 @@ import kotlin.time.Instant
  */
 object SyncMerge {
 
-    /** The subset of [incoming] that should be written locally: new ids, or ids where [incoming] is strictly newer. */
+    /**
+     * The subset of [incoming] that should be written locally: new ids, or
+     * ids where [incoming] is strictly newer. [incoming] is first reduced to
+     * its newest record per id -- a file can (accidentally or from a buggy
+     * exporter) contain two records sharing an id, and without this, both
+     * would independently pass the "newer than local" check below and get
+     * upserted in file order, letting an older-but-later-in-the-file record
+     * silently win over a newer one instead of `modifiedAt` deciding.
+     */
     fun <T> newerOrMissing(local: List<T>, incoming: List<T>, id: (T) -> String, modifiedAt: (T) -> Instant): List<T> {
         val localById = local.associateBy(id)
-        return incoming.filter { candidate ->
+        val newestIncomingById = incoming.groupBy(id).mapValues { (_, duplicates) -> duplicates.maxBy(modifiedAt) }
+        return newestIncomingById.values.filter { candidate ->
             val existing = localById[id(candidate)]
             existing == null || modifiedAt(candidate) > modifiedAt(existing)
         }

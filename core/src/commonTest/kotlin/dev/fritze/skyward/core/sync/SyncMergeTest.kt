@@ -46,6 +46,23 @@ class SyncMergeTest {
     }
 
     @Test
+    fun duplicateIncomingIdsReduceToTheNewestBeforeComparingToLocal() {
+        // A file (accidentally, or from a buggy exporter) containing two records sharing an id
+        // must not let file order decide the winner -- only modifiedAt may.
+        val incoming = listOf(loc("a", t0 + 1.days), loc("a", t0 + 2.days), loc("a", t0))
+        val result = SyncMerge.newerOrMissing(local = emptyList(), incoming = incoming, id = { it.id }, modifiedAt = { it.modifiedAt })
+        assertEquals(listOf(loc("a", t0 + 2.days)), result)
+    }
+
+    @Test
+    fun duplicateIncomingIdsStillRespectAnEvenNewerLocalRecord() {
+        val local = listOf(loc("a", t0 + 5.days))
+        val incoming = listOf(loc("a", t0 + 1.days), loc("a", t0 + 2.days))
+        val result = SyncMerge.newerOrMissing(local, incoming, id = { it.id }, modifiedAt = { it.modifiedAt })
+        assertEquals(emptyList(), result, "even the newest duplicate is still older than local")
+    }
+
+    @Test
     fun syntheticFiredHistoryEntryDerivesOccurrenceIdAndIsFired() {
         val entry = SyncMerge.syntheticFiredHistoryEntry("se:20260812|1786556760|7200", t0)
         assertEquals("se:20260812", entry.occurrenceId)

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.sync.SyncImportError
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -154,7 +155,7 @@ private class SyncUiController(
         isBusy = true
         scope.launch {
             val text = viewModel.buildExportText(appVersion)
-            val wrote = runCatching { withContext(Dispatchers.IO) { contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } } }.isSuccess
+            val wrote = runCatchingCancellable { withContext(Dispatchers.IO) { contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } } }.isSuccess
             if (wrote) {
                 statusMessage = "Exported your locations, rules, and settings."
                 errorMessage = null
@@ -176,7 +177,7 @@ private class SyncUiController(
                 isBusy = false
                 return@launch
             }
-            runCatching { viewModel.applyImport(text, replaceEverything) }
+            runCatchingCancellable { viewModel.applyImport(text, replaceEverything) }
                 .onSuccess { summary -> importSummary = summary; errorMessage = null; statusMessage = null }
                 .onFailure { errorMessage = importErrorMessage(it); importSummary = null; statusMessage = null }
             isBusy = false
@@ -184,7 +185,7 @@ private class SyncUiController(
     }
 
     private fun readText(uri: Uri): String? =
-        runCatching { contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
+        runCatchingCancellable { contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
 }
 
 private fun importErrorMessage(t: Throwable): String = when (t) {

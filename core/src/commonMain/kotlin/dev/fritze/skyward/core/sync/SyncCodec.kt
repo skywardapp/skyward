@@ -83,7 +83,14 @@ object SyncCodec {
 
         val warnings = mutableListOf<RuleImportWarning>()
         val degradedIds = mutableSetOf<String>()
-        val ruleElements = (root["rules"] as? JsonArray) ?: JsonArray(emptyList())
+        // Absent "rules" tolerantly means "none"; present-but-wrong-shape must refuse rather than
+        // silently become an empty list -- otherwise a corrupt file paired with "Replace
+        // everything" would delete every local rule and write nothing back in its place.
+        val ruleElements = when (val rulesField = root["rules"]) {
+            null -> JsonArray(emptyList())
+            is JsonArray -> rulesField
+            else -> throw SyncImportError.Malformed("rules: expected an array")
+        }
         val rules = ruleElements.mapNotNull { decodeRuleOrDisabled(it, warnings, degradedIds) }
 
         return ParsedSyncFile(

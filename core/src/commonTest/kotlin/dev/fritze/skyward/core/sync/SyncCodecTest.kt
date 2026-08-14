@@ -68,6 +68,20 @@ class SyncCodecTest {
     }
 
     @Test
+    fun nonArrayRulesFieldRefusedRatherThanTreatedAsEmpty() {
+        // §12.3: a "Replace everything" import must never turn a corrupt file into a silent wipe --
+        // a non-array "rules" value has to refuse the whole import, not decode as "zero rules".
+        val text = """{"format":"skyward-sync","formatVersion":1,"exportedAt":"2026-01-01T00:00:00Z","appVersion":"1","locations":[],"rules":{},"settings":{},"firedNotificationIds":[]}"""
+        assertFailsWith<SyncImportError.Malformed> { SyncCodec.parseForImport(text) }
+    }
+
+    @Test
+    fun absentRulesFieldStillDefaultsToEmpty() {
+        val text = """{"format":"skyward-sync","formatVersion":1,"exportedAt":"2026-01-01T00:00:00Z","appVersion":"1","locations":[],"settings":{},"firedNotificationIds":[]}"""
+        assertTrue(SyncCodec.parseForImport(text).rules.isEmpty())
+    }
+
+    @Test
     fun malformedFieldShapesRefuseWithoutThrowingRaw() {
         // "format" as an array, not a string -- must not escape as a raw ClassCastException/
         // IllegalArgumentException from the underlying JsonPrimitive access.

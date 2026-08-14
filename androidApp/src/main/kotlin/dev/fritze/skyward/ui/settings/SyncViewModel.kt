@@ -7,6 +7,7 @@ import dev.fritze.skyward.core.sync.SyncCodec
 import dev.fritze.skyward.core.sync.SyncFile
 import dev.fritze.skyward.core.sync.SyncMerge
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 
@@ -78,7 +79,7 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
         // §12.3: "After import: full re-plan (§9.7)." The data above is already committed, so a
         // re-plan failure must not be reported as an import failure (that would route through the
         // generic "couldn't read that file" message and could prompt a needless destructive retry).
-        val replanFailed = runCatching { container.replanAndSync() }.isFailure
+        val replanFailed = runCatchingCancellable { container.replanAndSync() }.isFailure
 
         return ImportSummary(
             locationsImported = locationsToWrite.size,

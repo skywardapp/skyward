@@ -23,6 +23,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.rules.Anchor
 import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.Rule
+import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -97,7 +98,7 @@ private class PreviewState {
         }
         loading = true
         delay(500)
-        runCatching { viewModel.previewCount(rule) }
+        runCatchingCancellable { viewModel.previewCount(rule) }
             .onSuccess { previewCount = it }
             .onFailure { previewFailed = true }
         loading = false
@@ -106,7 +107,7 @@ private class PreviewState {
     fun loadPastCount(scope: CoroutineScope, viewModel: RuleEditorViewModel, rule: Rule) {
         scope.launch {
             pastLoading = true
-            pastCount = runCatching { viewModel.pastMatchCount(rule) ?: 0 }.getOrNull()
+            pastCount = runCatchingCancellable { viewModel.pastMatchCount(rule) ?: 0 }.getOrNull()
             pastLoading = false
         }
     }
