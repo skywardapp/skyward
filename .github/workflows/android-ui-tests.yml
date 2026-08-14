@@ -41,6 +41,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job runs PR-controlled Gradle and shell code, and nothing in it
+          # does an authenticated Git operation — so the checkout token has no
+          # reason to stay on disk for that code to find.
+          persist-credentials: false
 
       # Hardware acceleration: without this the emulator falls back to software
       # and the job takes long enough to hit the timeout.
