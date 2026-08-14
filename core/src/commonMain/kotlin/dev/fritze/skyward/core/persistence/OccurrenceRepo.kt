@@ -25,6 +25,10 @@ class OccurrenceRepo(private val db: SkywardDatabase) {
     fun observeAll(): Flow<List<OccurrenceModel>> =
         db.occurrenceQueries.selectAll().asFlow().mapToList(Dispatchers.Default).map { rows -> rows.map { it.toModel() } }
 
+    suspend fun getAll(): List<OccurrenceModel> = withContext(Dispatchers.Default) {
+        db.occurrenceQueries.selectAll().executeAsList().map { it.toModel() }
+    }
+
     suspend fun getById(id: String): OccurrenceModel? = withContext(Dispatchers.Default) {
         db.occurrenceQueries.selectById(id).executeAsOneOrNull()?.toModel()
     }
