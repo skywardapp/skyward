@@ -12,6 +12,8 @@ sqldelight = "2.3.2"
 workManager = "2.10.5"
 androidxCore = "1.18.0"
 androidxActivityCompose = "1.13.0"
+androidxTestJunit = "1.3.0"
+androidxTestRunner = "1.7.0"
 composeNativeTray = "1.3.3"
 twoSlices = "0.9.7"
 
@@ -38,6 +40,11 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+
+# Android instrumented tests (§17.5). Not shipped: androidTest* configurations
+# only, so they stay out of the licence-checked runtime classpaths (§16).
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestJunit" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "composeNativeTray" }
 two-slices = { module = "com.sshtools:two-slices", version.ref = "twoSlices" }
