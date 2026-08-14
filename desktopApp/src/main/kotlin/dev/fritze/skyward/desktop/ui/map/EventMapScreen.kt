@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -96,11 +97,15 @@ fun EventMapScreen(state: DesktopAppState) {
 
             LayerChips(enabledLayers) { enabledLayers = it }
 
-            Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
+            // Sized explicitly rather than with aspectRatio(): under
+            // fillMaxSize() both dimensions are already fixed, so aspectRatio
+            // cannot shrink the box to fit and the map spills out of its pane.
+            BoxWithConstraints(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
+                val mapWidth = minOf(maxWidth, maxHeight * MAP_ASPECT)
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .aspectRatio(MAP_ASPECT)
+                        .width(mapWidth)
+                        .height(mapWidth / MAP_ASPECT)
                         .clip(RoundedCornerShape(6.dp))
                         .background(OCEAN),
                 ) {

@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.sources
 
+import dev.fritze.skyward.core.astro.subPoint
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.model.Certainty
@@ -12,6 +13,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
+import io.github.cosinekitty.astronomy.Body
 import io.github.cosinekitty.astronomy.EclipseKind
 import io.github.cosinekitty.astronomy.GlobalSolarEclipseInfo
 import io.github.cosinekitty.astronomy.LocalSolarEclipseInfo
@@ -82,6 +84,7 @@ class EclipseSource : EventSource {
         } else {
             emptyList()
         }
+        val greatest = greatestCircumstances(eclipse)
 
         return Occurrence(
             id = "se:${peakInstant.toYearMonthDayKey()}",
@@ -95,13 +98,51 @@ class EclipseSource : EventSource {
             certainty = Certainty.CERTAIN,
             payload = SolarEclipsePayload(
                 kind = solarKind,
-                greatestEclipsePoint = GeoPoint(eclipse.latitude, eclipse.longitude),
+                greatestEclipsePoint = greatest.point,
                 greatestEclipseTime = peakInstant,
                 centralPath = centralPath,
-                obscurationAtGreatest = eclipse.obscuration,
+                obscurationAtGreatest = greatest.obscuration,
             ),
             fetchedAt = now,
             expiresAt = null,
+        )
+    }
+
+    private data class GreatestCircumstances(val point: GeoPoint, val obscuration: Double)
+
+    /**
+     * Astronomy Engine reports `latitude`, `longitude` and `obscuration` as
+     * **NaN** for a PARTIAL global eclipse: the shadow axis misses the Earth
+     * entirely, so there is no "center of the peak eclipse shadow" to report.
+     * §7.1.4 still wants one `Occurrence` per eclipse with a point, and a NaN
+     * one is not merely imprecise — it cannot be serialized into
+     * `payload_json` at all (JSON has no NaN, §11), and it makes §8.2's
+     * travel search start from nowhere.
+     *
+     * For that case the sub-lunar point stands in: at eclipse time the Moon
+     * and the shadow axis lie in nearly the same direction from the Earth's
+     * centre, so the point with the Moon overhead is, to well within the
+     * precision this seeds, the point on Earth closest to the axis — i.e.
+     * where the eclipse is deepest. Its local obscuration is then a real
+     * measured value rather than a missing one.
+     */
+    private fun greatestCircumstances(eclipse: GlobalSolarEclipseInfo): GreatestCircumstances {
+        val searchStart = eclipse.peak.addDays(-4.0 / 24.0)
+        if (eclipse.latitude.isFinite() && eclipse.longitude.isFinite()) {
+            val point = GeoPoint(eclipse.latitude, eclipse.longitude)
+            val obscuration = eclipse.obscuration.takeIf { it.isFinite() }
+                ?: tryLocalEclipse(point.latDeg, point.lonDeg, searchStart)?.obscuration?.takeIf { it.isFinite() }
+                ?: 1.0 // total/annular by definition once the axis reaches the ground
+            return GreatestCircumstances(point, obscuration)
+        }
+
+        val subLunar = subPoint(Body.Moon, eclipse.peak)
+        val local = tryLocalEclipse(subLunar.latDeg, subLunar.lonDeg, searchStart)
+        return GreatestCircumstances(
+            point = subLunar,
+            // 0.0 only if even the local search fails — an honest "we could not
+            // determine how deep it gets", not a claim that nothing happens.
+            obscuration = local?.obscuration?.takeIf { it.isFinite() } ?: 0.0,
         )
     }
 
@@ -154,6 +195,18 @@ class EclipseSource : EventSource {
         return buckets.entries
             .sortedBy { it.key }
             .mapNotNull { (_, pointsInBucket) -> refineBucket(pointsInBucket) }
+            // Refinement moves a sample off its bucket's nominal time, which
+            // can reorder neighbours across a bucket boundary. Sort by the
+            // *emitted* time: the list order is the polyline order the map
+            // draws (§14.1), and the shadow's track is by definition the
+            // order in which it touches the ground.
+            .sortedBy { it.time }
+            // Belt and braces: two adjacent buckets whose refinements converge
+            // on the same point would draw as a zero-length segment on the map
+            // and skew the path's own duration statistics. The bounded
+            // refinement below is what actually prevents this; this keeps a
+            // future tuning change from silently reintroducing it.
+            .distinctBy { it.time }
     }
 
     private data class GridHit(val point: GeoPoint, val local: LocalSolarEclipseInfo)
@@ -198,39 +251,69 @@ class EclipseSource : EventSource {
     /** 2-minute local-peak-time slot index (§7.1.3 step 3). */
     private fun bucketIndex(t: Time): Long = (t.tt * MINUTES_PER_DAY / BUCKET_MINUTES).toLong()
 
+    /**
+     * §7.1.3 step 3: "refine the centroid point with 4 rounds of ±step/2
+     * hill-climbing (step 2.5°→0.15°) maximizing central duration ... the
+     * maximum lies on the centerline."
+     *
+     * The refinement is deliberately **bounded**: each round probes exactly
+     * once at ±`offset` and then halves `offset`, so a sample can move at
+     * most 1.25 + 0.625 + 0.3125 + 0.156 ≈ 2.34° from its bucket's centroid.
+     * That bound is the whole point. Central duration rises monotonically
+     * along the path toward greatest eclipse, so an *unbounded* climb doesn't
+     * find this bucket's centreline point — it walks off down the path to the
+     * global maximum, and every bucket collapses onto the same handful of
+     * points (which is exactly what the §18 M6 map-rendering check caught:
+     * a 2027-08-02 "path" of a dozen repeated coordinates with southern Spain
+     * and Morocco missing entirely).
+     */
     private fun refineBucket(pointsInBucket: List<GridHit>): PathSample? {
         val searchStart = pointsInBucket.first().local.peak.time.addDays(-4.0 / 24.0)
         var lat = pointsInBucket.map { it.point.latDeg }.average()
         // Circular (not arithmetic) mean: a bucket whose grid hits straddle
         // the antimeridian (e.g. -179 and 179) must average to ~180, not ~0.
         var lon = circularMeanDeg(pointsInBucket.map { it.point.lonDeg })
-        var best = pointsInBucket.first().local
 
-        var step = COARSE_GRID_STEP_DEG
+        // Start from the centroid itself where it is genuinely on the central
+        // path; the bucket's own best grid hit is the fallback when the
+        // centroid of several hits lands just off it.
+        val atCentroid = tryLocalEclipse(lat, normalizeLonDeg(lon), searchStart)?.takeIf(::isCentralPathPoint)
+        var best: LocalSolarEclipseInfo
+        if (atCentroid != null) {
+            best = atCentroid
+        } else {
+            val bestHit = pointsInBucket.maxBy { centralDurationDays(it.local) }
+            best = bestHit.local
+            lat = bestHit.point.latDeg
+            lon = bestHit.point.lonDeg
+        }
+
+        var offset = COARSE_GRID_STEP_DEG / 2.0
         repeat(HILL_CLIMB_ROUNDS) {
-            var improved = true
-            while (improved) {
-                improved = false
-                var bestDuration = centralDurationDays(best)
-                for (dLat in doubleArrayOf(-step, 0.0, step)) {
-                    for (dLon in doubleArrayOf(-step, 0.0, step)) {
-                        if (dLat == 0.0 && dLon == 0.0) continue
-                        val candidateLat = (lat + dLat).coerceIn(-90.0, 90.0)
-                        val candidateLon = normalizeLonDeg(lon + dLon)
-                        val candidate = tryLocalEclipse(candidateLat, candidateLon, searchStart) ?: continue
-                        if (!isCentralPathPoint(candidate)) continue
-                        val duration = centralDurationDays(candidate)
-                        if (duration > bestDuration) {
-                            bestDuration = duration
-                            best = candidate
-                            lat = candidateLat
-                            lon = candidateLon
-                            improved = true
-                        }
+            var bestDuration = centralDurationDays(best)
+            var bestLat = lat
+            var bestLon = lon
+            var bestLocal = best
+            for (dLat in doubleArrayOf(-offset, 0.0, offset)) {
+                for (dLon in doubleArrayOf(-offset, 0.0, offset)) {
+                    if (dLat == 0.0 && dLon == 0.0) continue
+                    val candidateLat = (lat + dLat).coerceIn(-90.0, 90.0)
+                    val candidateLon = normalizeLonDeg(lon + dLon)
+                    val candidate = tryLocalEclipse(candidateLat, candidateLon, searchStart) ?: continue
+                    if (!isCentralPathPoint(candidate)) continue
+                    val duration = centralDurationDays(candidate)
+                    if (duration > bestDuration) {
+                        bestDuration = duration
+                        bestLocal = candidate
+                        bestLat = candidateLat
+                        bestLon = candidateLon
                     }
                 }
             }
-            step /= 2.0
+            lat = bestLat
+            lon = bestLon
+            best = bestLocal
+            offset /= 2.0
         }
 
         val totalBegin = best.totalBegin ?: return null

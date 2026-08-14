@@ -1,10 +1,12 @@
 package dev.fritze.skyward.core.sources
 
 import dev.fritze.skyward.core.model.LunarEclipsePayload
+import dev.fritze.skyward.core.model.OccurrencePayload
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -75,6 +77,68 @@ class EclipseSourceTest {
         for (sample in payload.centralPath) {
             assertTrue(sample.centralDurationSec != null && sample.centralDurationSec > 0.0)
         }
+    }
+
+    /**
+     * A PARTIAL global eclipse has no shadow-axis intersection with the
+     * Earth, so Astronomy Engine reports its latitude, longitude and
+     * obscuration as NaN. Persisting one then fails outright — JSON has no
+     * NaN — which took down the desktop app's first refresh with
+     * `JsonEncodingException: Unexpected special floating-point value NaN`
+     * from inside `GeoPoint`'s serializer. Every emitted occurrence must
+     * carry finite, plottable coordinates.
+     */
+    @Test
+    fun partialEclipsesCarryFiniteCoordinatesAndSurviveSerialization() = runTest(timeout = 180.seconds) {
+        val result = refresh(Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2029-06-01T00:00:00Z"))
+        val solar = result.occurrences.filter { it.id.startsWith("se:") }
+        val partials = solar.filter { (it.payload as SolarEclipsePayload).kind == SolarEclipseKind.PARTIAL }
+        assertTrue(partials.isNotEmpty(), "expected at least one partial solar eclipse in this span")
+
+        for (occurrence in solar) {
+            val payload = occurrence.payload as SolarEclipsePayload
+            val point = payload.greatestEclipsePoint
+            assertTrue(point.latDeg.isFinite() && point.lonDeg.isFinite(), "${occurrence.id}: non-finite greatest-eclipse point $point")
+            assertTrue(point.latDeg in -90.0..90.0, "${occurrence.id}: latitude out of range ${point.latDeg}")
+            assertTrue(point.lonDeg in -180.0..180.0, "${occurrence.id}: longitude out of range ${point.lonDeg}")
+            assertTrue(
+                payload.obscurationAtGreatest.isFinite() && payload.obscurationAtGreatest in 0.0..1.0,
+                "${occurrence.id}: obscuration ${payload.obscurationAtGreatest} is not a fraction",
+            )
+            // The real failure was at the persistence boundary (§11), so assert there.
+            val json = Json.encodeToString(OccurrencePayload.serializer(), payload)
+            assertEquals(payload, Json.decodeFromString(OccurrencePayload.serializer(), json))
+        }
+    }
+
+    /**
+     * §7.1.3's per-bucket refinement is bounded on purpose. Central duration
+     * increases monotonically along the path toward greatest eclipse, so an
+     * unbounded climb walks every bucket off to the same global maximum and
+     * the "path" degenerates into a handful of repeated coordinates with long
+     * stretches of the real track missing. This asserts the shape a path must
+     * have — distinct, time-ordered, spatially spread — rather than only that
+     * its extreme value is right.
+     */
+    @Test
+    fun august2026PathSamplesStayDistinctAndSpreadAlongTheTrack() = runTest(timeout = 180.seconds) {
+        val result = refresh(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-20T00:00:00Z"))
+        val payload = result.occurrences.first { it.id == "se:20260812" }.payload as SolarEclipsePayload
+        val path = payload.centralPath
+
+        assertTrue(path.size >= 15, "expected a resolved centreline, got ${path.size} samples")
+        assertEquals(path.size, path.map { it.time }.toSet().size, "path samples must have distinct times")
+        assertEquals(path, path.sortedBy { it.time }, "path samples must be ordered in time")
+        assertEquals(
+            path.size,
+            path.map { it.point.latDeg to it.point.lonDeg }.toSet().size,
+            "path samples must be distinct points — repeated coordinates mean the refinement collapsed",
+        )
+
+        // A total eclipse's shadow crosses a wide swathe of the globe; a path
+        // confined to a few degrees would mean most of it was never traced.
+        val lonSpan = path.maxOf { it.point.lonDeg } - path.minOf { it.point.lonDeg }
+        assertTrue(lonSpan > 40.0, "expected the path to span the globe's width, got $lonSpan degrees of longitude")
     }
 
     // Shares one refresh() across both checks below — each solar total/annular

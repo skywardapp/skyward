@@ -45,8 +45,11 @@ Natural Earth 1:50m cultural/physical vectors
 ================================================================================
 Source:    https://www.naturalearthdata.com/downloads/
 License:   Public domain
-Bundled:   Yes — converted at build time to a compact binary resource
-           (desktopApp map layer, §14.1)
+Bundled:   Yes — the 1:50m land layer is vendored as
+           tools/naturalearth/ne_50m_land.geojson.gz and converted at build
+           time (:core's convertNaturalEarth task) into natural-earth.bin on
+           the desktop target's resource path, for the event map (§14.1).
+           The Android artifact does not carry it.
 Notes:     Courtesy credit: "Made with Natural Earth."
 
 ================================================================================

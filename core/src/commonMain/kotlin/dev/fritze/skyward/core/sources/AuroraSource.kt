@@ -207,6 +207,30 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
             }.getOrNull()
         }
 
+        /**
+         * §7.3.2: the active tier is entered when the forecast warrants it
+         * "**or the user opens the aurora dashboard**". The refresh cycle can
+         * only act on the first half of that — it has no idea what is on
+         * screen — so this is the second half: fetch the OVATION grid now and
+         * persist it under the same `source_state` keys [loadOvationGrid]
+         * reads, leaving the polling schedule alone.
+         *
+         * Returns null if the fetch or parse fails; §14.4's dashboard simply
+         * keeps showing whatever grid it already had, which is the same
+         * degradation [refresh] applies on an OVATION failure (§19 R3).
+         */
+        suspend fun fetchOvationGridNow(
+            sourceStateRepo: SourceStateRepo,
+            now: Instant,
+            httpClient: HttpClient = createHttpClient(),
+        ): OvationGrid? = runCatching {
+            val parsed = parseOvationGridJson(httpClient.getText(OVATION_URL))
+            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_GRID, gzipCompress(parsed.probBytes), now)
+            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_FORECAST_TIME, parsed.forecastTime.toString().encodeToByteArray(), now)
+            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_OBSERVATION_TIME, parsed.observationTime.toString().encodeToByteArray(), now)
+            OvationGrid(parsed.observationTime, parsed.forecastTime, parsed.probBytes)
+        }.getOrNull()
+
         internal const val SOURCE_ID = "swpc"
     }
 }

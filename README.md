@@ -18,10 +18,22 @@ this repository implements it. In particular:
 
 ## Status
 
-**M0 — Skeleton & CI.** Repository layout, Gradle multi-module setup
-(`:core`, `:androidApp`, `:desktopApp`), version catalog, both Android
-product flavours (`foss` / `play`) with their manifests, the vendored
-Astronomy Engine compiling in `commonMain`, the SQLDelight schema, and CI.
+**M6 — Desktop app.** The Linux desktop app is the full §14 application:
+Overview, event map, timeline, sky chart, aurora dashboard, rules and
+settings, with reminders delivered by an in-process scheduler that keeps
+running when the window is closed (tray, autostart, desktop notifications).
+
+Previously landed: M0 skeleton & CI, M1 astronomy core, M2 visibility +
+rules + planner, M3 Android MVP, M4 polled sources, M5 full RuleEditor +
+settings sync. Next is M7 (release engineering).
+
+### Running the desktop app
+
+```sh
+./gradlew :desktopApp:run                        # from source
+./gradlew :desktopApp:createReleaseDistributable # self-contained tree
+flatpak/build.sh                                 # Flatpak bundle (§15.5)
+```
 
 ## Project layout
 

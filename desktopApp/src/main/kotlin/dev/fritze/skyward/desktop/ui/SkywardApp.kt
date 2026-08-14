@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -41,7 +42,10 @@ fun SkywardApp(state: DesktopAppState) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Row(modifier = Modifier.fillMaxSize()) {
                 SkywardNavigationRail(state)
-                Column(modifier = Modifier.fillMaxSize()) {
+                // weight(1f), not fillMaxSize(): an unweighted Row child asking
+                // to fill the whole row leaves the layout no width to give it
+                // after the rail has taken its share.
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     // §10.3: surfaced above whatever screen is open rather than
                     // as its own destination — it's a one-shot startup report,
                     // not a place in the app.
@@ -74,8 +78,12 @@ private fun SkywardNavigationRail(state: DesktopAppState) {
             }
         },
     ) {
+        // Deliberately NOT fillMaxSize/fillMaxWidth: NavigationRail sizes
+        // itself to its content, so a child that asks to fill the maximum
+        // width stretches the rail across the entire window and squeezes the
+        // screen beside it down to nothing.
         Column(
-            modifier = Modifier.fillMaxSize().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxHeight().padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             for (destination in Destination.entries) {

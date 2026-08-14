@@ -48,11 +48,63 @@ compose.desktop {
     application {
         mainClass = "dev.fritze.skyward.desktop.MainKt"
 
+        buildTypes.release.proguard {
+            // §15.5 asks for release minification. It is OFF, deliberately, and
+            // this is the deviation's record.
+            //
+            // ProGuard 7.7.0 (and 7.4.2, checked) cannot produce a *working*
+            // build of this dependency set. Three separate miscompilations, each
+            // reproduced by running the packaged binary:
+            //
+            //   1. The optimizer's local-variable reallocation breaks
+            //      `EclipseSource.refresh` (§7.1.3's sampler — a big suspend
+            //      function full of live doubles):
+            //      "VerifyError: Instruction type does not match stack map".
+            //      Avoidable only with -dontoptimize; the narrower
+            //      !code/allocation/variable is not enough.
+            //   2. The shrinker deletes `kotlinx.coroutines.Job` from
+            //      `JobSupport`'s *direct* interface list as redundant (ChildJob
+            //      already extends it). That breaks the invokespecial its
+            //      JVM-default `cancel()` compiles to:
+            //      "VerifyError: Bad invokespecial instruction: interface method
+            //      reference is in an indirect superinterface", thrown as soon as
+            //      the app builds its application scope. `-keep class
+            //      kotlinx.coroutines.** { *; }` does not prevent it — the
+            //      redundant-interface removal is unconditional — and only
+            //      -dontshrink does.
+            //   3. Service-loaded providers (Ktor's engine and serialization
+            //      extensions) get shrunk away while their META-INF/services
+            //      entries survive. That one *is* fixable with keep rules, and
+            //      proguard-rules.pro has them.
+            //
+            // -dontoptimize plus -dontshrink leaves only renaming, which buys no
+            // size and adds reflection risk. A packaged app that does not start
+            // fails M6's own acceptance criterion ("runs under Flatpak
+            // locally"), so minification waits for M7 — by which time a
+            // coroutines or ProGuard bump may simply fix (2).
+            isEnabled.set(false)
+            configurationFiles.from(project.file("proguard-rules.pro"))
+        }
+
         nativeDistributions {
             // §15.5: jpackage targets. No AppImage support in the Compose plugin —
             // Flatpak (primary) repackages the jlinked createReleaseDistributable
             // tree separately; see flatpak/.
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
+
+            // jlink strips the runtime image down to what it can *see* being
+            // used, and it cannot see through service loading or reflection.
+            // Without these, the packaged app builds cleanly and then dies on
+            // first launch — which is exactly how it failed before they were
+            // listed:
+            //   java.sql       JDBC service lookup for Xerial/SQLite (§11);
+            //                  NoClassDefFoundError: java/sql/DriverManager
+            //   java.naming    pulled in by the JDBC stack
+            //   jdk.crypto.ec  ECDHE cipher suites — without it every HTTPS
+            //                  call to SWPC/JPL/EONET fails the handshake (§7)
+            //   jdk.unsupported  sun.misc.Unsafe, used by skiko and coroutines
+            modules("java.sql", "java.naming", "jdk.crypto.ec", "jdk.unsupported")
+
             packageName = "skyward"
             packageVersion = "0.1.0"
             description = "Location-based reminders for natural & sky events"
