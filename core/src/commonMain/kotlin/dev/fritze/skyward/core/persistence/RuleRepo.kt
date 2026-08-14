@@ -28,6 +28,11 @@ class RuleRepo(private val db: SkywardDatabase) {
         db.ruleQueries.selectEnabled().executeAsList().map { it.toModel() }
     }
 
+    /** All rules, including hidden system ones -- §9.1: those "are ... included in evaluation & sync." */
+    suspend fun getAll(): List<RuleModel> = withContext(Dispatchers.Default) {
+        db.ruleQueries.selectAll().executeAsList().map { it.toModel() }
+    }
+
     suspend fun getById(id: String): RuleModel? = withContext(Dispatchers.Default) {
         db.ruleQueries.selectById(id).executeAsOneOrNull()?.toModel()
     }

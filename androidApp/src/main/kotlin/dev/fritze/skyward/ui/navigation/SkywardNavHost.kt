@@ -24,6 +24,7 @@ import dev.fritze.skyward.ui.eventdetail.EventDetailScreen
 import dev.fritze.skyward.ui.locations.LocationEditorScreen
 import dev.fritze.skyward.ui.locations.LocationsScreen
 import dev.fritze.skyward.ui.onboarding.OnboardingScreen
+import dev.fritze.skyward.ui.rules.RuleEditorScreen
 import dev.fritze.skyward.ui.rules.RulesScreen
 import dev.fritze.skyward.ui.settings.AboutScreen
 import dev.fritze.skyward.ui.settings.NotificationsSettingsScreen
@@ -82,7 +83,20 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
                 val occurrenceId = entry.arguments?.getString(Routes.EVENT_DETAIL_ARG).orEmpty()
                 EventDetailScreen(container, occurrenceId, onBack = { navController.popBackStack() })
             }
-            composable(Routes.RULES) { RulesScreen(container) }
+            composable(Routes.RULES) {
+                RulesScreen(
+                    container,
+                    onAdd = { navController.navigate(Routes.RULE_EDITOR_NEW) },
+                    onEdit = { navController.navigate(Routes.ruleEditor(it)) },
+                )
+            }
+            composable(Routes.RULE_EDITOR_NEW) {
+                RuleEditorScreen(container, ruleId = null, onDone = { navController.popBackStack() })
+            }
+            composable(Routes.RULE_EDITOR_EDIT) { entry ->
+                val ruleId = entry.arguments?.getString(Routes.RULE_EDITOR_ARG)
+                RuleEditorScreen(container, ruleId, onDone = { navController.popBackStack() })
+            }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onLocations = { navController.navigate(Routes.LOCATIONS) },
@@ -109,7 +123,7 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
             }
             composable(Routes.NOTIFICATIONS_SETTINGS) { NotificationsSettingsScreen(container, onBack = { navController.popBackStack() }) }
             composable(Routes.SOURCES) { SourcesScreen(container, onBack = { navController.popBackStack() }) }
-            composable(Routes.SYNC) { SyncScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.SYNC) { SyncScreen(container, onBack = { navController.popBackStack() }) }
             composable(Routes.ABOUT) { AboutScreen(onBack = { navController.popBackStack() }) }
         }
     }
