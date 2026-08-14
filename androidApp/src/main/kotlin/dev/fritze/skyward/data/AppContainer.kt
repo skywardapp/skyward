@@ -81,7 +81,8 @@ class AppContainer(context: Context) {
     // just never see any occurrences via SourceRunner until then.
     val computedSources: List<EventSource> = listOf(EclipseSource(), MeteorShowerSource(), MoonEventSource(), ConjunctionSource())
 
-    val alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)
+    /** Var (not val): instrumented tests substitute a fake per §17.5, since there's no DI framework. */
+    var alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)
 
     val replanCoordinator = ReplanCoordinator(occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityModels)
 

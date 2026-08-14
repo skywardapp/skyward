@@ -86,8 +86,12 @@ dependencies {
     testImplementation(libs.sqldelight.sqlite.driver)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(kotlin("test"))
+    androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.core.ktx)
     debugImplementation("androidx.compose.ui:ui-tooling")
     // Supplies the debug-only manifest entry for ComponentActivity that
     // createAndroidComposeRule<MainActivity>() launches into.
