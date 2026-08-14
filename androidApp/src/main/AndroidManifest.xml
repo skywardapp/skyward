@@ -52,6 +52,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- §10.2: exact-alarm permission revoked/granted mid-life; re-sync
+             onto whichever path (exact/approximate) is now correct. API 31+
+             only; the intent-filter is simply inert below that. -->
+        <receiver
+            android:name=".alarm.ExactAlarmPermissionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <!-- WorkManager auto-init replaced by SkywardApplication's own
              Configuration.Provider (needed to inject AppContainer into
              workers); see docs/adr/0006-workmanager-custom-initialization.md. -->

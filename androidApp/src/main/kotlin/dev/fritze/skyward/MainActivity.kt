@@ -6,43 +6,35 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.ui.navigation.SkywardNavHost
 
-/**
- * M0 acceptance check (§18): a hello-world Compose app must boot. The real
- * navigation graph (§13.1) lands in M3.
- */
+/** §13: single-Activity, Navigation-Compose (§13.1). */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val container = (application as SkywardApplication).container
         setContent {
-            SkywardApp()
+            SkywardApp(container = container)
         }
     }
 }
 
 @Composable
-private fun SkywardApp() {
+private fun SkywardApp(container: dev.fritze.skyward.data.AppContainer) {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("Skyward")
+            val onboardingDone by container.settingsRepo.observeOnboardingDone().collectAsState(initial = null)
+            when (onboardingDone) {
+                null -> Box(Modifier.fillMaxSize()) // brief loading gate while the flag loads
+                else -> SkywardNavHost(container, onboardingDone == true)
             }
         }
     }
-}
-
-@Preview
-@Composable
-private fun SkywardAppPreview() {
-    SkywardApp()
 }
