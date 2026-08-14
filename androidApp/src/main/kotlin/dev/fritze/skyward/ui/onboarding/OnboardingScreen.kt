@@ -43,24 +43,41 @@ private enum class OnboardingStep { WELCOME, LOCATION, NOTIFICATIONS, EXACT_ALAR
 fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
     val viewModel: OnboardingViewModel = viewModel { OnboardingViewModel(container) }
     var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
+    var finishFailed by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    fun attemptFinish() {
+        finishFailed = false
+        coroutineScope.launch {
+            // coroutineScope (tied to this composition, not the ViewModel) so finish()'s work is
+            // awaited in full before onDone() pops Routes.ONBOARDING -- otherwise the navigation
+            // itself would race the write it's meant to wait for. finish() now propagates a
+            // failed location write (§: OnboardingViewModel.addFirstLocation/finish) rather than
+            // silently completing onboarding without the location the user asked to save.
+            try {
+                viewModel.finish()
+                onDone()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                finishFailed = true
+            }
+        }
+    }
 
     Scaffold { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (finishFailed) {
+                Text(
+                    "Couldn't save your location -- check your connection and try again.",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             when (step) {
                 OnboardingStep.WELCOME -> WelcomeStep { step = OnboardingStep.LOCATION }
                 OnboardingStep.LOCATION -> LocationStep(viewModel, onNext = { step = OnboardingStep.NOTIFICATIONS })
                 OnboardingStep.NOTIFICATIONS -> NotificationsStep(onNext = { step = OnboardingStep.EXACT_ALARM })
                 OnboardingStep.EXACT_ALARM -> ExactAlarmStep(onNext = { step = OnboardingStep.RULES_PREVIEW })
-                OnboardingStep.RULES_PREVIEW -> RulesPreviewStep(viewModel) {
-                    // coroutineScope (tied to this composition, not the ViewModel) so finish()'s
-                    // work is awaited in full before onDone() pops Routes.ONBOARDING -- otherwise
-                    // the navigation itself would race the write it's meant to wait for.
-                    coroutineScope.launch {
-                        viewModel.finish()
-                        onDone()
-                    }
-                }
+                OnboardingStep.RULES_PREVIEW -> RulesPreviewStep(viewModel, onFinish = ::attemptFinish)
             }
         }
     }

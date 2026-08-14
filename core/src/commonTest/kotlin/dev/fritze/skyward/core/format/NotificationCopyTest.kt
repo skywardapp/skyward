@@ -166,7 +166,7 @@ class NotificationCopyTest {
         // No LocalDetails.MeteorLocal -- maxRadiantAltDeg is unknown, not zero.
         val copy = renderNotificationCopy(occ, home, visres(), rule(), fireAt = now, leadUntilAnchor = null)
 
-        assertTrue(!copy.body.contains("Radiant up to 0"), "must not claim the radiant never rises when altitude is simply unknown: ${copy.body}")
+        assertTrue(!copy.body.contains("Radiant up to"), "must omit the whole clause when altitude is unknown, not just the 0-degree wording: ${copy.body}")
         assertTrue(copy.body.contains("Moon 50%"), copy.body)
     }
 

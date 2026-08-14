@@ -28,12 +28,18 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         // racing to post the same id is safe -- NotificationPoster.postNotificationFor is idempotent
         // on status.
         scheduleApproximate(n)
-        return if (canScheduleExact()) {
-            val pendingIntent = notificationPendingIntent(context, n.id)
+        if (!canScheduleExact()) {
+            alarmManager.cancel(notificationPendingIntent(context, n.id))
+            return Precision.APPROXIMATE
+        }
+        val pendingIntent = notificationPendingIntent(context, n.id)
+        return try {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, n.fireAt.toEpochMilliseconds(), pendingIntent)
             Precision.EXACT
-        } else {
-            alarmManager.cancel(notificationPendingIntent(context, n.id))
+        } catch (_: SecurityException) {
+            // canScheduleExact() and setExactAndAllowWhileIdle() aren't atomic; the permission
+            // can be revoked in between. The WorkManager backup above is already registered.
+            alarmManager.cancel(pendingIntent)
             Precision.APPROXIMATE
         }
     }

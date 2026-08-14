@@ -42,13 +42,13 @@ class RuleRepo(private val db: SkywardDatabase) {
             condition_json = persistenceJson.encodeToString(Cond.serializer(), rule.condition),
             schedule_json = persistenceJson.encodeToString(NotifySchedule.serializer(), rule.schedule),
             hidden = if (rule.hidden) 1L else 0L,
-            created_at = rule.createdAt.toString(),
-            modified_at = rule.modifiedAt.toString(),
+            created_at = rule.createdAt.toIsoFixed(),
+            modified_at = rule.modifiedAt.toIsoFixed(),
         )
     }
 
     suspend fun setEnabled(id: String, enabled: Boolean, modifiedAt: Instant) = withContext(Dispatchers.Default) {
-        db.ruleQueries.updateEnabled(if (enabled) 1L else 0L, modifiedAt.toString(), id)
+        db.ruleQueries.updateEnabled(if (enabled) 1L else 0L, modifiedAt.toIsoFixed(), id)
     }
 
     suspend fun delete(id: String) = withContext(Dispatchers.Default) {
