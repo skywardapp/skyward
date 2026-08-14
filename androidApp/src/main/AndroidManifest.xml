@@ -53,8 +53,15 @@
              sending an *explicit* component-targeted intent; BootReceiver
              guards on intent.action, and the only reachable effect is an
              idempotent re-sync of alarms already in our own DB. No data is
-             read from the intent and none leaves the app. -->
-        <receiver android:name=".alarm.BootReceiver" android:exported="true"> <!-- NOSONAR xml:S5322, reviewed above -->
+             read from the intent and none leaves the app.
+
+             The finding therefore has to be resolved as "Safe" in the
+             SonarCloud UI: the XML analyser ignores NOSONAR markers for this
+             rule (verified empirically), and Automatic Analysis does not read
+             sonar.issue.ignore.multicriteria from the repository. -->
+        <receiver
+            android:name=".alarm.BootReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -68,8 +75,11 @@
              Same xml:S5322 review as BootReceiver above: protected system
              broadcast, exported only so the system can reach us, action
              guarded in the receiver, and the only effect is an idempotent
-             AlarmSyncer pass over rows we already own. -->
-        <receiver android:name=".alarm.ExactAlarmPermissionReceiver" android:exported="true"> <!-- NOSONAR xml:S5322, reviewed above -->
+             AlarmSyncer pass over rows we already own. Resolve as "Safe" in
+             the SonarCloud UI, as above. -->
+        <receiver
+            android:name=".alarm.ExactAlarmPermissionReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
