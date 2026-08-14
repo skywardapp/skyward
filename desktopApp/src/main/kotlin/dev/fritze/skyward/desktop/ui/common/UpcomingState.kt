@@ -1,0 +1,53 @@
+package dev.fritze.skyward.desktop.ui.common
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import dev.fritze.skyward.core.planner.UpcomingFilter
+import dev.fritze.skyward.core.planner.UpcomingItem
+import dev.fritze.skyward.core.planner.computeUpcomingItems
+import dev.fritze.skyward.desktop.ui.DesktopAppState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+data class UpcomingState(val items: List<UpcomingItem>, val isLoading: Boolean)
+
+/**
+ * §13.2's `computeUpcomingItems`, driven from the desktop's shared flows.
+ * The same pure core function the Android Upcoming screen uses — the only
+ * thing that differs is where the inputs come from and where the output is
+ * drawn (§4.1).
+ *
+ * Evaluated off the UI thread (§4.3: "astronomy computations run on
+ * `Dispatchers.Default` ... must never run on the main thread"). A full pass
+ * over a three-year horizon runs a rise/set search per (occurrence,
+ * location), which is emphatically not frame-budget work.
+ */
+@Composable
+fun rememberUpcoming(state: DesktopAppState, filter: UpcomingFilter): UpcomingState {
+    val occurrences by state.occurrences.collectAsState()
+    val locations by state.locations.collectAsState()
+    val rules by state.allRules.collectAsState()
+    val now by state.tick.collectAsState()
+    val grid by state.ovationGrid.collectAsState()
+
+    val result by produceState(
+        initialValue = UpcomingState(emptyList(), isLoading = true),
+        occurrences, locations, rules, filter, now, grid,
+    ) {
+        value = value.copy(isLoading = true)
+        val items = withContext(Dispatchers.Default) {
+            computeUpcomingItems(
+                occurrences = occurrences,
+                locations = locations,
+                rules = rules,
+                visibilityModels = state.container.visibilityModels,
+                ctx = state.visibilityContext(now),
+                filter = filter,
+            )
+        }
+        value = UpcomingState(items, isLoading = false)
+    }
+    return result
+}

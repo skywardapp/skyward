@@ -1,52 +1,120 @@
 package dev.fritze.skyward.desktop
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import dev.fritze.skyward.desktop.data.DesktopContainer
+import dev.fritze.skyward.desktop.scheduler.DesktopScheduler
+import dev.fritze.skyward.desktop.scheduler.SourceRefreshLoop
+import dev.fritze.skyward.desktop.tray.SkywardTray
+import dev.fritze.skyward.desktop.tray.TrayActions
+import dev.fritze.skyward.desktop.ui.DesktopAppState
+import dev.fritze.skyward.desktop.ui.SkywardApp
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlin.time.Clock
+
+/** Shown in the About section and written into §12 export files. Kept in step with `compose.desktop`'s `packageVersion`. */
+const val APP_VERSION = "0.1.0"
 
 /**
- * M0 acceptance check (§18): a hello-world Compose for Desktop app must boot.
- * The real nav rail / views (§14) land in M6.
+ * §14: single window, ~1280×800 default, left nav rail. §10.3: with
+ * "Background mode" enabled, closing the window hides to tray instead of
+ * exiting, and the in-process scheduler keeps running behind it.
  *
- * M2 acceptance check (§18): `debug-matches` prints the next 3 years of rule
- * matches for a hardcoded location instead of launching the GUI — see
- * [runDebugMatches]. The real Rules/Settings screens land in M6 too; this is
- * a deliberately minimal stand-in to exercise the planner end-to-end.
+ * `debug-matches` keeps M2's CLI acceptance path working (§18) — it must
+ * stay ahead of any windowing setup so it still runs headless.
  */
 fun main(args: Array<String>) {
     if (args.firstOrNull() == "debug-matches") {
         runDebugMatches()
         return
     }
+
+    val container = DesktopContainer.open()
+    val state = DesktopAppState(container, container.applicationScope)
+    val windowVisibility = MutableStateFlow(!args.contains(FLAG_BACKGROUND))
+
+    val scheduler = DesktopScheduler(
+        notificationRepo = container.notificationRepo,
+        occurrenceRepo = container.occurrenceRepo,
+        notifier = state.notifier,
+        onActivated = { occurrenceId ->
+            // §10.3: "Clicking a notification raises the window on the relevant
+            // detail view (DBus action if supported; else best effort)."
+            windowVisibility.value = true
+            occurrenceId?.let(state::openOccurrence)
+        },
+    )
+    val refreshLoop = SourceRefreshLoop(
+        sourceRunner = container.sourceRunner,
+        forcedSourceIds = container.computedSources.mapTo(mutableSetOf()) { it.id },
+    )
+
+    container.applicationScope.launch { startBackgroundWork(container, state, scheduler, refreshLoop) }
+
     application {
+        val visible by windowVisibility.collectAsState()
+        val settings by state.settings.collectAsState()
+        val backgroundMode = settings[DesktopContainer.KEY_BACKGROUND_MODE] == "true"
+
+        val quit: () -> Unit = {
+            container.close()
+            exitApplication()
+        }
+
+        SkywardTray(
+            TrayActions(
+                onOpen = { windowVisibility.value = true },
+                onRefresh = state::refreshEverything,
+                onQuit = quit,
+            ),
+        )
+
         val windowState = rememberWindowState(
             position = WindowPosition.Aligned(Alignment.Center),
             size = DpSize(1280.dp, 800.dp),
         )
-        Window(onCloseRequest = ::exitApplication, title = "Skyward", state = windowState) {
-            SkywardDesktopApp()
+        Window(
+            onCloseRequest = { if (backgroundMode) windowVisibility.value = false else quit() },
+            title = "Skyward",
+            state = windowState,
+            visible = visible,
+        ) {
+            SkywardApp(state)
         }
     }
 }
 
-@Composable
-private fun SkywardDesktopApp() {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Skyward")
-            }
-        }
-    }
+private const val FLAG_BACKGROUND = "--background"
+
+/**
+ * The startup sequence, in the one order that works: seed defaults, load the
+ * persisted OVATION grid, re-plan against the current DB, *then* decide what
+ * was missed while the app was closed — and only after that let the scheduler
+ * start firing. Reversing any two of these either fires a stale reminder
+ * (§10.3 forbids exactly that) or hides a fresh one in the missed panel.
+ */
+private suspend fun startBackgroundWork(
+    container: DesktopContainer,
+    state: DesktopAppState,
+    scheduler: DesktopScheduler,
+    refreshLoop: SourceRefreshLoop,
+) {
+    container.ensureDefaultRulesSeeded()
+    state.reloadOvationGrid()
+
+    val now = Clock.System.now()
+    val preexistingIds = container.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
+    container.replan(now)
+    state.setMissedWhileAway(scheduler.collectMissedWhileAway(now, preexistingIds))
+
+    container.applicationScope.launch { scheduler.run() }
+    container.applicationScope.launch { refreshLoop.run() }
 }

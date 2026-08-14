@@ -15,12 +15,33 @@ dependencies {
 
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.kotlinx.datetime)
+    implementation(libs.kotlinx.serialization.json)
+    // :core exposes these as `implementation`, so they're on the runtime
+    // classpath but not the compile one — and DesktopContainer drives the
+    // schema create/migrate by hand (§11), which needs both.
+    implementation(libs.sqldelight.runtime)
+    implementation(libs.sqldelight.sqlite.driver)
     implementation(libs.compose.native.tray)
     implementation(libs.two.slices)
 
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+
+// §16: "the About screen renders them". Packaging the repository's own NOTICE
+// as a resource (rather than retyping it into Kotlin) is what keeps the two
+// from drifting — there is exactly one copy of the text.
+val bundleNotice by tasks.registering(Copy::class) {
+    description = "Packages the repository NOTICE file as a desktop app resource for the About screen."
+    from(rootProject.layout.projectDirectory.file("NOTICE"))
+    into(layout.buildDirectory.dir("generated/notice"))
+}
+
+sourceSets.named("main") {
+    resources.srcDir(bundleNotice.map { it.destinationDir })
 }
 
 compose.desktop {
