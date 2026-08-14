@@ -57,6 +57,7 @@ import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
 import dev.fritze.skyward.desktop.ui.common.formatDateTime
 import dev.fritze.skyward.desktop.ui.common.formatDegrees
+import dev.fritze.skyward.desktop.ui.common.formatKp
 import dev.fritze.skyward.desktop.ui.common.formatTime
 import dev.fritze.skyward.desktop.ui.theme.gScaleLabel
 import dev.fritze.skyward.desktop.ui.theme.kpColor
@@ -183,7 +184,7 @@ private fun KpGaugeCard(estimate: KpEstimate?, failed: Boolean, state: DesktopAp
             }
         }
         Text(
-            "Kp ${(estimate.estimatedKp * 10).roundToInt() / 10.0}" + (gScaleLabel(estimate.estimatedKp)?.let { " · $it" } ?: ""),
+            "Kp ${formatKp(estimate.estimatedKp)}" + (gScaleLabel(estimate.estimatedKp)?.let { " · $it" } ?: ""),
             style = MaterialTheme.typography.headlineSmall,
             color = kpColor(estimate.estimatedKp),
         )
@@ -397,7 +398,7 @@ private fun LocationVerdictRow(
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(location.name, style = MaterialTheme.typography.titleSmall)
             Text(
-                "Geomagnetic latitude ${formatDegrees(geomagneticLat, 1)} — visible from here when Kp ≥ ${(kpNeeded * 10).roundToInt() / 10.0}",
+                "Geomagnetic latitude ${formatDegrees(geomagneticLat, 1)} — visible from here when Kp ≥ ${formatKp(kpNeeded)}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             val current = estimate?.estimatedKp
@@ -406,9 +407,10 @@ private fun LocationVerdictRow(
                 when {
                     kpNeeded <= 0 -> "Above the auroral boundary at any Kp."
                     margin == null && peakKp == null -> "No current Kp reading and no forecast slot above your thresholds."
-                    margin != null && margin >= 0 -> "Now: Kp ${current} — ${formatDegrees(margin * 2, 1)} of margin. Look north after dark."
-                    margin != null -> "Now: Kp ${current} — short by ${(kotlin.math.abs(margin) * 10).roundToInt() / 10.0} Kp."
-                    else -> "Forecast peak Kp $peakKp over the next three days."
+                    margin != null && margin >= 0 -> "Now: Kp ${formatKp(current)} — ${formatDegrees(margin * 2, 1)} of margin. Look north after dark."
+                    margin != null -> "Now: Kp ${formatKp(current)} — short by ${formatKp(abs(margin))} Kp."
+                    // Reached only when there is no live reading but a forecast slot exists.
+                    else -> "Forecast peak Kp ${formatKp(peakKp ?: 0.0)} over the next three days."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (margin != null && margin >= 0) kpColor(current) else MaterialTheme.colorScheme.onSurfaceVariant,

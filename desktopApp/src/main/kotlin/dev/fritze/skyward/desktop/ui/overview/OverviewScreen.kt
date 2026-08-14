@@ -46,6 +46,7 @@ import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.Destination
 import dev.fritze.skyward.desktop.ui.common.formatDate
 import dev.fritze.skyward.desktop.ui.common.formatDateTime
+import dev.fritze.skyward.desktop.ui.common.formatKp
 import dev.fritze.skyward.desktop.ui.common.formatPercent
 import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
@@ -189,7 +190,7 @@ private fun MiniAuroraCard(state: DesktopAppState) {
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(12.dp).clip(CircleShape).background(kpColor(maxKp)))
-                    Text("Kp ${maxKp}", style = MaterialTheme.typography.headlineSmall)
+                    Text("Kp ${formatKp(maxKp)}", style = MaterialTheme.typography.headlineSmall)
                 }
                 Text("Peak forecast in the next 3 days", style = MaterialTheme.typography.bodySmall)
             }

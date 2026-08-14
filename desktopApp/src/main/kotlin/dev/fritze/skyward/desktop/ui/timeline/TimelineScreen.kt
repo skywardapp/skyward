@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +70,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -104,7 +106,10 @@ fun TimelineScreen(state: DesktopAppState) {
     val now by state.tick.collectAsState()
     val selected = state.selectedOccurrenceId
 
-    val horizonYears = settings["horizon_years"]?.toIntOrNull() ?: 3
+    // Clamped to the same range Settings offers: a hand-edited or imported
+    // setting of 0 would collapse the axis to zero width, and a wild one would
+    // overflow the day arithmetic.
+    val horizonYears = (settings["horizon_years"]?.toIntOrNull() ?: 3).coerceIn(1, 50)
     val end = remember(now, horizonYears) { now + (365L * horizonYears).days }
 
     // Lanes are fixed to the full phenomenon set rather than "whatever has
@@ -229,6 +234,12 @@ private fun TimelineCanvas(
         }
     }
     val monthTicks = remember(scale) { scale?.let { monthTicks(it, state.zone) }.orEmpty() }
+
+    // A filter change or a source refresh can remove whatever is hovered; the
+    // pointer isn't moving, so nothing else would ever clear the tooltip.
+    LaunchedEffect(drawItems) {
+        hovered = hovered?.let { stale -> drawItems.firstOrNull { it.occurrence.id == stale.occurrence.id } }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Canvas(
@@ -445,7 +456,10 @@ private val BOUNDARY_COLOR = Color(0xFF54617A)
 private val TODAY_COLOR = Color(0xFFE9EEF7)
 
 private fun itemAt(position: Offset, items: List<TimelineItem>, axisHeightPx: Float, laneHeightPx: Float): TimelineItem? {
-    val lane = ((position.y - axisHeightPx) / laneHeightPx).toInt()
+    // `floor`, not `toInt()`: truncation rounds toward zero, so the whole axis
+    // band above lane 0 (a negative fraction) would map into lane 0 and let a
+    // hover over the month labels light up the first lane's markers.
+    val lane = floor((position.y - axisHeightPx) / laneHeightPx).toInt()
     if (lane < 0) return null
     return items
         .filter { it.laneIndex == lane }

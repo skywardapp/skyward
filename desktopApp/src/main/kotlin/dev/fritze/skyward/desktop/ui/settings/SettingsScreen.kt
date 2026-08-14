@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,6 +30,8 @@ import dev.fritze.skyward.desktop.ui.common.LabeledRow
 import dev.fritze.skyward.desktop.ui.common.NumberField
 import dev.fritze.skyward.desktop.ui.common.SectionCard
 import dev.fritze.skyward.desktop.ui.theme.ThemeChoice
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * §14: Settings, reusing the same `:core` repositories as Android's Settings
@@ -77,22 +80,31 @@ private fun BackgroundModeRow(state: DesktopAppState, enabled: Boolean) {
 
 @Composable
 private fun AutostartRow(state: DesktopAppState, persistedSetting: Boolean) {
+    var note by remember { mutableStateOf<String?>(null) }
+    var writes by remember { mutableStateOf(0) }
     // The XDG backend can read the real state off disk; the portal cannot, so
     // there the persisted setting is the only record of what we asked for.
-    val enabled = state.autostart.isEnabled() ?: persistedSetting
-    var note by remember { mutableStateOf<String?>(null) }
+    // Read off the UI thread — it touches the filesystem — and re-read after
+    // every write, so the switch shows what is actually on disk rather than
+    // what we asked for.
+    val enabled by produceState(persistedSetting, persistedSetting, writes) {
+        value = withContext(Dispatchers.IO) { runCatching { state.autostart.isEnabled() }.getOrNull() } ?: persistedSetting
+    }
 
     SettingSwitchRow(
         checked = enabled,
         onCheckedChange = { on ->
-            val result = state.autostart.setEnabled(on)
-            note = when (result) {
-                is AutostartResult.Applied -> null
-                is AutostartResult.Requested -> result.note
-                is AutostartResult.Failed -> "Could not change autostart: ${result.message}"
-            }
-            if (result !is AutostartResult.Failed) {
-                state.launch { state.container.settingsRepo.set(DesktopContainer.KEY_AUTOSTART, on.toString()) }
+            state.launch {
+                val result = state.autostart.setEnabled(on)
+                note = when (result) {
+                    is AutostartResult.Applied -> null
+                    is AutostartResult.Requested -> result.note
+                    is AutostartResult.Failed -> "Could not change autostart: ${result.message}"
+                }
+                if (result !is AutostartResult.Failed) {
+                    state.container.settingsRepo.set(DesktopContainer.KEY_AUTOSTART, on.toString())
+                }
+                writes++
             }
         },
         title = "Start Skyward at login",
@@ -110,14 +122,21 @@ private fun TestNotificationRow(state: DesktopAppState) {
     var note by remember { mutableStateOf<String?>(null) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         TextButton(onClick = {
-            val delivered = state.notifier.post(
-                DesktopNotification("Skyward test", "Notifications are working.", occurrenceId = null),
-                onActivated = {},
-            )
-            note = if (delivered) {
-                "Sent — if nothing appeared, check your desktop's notification settings."
-            } else {
-                "No notification backend accepted it. Reminders will still be listed in the app."
+            // Off the UI thread: both backends block — one on a DBus call, the
+            // other on spawning `notify-send` — and a stalled notification
+            // daemon would otherwise freeze the window.
+            state.launch {
+                val delivered = withContext(Dispatchers.IO) {
+                    state.notifier.post(
+                        DesktopNotification("Skyward test", "Notifications are working.", occurrenceId = null),
+                        onActivated = {},
+                    )
+                }
+                note = if (delivered) {
+                    "Sent — if nothing appeared, check your desktop's notification settings."
+                } else {
+                    "No notification backend accepted it. Reminders will still be listed in the app."
+                }
             }
         }) { Text("Send a test notification") }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

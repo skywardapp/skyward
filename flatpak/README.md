@@ -33,17 +33,23 @@ flatpak-builder --user --install --force-clean build/flatpak \
 Every `finish-arg` in the manifest is there for a specific §10.3 behaviour,
 and the list is deliberately short:
 
-- `--share=network` — HTTPS to NOAA/NASA/JPL, and nothing else (P1).
+- `--share=network` — unrestricted outbound network. Flatpak has no per-host
+  filter, so P1's "NOAA/NASA/JPL only" is enforced by the app's source list,
+  not by the sandbox.
 - `--socket=wayland`, `--socket=fallback-x11` — the window.
 - `--talk-name=org.freedesktop.Notifications` — reminders.
 - `--talk-name=org.kde.StatusNotifierWatcher` — the tray icon.
-- `--talk-name=org.freedesktop.portal.Background` — *optional* autostart,
-  requested only when the user enables it. Not blanket background access.
-- `--talk-name=org.freedesktop.portal.FileChooser` — §12 export/import.
-  Note there is no `--filesystem=` grant: the portal hands back only the
-  file the user picked.
-- `--talk-name=org.freedesktop.portal.OpenURI` — the JPL/EONET links on the
-  event detail pane.
+- `--filesystem=xdg-download` — §12 export/import. Swing's `JFileChooser` is
+  not portal-aware: it browses the sandbox's own filesystem view, so without
+  a grant there is nowhere to write an export to. `~/Downloads` is the
+  narrowest place that is still a sensible default; this is deliberately not
+  `--filesystem=home`. Switching the pickers to the FileChooser portal would
+  remove the grant entirely — a good M7 change.
+
+The Background portal (*optional* autostart, requested only when the user
+enables it) and OpenURI (the JPL/EONET links on the event detail pane) need
+no entries: flatpak's default policy already permits talking to
+`org.freedesktop.portal.Desktop`.
 
 ## Known limitation
 

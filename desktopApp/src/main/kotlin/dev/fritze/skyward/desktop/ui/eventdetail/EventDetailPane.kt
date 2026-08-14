@@ -19,7 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +52,10 @@ import dev.fritze.skyward.desktop.ui.common.openInBrowser
 import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import dev.fritze.skyward.desktop.ui.theme.qualityLabel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -78,9 +82,17 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
     }
 
     val ctx = state.visibilityContext(now)
-    val perLocation = remember(occurrence, locations, ctx) {
+    // Off the composition thread: the visibility models run real astronomy
+    // (rise/set searches, eclipse circumstances) once per saved location, and
+    // this re-runs on every tick. The pane renders the previous answer until
+    // the new one lands rather than stalling the frame.
+    val perLocation by produceState(emptyList<Pair<SavedLocation, VisibilityResult>>(), occurrence, locations, ctx) {
         val model = state.container.visibilityModels[occurrence.phenomenon]
-        if (model == null) emptyList() else locations.map { it to model.evaluate(occurrence, it, ctx) }
+        value = if (model == null) {
+            emptyList()
+        } else {
+            withContext(Dispatchers.Default) { locations.map { it to model.evaluate(occurrence, it, ctx) } }
+        }
     }
     val isMuted = rules.any { it.id == muteRuleId(occurrenceId) && it.enabled }
 
@@ -92,9 +104,11 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
 
         HorizontalDivider()
 
-        if (perLocation.isEmpty()) {
+        if (locations.isEmpty()) {
             Text("Add a saved location in Settings to see local circumstances.", style = MaterialTheme.typography.bodyMedium)
         } else {
+            // While the first evaluation is in flight `perLocation` is empty;
+            // that is a blank moment, not the "no locations" state above.
             for ((location, visres) in perLocation) {
                 LocationVisibilityCard(state, location, visres)
             }
@@ -205,7 +219,9 @@ private fun CometHonestyCard(payload: CometPayload, visres: VisibilityResult?, s
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = { openInBrowser("https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=${payload.designation}") }) {
+            // Designations carry spaces and slashes ("C/2023 A3", "73P/Schwassmann-Wachmann").
+            val sstr = URLEncoder.encode(payload.designation, StandardCharsets.UTF_8)
+            TextButton(onClick = { openInBrowser("https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=$sstr") }) {
                 Text("View on JPL Small-Body Database")
             }
         }

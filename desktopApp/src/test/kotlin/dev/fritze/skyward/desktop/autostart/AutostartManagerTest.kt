@@ -1,9 +1,11 @@
 package dev.fritze.skyward.desktop.autostart
 
 import dev.fritze.skyward.desktop.data.DesktopPaths
+import kotlinx.coroutines.test.runTest
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.exists
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -19,7 +21,7 @@ class AutostartManagerTest {
     )
 
     @Test
-    fun writesAndRemovesTheXdgAutostartEntry() {
+    fun writesAndRemovesTheXdgAutostartEntry() = runTest {
         val home = createTempDirectory("skyward-home")
         val manager = XdgAutostartManager(pathsRootedAt(home))
         val entry = home.resolve(".config/autostart/skyward.desktop")
@@ -41,7 +43,26 @@ class AutostartManagerTest {
     }
 
     @Test
-    fun theFlatpakBackendAsksThePortalAndAdmitsItCannotReadTheState() {
+    fun gnomesOwnOffSwitchIsHonoured() = runTest {
+        // GNOME's Startup Applications toggle leaves the file in place and
+        // flips this key, so `exists()` alone would show a switch that
+        // disagrees with the desktop's own UI.
+        val home = createTempDirectory("skyward-home")
+        val manager = XdgAutostartManager(pathsRootedAt(home))
+        manager.setEnabled(true)
+        assertTrue(manager.isEnabled())
+
+        val entry = home.resolve(".config/autostart/skyward.desktop")
+        entry.writeText(entry.readText().replace("X-GNOME-Autostart-enabled=true", "X-GNOME-Autostart-enabled=false"))
+        assertFalse(manager.isEnabled())
+
+        // Re-enabling rewrites the entry, so the key comes back as `true`.
+        manager.setEnabled(true)
+        assertTrue(manager.isEnabled())
+    }
+
+    @Test
+    fun theFlatpakBackendAsksThePortalAndAdmitsItCannotReadTheState() = runTest {
         val commands = mutableListOf<List<String>>()
         val manager = BackgroundPortalAutostartManager(
             paths = pathsRootedAt(createTempDirectory("skyward-home"), flatpak = true),
@@ -66,7 +87,7 @@ class AutostartManagerTest {
     }
 
     @Test
-    fun aRefusedPortalRequestIsReportedAsAFailure() {
+    fun aRefusedPortalRequestIsReportedAsAFailure() = runTest {
         val manager = BackgroundPortalAutostartManager(
             paths = pathsRootedAt(createTempDirectory("skyward-home"), flatpak = true),
             commandRunner = { false },

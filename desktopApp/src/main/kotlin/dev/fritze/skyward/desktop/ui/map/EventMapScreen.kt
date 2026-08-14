@@ -81,7 +81,6 @@ fun EventMapScreen(state: DesktopAppState) {
 
     // Each of these is a pure function of data that changes rarely; recomputing
     // them per frame would put GeoJSON-scale work in the draw path.
-    val landPath = remember { buildLandPath() }
     val content = MapContent(
         landPath = landPath,
         eclipsePaths = remember(occurrences) { eclipsePathPolylines(occurrences.filter { it.phenomenon == Phenomenon.SOLAR_ECLIPSE }) },

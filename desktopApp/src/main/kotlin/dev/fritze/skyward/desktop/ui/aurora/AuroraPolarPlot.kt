@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.visibility.OvationGrid
+import dev.fritze.skyward.desktop.ui.common.OvationRamp
 import java.awt.image.BufferedImage
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -80,21 +81,14 @@ object AuroraPolarPlot {
         return image.toComposeImageBitmap()
     }
 
-    /** The dashboard's probability ramp, shared by the raster and the colorbar so they cannot disagree. */
-    fun probabilityArgb(probability: Double): Int {
-        val fraction = (probability.coerceIn(0.0, 100.0)) / 100.0
-        val red = (60 + 195 * fraction).toInt().coerceIn(0, 255)
-        val green = (220 - 80 * fraction).toInt().coerceIn(0, 255)
-        val blue = (120 - 100 * fraction).toInt().coerceIn(0, 255)
-        val alpha = (70 + 170 * fraction).toInt().coerceIn(0, 255)
-        return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
-    }
+    /** The probability ramp, shared by the raster, the colorbar and §14.1's map overlay. */
+    fun probabilityArgb(probability: Double): Int = OvationRamp.argb(probability)
 
     private fun normalizeLongitude(lonDeg: Double): Double {
         val wrapped = ((lonDeg + 180.0) % 360.0 + 360.0) % 360.0 - 180.0
         return wrapped
     }
 
-    const val MIN_VISIBLE_PROBABILITY = 5.0
+    const val MIN_VISIBLE_PROBABILITY = OvationRamp.DASHBOARD_MIN_PROBABILITY
     private const val DEFAULT_RASTER_SIZE = 420
 }

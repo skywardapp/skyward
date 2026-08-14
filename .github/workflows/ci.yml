@@ -53,11 +53,13 @@ jobs:
       - name: Compile desktop app
         run: ./gradlew :desktopApp:compileKotlin --stacktrace
 
-      # §18/M6 accept: "runs under Flatpak locally". Flatpak packages exactly
-      # this tree (flatpak/dev.fritze.Skyward.yml), and it is the only build
-      # that exercises jlink's module set and the packaging config — a missing
-      # JDK module (java.sql, jdk.crypto.ec) compiles perfectly and then dies
-      # on first launch, so compiling alone would not catch it.
+      # §18/M6 accept: "runs under Flatpak locally". CI does not run
+      # flatpak-builder — it builds the tree the manifest repackages
+      # (flatpak/dev.fritze.Skyward.yml), which is the only build that
+      # exercises jlink's module set and the packaging config. A missing JDK
+      # module (java.sql, jdk.crypto.ec) compiles perfectly and then dies on
+      # first launch, so compiling alone would not catch it. The Flatpak build
+      # itself stays a local/release step.
       - name: Build the self-contained desktop distributable
         run: ./gradlew :desktopApp:createReleaseDistributable --stacktrace
 

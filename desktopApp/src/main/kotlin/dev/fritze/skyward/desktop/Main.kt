@@ -16,6 +16,7 @@ import dev.fritze.skyward.desktop.tray.SkywardTray
 import dev.fritze.skyward.desktop.tray.TrayActions
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.SkywardApp
+import dev.fritze.skyward.desktop.util.runCatchingCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -69,7 +70,7 @@ fun main(args: Array<String>) {
             exitApplication()
         }
 
-        SkywardTray(
+        val trayAvailable = SkywardTray(
             TrayActions(
                 onOpen = { windowVisibility.value = true },
                 onRefresh = state::refreshEverything,
@@ -82,7 +83,10 @@ fun main(args: Array<String>) {
             size = DpSize(1280.dp, 800.dp),
         )
         Window(
-            onCloseRequest = { if (backgroundMode) windowVisibility.value = false else quit() },
+            // Background mode without a tray icon would hide the window with
+            // nothing left to restore it from, so the tray's absence overrides
+            // the setting (§10.3's no-tray degradation path).
+            onCloseRequest = { if (backgroundMode && trayAvailable) windowVisibility.value = false else quit() },
             title = "Skyward",
             state = windowState,
             visible = visible,
@@ -100,6 +104,11 @@ private const val FLAG_BACKGROUND = "--background"
  * was missed while the app was closed — and only after that let the scheduler
  * start firing. Reversing any two of these either fires a stale reminder
  * (§10.3 forbids exactly that) or hides a fresh one in the missed panel.
+ *
+ * The preparation is allowed to fail without taking the background services
+ * with it. A planner that throws on one bad rule would otherwise leave the
+ * app running with no scheduler and no refresh loop at all — silently not
+ * notifying, which is the one failure mode a reminder app cannot have.
  */
 private suspend fun startBackgroundWork(
     container: DesktopContainer,
@@ -107,13 +116,15 @@ private suspend fun startBackgroundWork(
     scheduler: DesktopScheduler,
     refreshLoop: SourceRefreshLoop,
 ) {
-    container.ensureDefaultRulesSeeded()
-    state.reloadOvationGrid()
+    runCatchingCancellable {
+        container.ensureDefaultRulesSeeded()
+        state.reloadOvationGrid()
 
-    val now = Clock.System.now()
-    val preexistingIds = container.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
-    container.replan(now)
-    state.setMissedWhileAway(scheduler.collectMissedWhileAway(now, preexistingIds))
+        val now = Clock.System.now()
+        val preexistingIds = container.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
+        container.replan(now)
+        state.setMissedWhileAway(scheduler.collectMissedWhileAway(now, preexistingIds))
+    }.onFailure { System.err.println("startup preparation failed: ${it.message ?: it::class.simpleName}") }
 
     container.applicationScope.launch { scheduler.run() }
     container.applicationScope.launch { refreshLoop.run() }

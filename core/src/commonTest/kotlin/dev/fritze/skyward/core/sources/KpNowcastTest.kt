@@ -44,10 +44,14 @@ class KpNowcastTest {
             [
               {"time_tag":"not a timestamp","estimated_kp":4.0},
               {"time_tag":"2026-08-14 20:01:00.000"},
+              {"estimated_kp":9.0},
+              {"kp_index":"not a number","time_tag":"2026-08-14 20:03:00.000"},
               {"time_tag":"2026-08-14 20:02:00.000","estimated_kp":2.5}
             ]
             """.trimIndent(),
         )
+        // A row with no `time_tag` at all is the interesting one: decoding the
+        // whole array as List<Row> would throw on it and lose the good rows too.
         assertEquals(1, samples.size)
         assertEquals(2.5, samples.single().estimatedKp)
     }

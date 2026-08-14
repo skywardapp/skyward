@@ -62,6 +62,14 @@ internal fun LocationsSection(state: DesktopAppState) {
                 TextButton(onClick = {
                     state.launch {
                         state.container.locationRepo.delete(location.id)
+                        // Deleting the primary would otherwise leave the app
+                        // with none, and screens that default to it (the sky
+                        // chart, the map's home marker) with nothing to pick.
+                        if (location.isPrimary) {
+                            state.container.locationRepo.getAll().firstOrNull()?.let {
+                                state.container.locationRepo.upsert(it.copy(isPrimary = true, modifiedAt = Clock.System.now()))
+                            }
+                        }
                         state.container.replan()
                     }
                 }) { Text("Delete") }

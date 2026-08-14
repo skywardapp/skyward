@@ -60,7 +60,11 @@ class AlarmFlowInstrumentedTest {
         // land keeps the *previous* test's teardown from arriving after this
         // test has already posted, and taking its notification with it.
         NotificationManagerCompat.from(context).cancelAll()
-        awaitNotifications { it.isEmpty() }
+        // Asserted, not merely awaited: on a timeout the helper returns whatever
+        // is still up, and starting a test with a leftover notification would
+        // show as a confusing failure in the test body instead of here.
+        val remaining = awaitNotifications { it.isEmpty() }
+        assertTrue("notifications did not clear before the test started", remaining.isEmpty())
     }
 
     /**

@@ -13,6 +13,7 @@ import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.visibility.OvationGrid
+import dev.fritze.skyward.desktop.ui.common.OvationRamp
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 import kotlin.math.cos
@@ -35,7 +36,12 @@ data class EclipsePathPolyline(
     /** Each segment is a continuous run of points; a new segment starts wherever the path wraps. */
     val segments: List<List<GeoPoint>>,
 ) {
-    val allPoints: List<GeoPoint> get() = segments.flatten()
+    /**
+     * Flattened once, not per access: hit-testing and label placement both
+     * read this while the pointer moves, and `flatten()` on every frame
+     * rebuilds a few thousand points for nothing.
+     */
+    val allPoints: List<GeoPoint> by lazy { segments.flatten() }
 }
 
 /**
@@ -137,26 +143,11 @@ fun ovationOverlayImage(grid: OvationGrid): ImageBitmap {
         for (y in 0 until 181) {
             val latitude = 90 - y
             val probability = grid.probabilityAt(gridLon, latitude)
-            if (probability < MIN_VISIBLE_PROBABILITY) continue
-            image.setRGB(x, y, ovationColorArgb(probability))
+            if (probability < OvationRamp.MAP_MIN_PROBABILITY) continue
+            image.setRGB(x, y, OvationRamp.argb(probability.toDouble()))
         }
     }
     return image.toComposeImageBitmap()
-}
-
-private const val MIN_VISIBLE_PROBABILITY = 10
-
-/**
- * Green → yellow → red, alpha rising with probability. Chosen to stay
- * readable over dark land at low probabilities, where most of the grid sits.
- */
-private fun ovationColorArgb(probability: Int): Int {
-    val fraction = (probability.coerceIn(0, 100)) / 100.0
-    val red = (60 + 195 * fraction).toInt().coerceIn(0, 255)
-    val green = (220 - 80 * fraction).toInt().coerceIn(0, 255)
-    val blue = (120 - 100 * fraction).toInt().coerceIn(0, 255)
-    val alpha = (60 + 160 * fraction).toInt().coerceIn(0, 255)
-    return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
 }
 
 /**
@@ -169,6 +160,9 @@ private fun ovationColorArgb(probability: Int): Int {
  * viewport is drawn 2:1, §14.1's equirectangular projection), which in turn
  * means a stroke width means the same thing horizontally and vertically —
  * it would not with an x-normalised-to-1 path on a 2:1 canvas.
+ *
+ * Prefer [landPath] over calling this: the vectors never change, so there is
+ * no reason to walk 60 000 points again each time the Map tab is opened.
  */
 fun buildLandPath(): Path {
     val path = Path()
@@ -197,6 +191,13 @@ fun buildLandPath(): Path {
     }
     return path
 }
+
+/**
+ * The shared, process-wide land path. Built on first use and kept: the
+ * Natural Earth vectors are a build-time resource that cannot change while
+ * the app runs, and the `Path` is only ever read.
+ */
+val landPath: Path by lazy { buildLandPath() }
 
 /** Screen-space distance, for hit-testing map features against a click. */
 fun distance(a: Offset, b: Offset): Float = (a - b).getDistance()

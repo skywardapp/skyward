@@ -100,7 +100,10 @@ private fun diagnosticsLine(row: SourceRow, state: DesktopAppState): String {
     val diagnostics = row.diagnostics ?: return if (row.polled) "Polled · never run yet" else "Computed · never run yet"
     val kind = if (row.polled) "Polled" else "Computed"
     val lastSuccess = diagnostics.lastSuccessAt?.let { "last success ${formatDateTime(it, state.zone)}" } ?: "no successful run yet"
-    val problem = diagnostics.message?.takeIf { !diagnostics.ok || it.isNotBlank() }
+    // A blank message adds a trailing " · " and nothing else; a failed run with
+    // no message still needs *something* said about it.
+    val problem = diagnostics.message?.takeIf { it.isNotBlank() }
+        ?: "the last run failed".takeIf { !diagnostics.ok }
     return listOfNotNull("$kind · ${diagnostics.itemCount} events · $lastSuccess", problem).joinToString(" · ")
 }
 

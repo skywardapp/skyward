@@ -41,6 +41,9 @@ import kotlin.time.Clock
 internal fun SyncSection(state: DesktopAppState) {
     var status by remember { mutableStateOf<String?>(null) }
     var pendingReplaceFile by remember { mutableStateOf<File?>(null) }
+    // Import and export both write the DB; two of them at once would interleave
+    // upserts and report each other's results. One at a time.
+    var busy by remember { mutableStateOf(false) }
 
     SectionCard("Backup & sync") {
         Text(
@@ -49,26 +52,47 @@ internal fun SyncSection(state: DesktopAppState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = {
-                val target = SyncFileDialogs.chooseExportTarget(defaultExportName())
-                if (target != null) {
-                    state.launch {
-                        status = runExport(state, target)
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    val target = SyncFileDialogs.chooseExportTarget(defaultExportName())
+                    if (target != null) {
+                        busy = true
+                        state.launch {
+                            try {
+                                status = runExport(state, target)
+                            } finally {
+                                busy = false
+                            }
+                        }
                     }
-                }
-            }) { Text("Export…") }
+                },
+            ) { Text("Export…") }
 
-            TextButton(onClick = {
-                val source = SyncFileDialogs.chooseImportSource()
-                if (source != null) {
-                    state.launch { status = runImport(state, source, replaceEverything = false) }
-                }
-            }) { Text("Import (merge)…") }
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    val source = SyncFileDialogs.chooseImportSource()
+                    if (source != null) {
+                        busy = true
+                        state.launch {
+                            try {
+                                status = runImport(state, source, replaceEverything = false)
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                },
+            ) { Text("Import (merge)…") }
 
-            TextButton(onClick = {
-                val source = SyncFileDialogs.chooseImportSource()
-                if (source != null) pendingReplaceFile = source
-            }) { Text("Import (replace everything)…") }
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    val source = SyncFileDialogs.chooseImportSource()
+                    if (source != null) pendingReplaceFile = source
+                },
+            ) { Text("Import (replace everything)…") }
         }
         status?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
@@ -87,7 +111,14 @@ internal fun SyncSection(state: DesktopAppState) {
             confirmButton = {
                 TextButton(onClick = {
                     pendingReplaceFile = null
-                    state.launch { status = runImport(state, replaceFile, replaceEverything = true) }
+                    busy = true
+                    state.launch {
+                        try {
+                            status = runImport(state, replaceFile, replaceEverything = true)
+                        } finally {
+                            busy = false
+                        }
+                    }
                 }) { Text("Replace") }
             },
             dismissButton = { TextButton(onClick = { pendingReplaceFile = null }) { Text("Cancel") } },

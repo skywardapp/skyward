@@ -34,13 +34,24 @@ fun interface DesktopNotifier {
  * choice costs one failed attempt per process rather than one per reminder —
  * and, more importantly, reminders don't silently arrive through two
  * different mechanisms depending on transient failures.
+ *
+ * The memory is a preference, not a commitment: if the remembered backend
+ * later fails (the notification daemon restarts, the DBus name goes away),
+ * the chain is re-walked rather than dropping the reminder. Losing a reminder
+ * is the failure §10.3's fallback chain exists to prevent.
  */
 class FallbackChainNotifier(private val backends: List<DesktopNotifier>) : DesktopNotifier {
+    @Volatile
     private var chosen: DesktopNotifier? = null
 
     override fun post(notification: DesktopNotification, onActivated: (String?) -> Unit): Boolean {
-        chosen?.let { return it.post(notification, onActivated) }
+        val preferred = chosen
+        if (preferred != null) {
+            if (preferred.post(notification, onActivated)) return true
+            chosen = null
+        }
         for (backend in backends) {
+            if (backend === preferred) continue // just tried it
             if (backend.post(notification, onActivated)) {
                 chosen = backend
                 return true

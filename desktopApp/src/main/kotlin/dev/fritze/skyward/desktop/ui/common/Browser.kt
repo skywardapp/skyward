@@ -10,7 +10,10 @@ import java.net.URI
  */
 fun openInBrowser(url: String) {
     val uri = runCatching { URI(url) }.getOrNull() ?: return
-    if (uri.scheme != "https" && uri.scheme != "http") return
+    // RFC 3986 schemes are case-insensitive, so "HTTPS://…" is a valid link
+    // and must not be dropped on the floor.
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "https" && scheme != "http") return
 
     val opened = runCatching {
         val desktop = Desktop.getDesktop().takeIf { Desktop.isDesktopSupported() && it.isSupported(Desktop.Action.BROWSE) }

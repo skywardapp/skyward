@@ -23,7 +23,12 @@ object SyncFileDialogs {
         val chosen = chooser.selectedFile ?: return null
         // A user who typed a bare name gets the extension the format expects,
         // matching what the Android SAF picker does with its MIME type.
-        return if (chosen.name.contains('.')) chosen else File(chosen.parentFile, "${chosen.name}.json")
+        // `parentFile` is null for a bare relative name, and `File(null, name)`
+        // would resolve it against the process's working directory rather than
+        // the directory the chooser is actually showing.
+        if (chosen.name.contains('.')) return chosen
+        val parent = chosen.parentFile ?: chooser.currentDirectory
+        return if (parent == null) File("${chosen.name}.json") else File(parent, "${chosen.name}.json")
     }
 
     fun chooseImportSource(): File? {

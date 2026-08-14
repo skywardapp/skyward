@@ -10,6 +10,7 @@ import dev.fritze.skyward.core.sources.EclipseSource
 import dev.fritze.skyward.core.sources.RefreshRequest
 import dev.fritze.skyward.core.sources.SourceSettings
 import dev.fritze.skyward.core.visibility.haversineDistanceKm
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
 import kotlin.test.Test
@@ -54,7 +55,7 @@ class EclipsePathRenderingTest {
 
     @Test
     fun august2027PathTracksThePublishedCentreline() = runTest(timeout = 300.seconds) {
-        val payload = fetchEclipsePayload()
+        val payload = eclipsePayload
 
         assertTrue(payload.kind == SolarEclipseKind.TOTAL, "expected a total eclipse, got ${payload.kind}")
         assertTrue(
@@ -77,7 +78,7 @@ class EclipsePathRenderingTest {
 
     @Test
     fun august2027PathProjectsAsOneUnbrokenWestToEastTrack() = runTest(timeout = 300.seconds) {
-        val payload = fetchEclipsePayload()
+        val payload = eclipsePayload
         val polyline = eclipsePathPolylines(listOf(occurrenceFor(payload))).single()
         val camera = MapCamera()
         val size = Size(1280f, 640f)
@@ -110,23 +111,6 @@ class EclipsePathRenderingTest {
         }
     }
 
-    private suspend fun fetchEclipsePayload(): SolarEclipsePayload {
-        val start = Instant.parse("2027-07-20T00:00:00Z")
-        val end = Instant.parse("2027-08-20T00:00:00Z")
-        val result = EclipseSource().refresh(
-            RefreshRequest(
-                now = start,
-                horizon = TimeWindow(start, end),
-                locations = emptyList(),
-                state = emptyMap(),
-                settings = SourceSettings(),
-                derivedThresholds = DerivedThresholds(null, null, null),
-            ),
-        )
-        val eclipse = result.occurrences.first { it.id == ECLIPSE_ID }
-        return eclipse.payload as SolarEclipsePayload
-    }
-
     private fun occurrenceFor(payload: SolarEclipsePayload) = dev.fritze.skyward.core.model.Occurrence(
         id = ECLIPSE_ID,
         phenomenon = dev.fritze.skyward.core.model.Phenomenon.SOLAR_ECLIPSE,
@@ -142,5 +126,30 @@ class EclipsePathRenderingTest {
 
     private companion object {
         const val ECLIPSE_ID = "se:20270802"
+
+        /**
+         * A month-wide `EclipseSource.refresh` is tens of seconds of real
+         * astronomy — the most expensive thing in this module's test suite.
+         * Both cases assert about the same eclipse, so it is computed once for
+         * the class rather than once per test.
+         */
+        val eclipsePayload: SolarEclipsePayload by lazy { runBlocking { fetchEclipsePayload() } }
+
+        private suspend fun fetchEclipsePayload(): SolarEclipsePayload {
+            val start = Instant.parse("2027-07-20T00:00:00Z")
+            val end = Instant.parse("2027-08-20T00:00:00Z")
+            val result = EclipseSource().refresh(
+                RefreshRequest(
+                    now = start,
+                    horizon = TimeWindow(start, end),
+                    locations = emptyList(),
+                    state = emptyMap(),
+                    settings = SourceSettings(),
+                    derivedThresholds = DerivedThresholds(null, null, null),
+                ),
+            )
+            val eclipse = result.occurrences.first { it.id == ECLIPSE_ID }
+            return eclipse.payload as SolarEclipsePayload
+        }
     }
 }

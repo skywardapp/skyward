@@ -10,9 +10,10 @@
 > + reflection-free config.
 
 M6's own acceptance criterion is that the app "runs under Flatpak locally",
-and Flatpak packages the `createReleaseDistributable` tree — i.e. the
-minified one. So the two requirements meet in the same artifact, and this is
-the milestone where they were first exercised together.
+and Flatpak packages the `createReleaseDistributable` tree — the same tree
+§15.5 wants minified. So the two requirements meet in the same artifact, and
+this is the milestone where they were first exercised together. (As shipped,
+that tree is *not* minified; the rest of this ADR is why.)
 
 They do not currently coexist. Running the packaged binary (not merely
 building it) surfaced three independent ProGuard miscompilations, on both

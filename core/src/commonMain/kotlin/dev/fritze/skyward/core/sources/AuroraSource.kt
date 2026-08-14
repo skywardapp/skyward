@@ -15,6 +15,7 @@ import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.haversineDistanceKm
 import dev.fritze.skyward.core.visibility.toRadians
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
 import kotlin.math.cos
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -222,14 +223,28 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
         suspend fun fetchOvationGridNow(
             sourceStateRepo: SourceStateRepo,
             now: Instant,
-            httpClient: HttpClient = createHttpClient(),
-        ): OvationGrid? = runCatching {
-            val parsed = parseOvationGridJson(httpClient.getText(OVATION_URL))
-            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_GRID, gzipCompress(parsed.probBytes), now)
-            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_FORECAST_TIME, parsed.forecastTime.toString().encodeToByteArray(), now)
-            sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_OBSERVATION_TIME, parsed.observationTime.toString().encodeToByteArray(), now)
-            OvationGrid(parsed.observationTime, parsed.forecastTime, parsed.probBytes)
-        }.getOrNull()
+            // Nullable rather than a `createHttpClient()` default: a client
+            // created here owns an engine with its own threads and selector, and
+            // must be closed. A caller-provided one stays the caller's to close.
+            httpClient: HttpClient? = null,
+        ): OvationGrid? {
+            val client = httpClient ?: createHttpClient()
+            return try {
+                val parsed = parseOvationGridJson(client.getText(OVATION_URL))
+                sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_GRID, gzipCompress(parsed.probBytes), now)
+                sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_FORECAST_TIME, parsed.forecastTime.toString().encodeToByteArray(), now)
+                sourceStateRepo.upsert(SOURCE_ID, STATE_KEY_OBSERVATION_TIME, parsed.observationTime.toString().encodeToByteArray(), now)
+                OvationGrid(parsed.observationTime, parsed.forecastTime, parsed.probBytes)
+            } catch (e: CancellationException) {
+                // Cancellation is not a fetch failure — it must reach the caller,
+                // which `runCatching` here would have swallowed.
+                throw e
+            } catch (e: Exception) {
+                null
+            } finally {
+                if (httpClient == null) client.close()
+            }
+        }
 
         internal const val SOURCE_ID = "swpc"
     }

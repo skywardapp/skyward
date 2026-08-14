@@ -32,9 +32,16 @@ fun rememberUpcoming(state: DesktopAppState, filter: UpcomingFilter): UpcomingSt
     val now by state.tick.collectAsState()
     val grid by state.ovationGrid.collectAsState()
 
+    // Keyed on a coarsened clock, not the 60-second tick: nothing this pass
+    // computes — rise/set windows, quality bands, rule matches — moves
+    // perceptibly inside five minutes, and re-running a three-year horizon
+    // every minute is the difference between an idle app and a busy one.
+    // Countdowns still read the fine-grained tick directly where they render.
+    val recomputeAt = now.epochSeconds / RECOMPUTE_BUCKET_SECONDS
+
     val result by produceState(
         initialValue = UpcomingState(emptyList(), isLoading = true),
-        occurrences, locations, rules, filter, now, grid,
+        occurrences, locations, rules, filter, recomputeAt, grid,
     ) {
         value = value.copy(isLoading = true)
         val items = withContext(Dispatchers.Default) {
@@ -51,3 +58,5 @@ fun rememberUpcoming(state: DesktopAppState, filter: UpcomingFilter): UpcomingSt
     }
     return result
 }
+
+private const val RECOMPUTE_BUCKET_SECONDS = 300L

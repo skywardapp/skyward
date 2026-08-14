@@ -54,6 +54,7 @@ import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import io.github.cosinekitty.astronomy.Observer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -88,7 +89,11 @@ fun SkyChartScreen(state: DesktopAppState) {
     // astronomical darkness". Falling back to a fixed evening window keeps
     // the chart usable at high summer latitudes, where there is no
     // astronomical night at all to span.
-    val night = remember(location, now) { nightWindow(location, now) }
+    // Anchored to the calendar day, not to `now`: keying on the ticking
+    // instant would rebuild the window every minute and snap the slider back
+    // to the middle of the night under the user's hand.
+    val today = now.toLocalDateTime(state.zone).date
+    val night = remember(location, today) { nightWindow(location, now) }
     var fraction by remember(night) { mutableStateOf(0.5f) }
     val instant = night.start + (night.end - night.start) * fraction.toDouble()
 

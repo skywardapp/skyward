@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlin.time.Instant
 
 /** One sample of SWPC's 1-minute estimated planetary K index (§7.3.1). */
@@ -38,7 +39,12 @@ object KpNowcast {
      * bad minute should not blank the gauge.
      */
     fun parseEstimatedKp1m(raw: String): List<KpEstimate> =
-        json.decodeFromString<List<Row>>(raw).mapNotNull { row ->
+        // Decoded element by element, not as one `List<Row>`: `time_tag` is a
+        // required field, so a single row missing it would throw before any
+        // per-row filtering could skip it, and blank the gauge over one bad
+        // minute.
+        json.parseToJsonElement(raw).jsonArray.mapNotNull { element ->
+            val row = runCatching { json.decodeFromJsonElement(Row.serializer(), element) }.getOrNull() ?: return@mapNotNull null
             val kp = row.estimatedKp ?: row.kpIndex ?: return@mapNotNull null
             if (!kp.isFinite()) return@mapNotNull null
             runCatching { KpEstimate(parseUtcNoZoneInstant(row.timeTag), kp) }.getOrNull()

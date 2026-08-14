@@ -271,7 +271,14 @@ private fun EditorActions(state: DesktopAppState, draft: Rule, existing: Boolean
         Button(
             onClick = {
                 state.launch {
-                    state.container.ruleRepo.upsert(draft.copy(modifiedAt = Clock.System.now()))
+                    // The editor has no enabled switch — the list row owns it —
+                    // so the draft's copy is a snapshot from when the pane
+                    // opened. Re-read it, or saving silently undoes a toggle
+                    // made in the list while the editor was open.
+                    val storedEnabled = state.container.ruleRepo.getAll().firstOrNull { it.id == draft.id }?.enabled
+                    state.container.ruleRepo.upsert(
+                        draft.copy(enabled = storedEnabled ?: draft.enabled, modifiedAt = Clock.System.now()),
+                    )
                     state.container.replan()
                 }
                 onClose()
@@ -378,14 +385,20 @@ private fun LivePreviewCard(state: DesktopAppState, draft: Rule) {
             return@LaunchedEffect
         }
         computing = true
-        delay(PREVIEW_DEBOUNCE_MS)
-        val ctx = state.visibilityContext(now)
-        count = withContext(Dispatchers.Default) {
-            Planner.computeMatches(occurrences, locations, listOf(draft.copy(enabled = true)), state.container.visibilityModels, ctx)
-                .distinctBy { it.occ.id }
-                .size
+        try {
+            delay(PREVIEW_DEBOUNCE_MS)
+            val ctx = state.visibilityContext(now)
+            count = withContext(Dispatchers.Default) {
+                Planner.computeMatches(occurrences, locations, listOf(draft.copy(enabled = true)), state.container.visibilityModels, ctx)
+                    .distinctBy { it.occ.id }
+                    .size
+            }
+        } finally {
+            // Every keystroke cancels this effect mid-debounce; without the
+            // `finally` the spinner from the cancelled run would be left
+            // spinning forever once the user stopped typing.
+            computing = false
         }
-        computing = false
     }
 
     SectionCard("Live preview") {

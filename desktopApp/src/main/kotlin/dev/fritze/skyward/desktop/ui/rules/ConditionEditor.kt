@@ -21,6 +21,7 @@ import dev.fritze.skyward.core.model.LunarEclipseKind
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.rules.Cond
+import dev.fritze.skyward.core.rules.RuleLimits
 import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.NumberField
 
@@ -112,7 +113,13 @@ private fun GroupEditor(
                     depth = depth + 1,
                 )
             }
-            AddConditionMenu(onAdd = { group.onChildrenChange(group.children + it) })
+            // Nesting groups any deeper would build a tree RuleLimits rejects,
+            // so the palette drops the group templates rather than letting the
+            // user assemble something that can't be saved.
+            AddConditionMenu(
+                allowGroups = depth + 1 < RuleLimits.MAX_TREE_DEPTH,
+                onAdd = { group.onChildrenChange(group.children + it) },
+            )
         }
     }
 }
@@ -133,19 +140,24 @@ private val CONDITION_TEMPLATES: List<Pair<String, Cond>> = listOf(
     "Peak within N days" to Cond.PeakInDaysAhead(30),
     "Peak on a weekend" to Cond.PeakOnWeekend(),
     "Peak in local hours" to Cond.PeakInLocalHours(fromHour = 22, toHour = 6),
+)
+
+/** The three templates that add a level of nesting, kept apart so depth can gate them. */
+private val GROUP_TEMPLATES: List<Pair<String, Cond>> = listOf(
     "All of…" to Cond.And(emptyList()),
     "Any of…" to Cond.Or(emptyList()),
     "Not…" to Cond.Not(Cond.VisibleAtLocation()),
 )
 
 @Composable
-private fun AddConditionMenu(onAdd: (Cond) -> Unit) {
+private fun AddConditionMenu(allowGroups: Boolean, onAdd: (Cond) -> Unit) {
+    val templates = if (allowGroups) CONDITION_TEMPLATES + GROUP_TEMPLATES else CONDITION_TEMPLATES
     Dropdown(
         selected = ADD_PLACEHOLDER,
-        options = listOf(ADD_PLACEHOLDER) + CONDITION_TEMPLATES.map { it.first },
+        options = listOf(ADD_PLACEHOLDER) + templates.map { it.first },
         label = { it },
         onSelect = { chosen ->
-            CONDITION_TEMPLATES.firstOrNull { it.first == chosen }?.let { onAdd(it.second) }
+            templates.firstOrNull { it.first == chosen }?.let { onAdd(it.second) }
         },
     )
 }

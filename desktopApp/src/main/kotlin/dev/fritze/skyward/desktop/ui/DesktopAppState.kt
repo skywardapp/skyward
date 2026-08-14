@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlin.time.Clock
@@ -150,14 +151,23 @@ class DesktopAppState(
      * — the aurora screen simply forces `swpc`.
      */
     fun refreshSources(sourceIds: Set<String>) {
-        if (sourceIds.isEmpty() || _refreshingSources.value.containsAll(sourceIds)) return
+        if (sourceIds.isEmpty()) return
         scope.launch {
-            _refreshingSources.value = _refreshingSources.value + sourceIds
+            // Claimed atomically, and only the ids this call actually claimed
+            // are released: two overlapping refreshes (the Overview button
+            // while the aurora screen is forcing `swpc`) would otherwise let
+            // the first to finish clear the other's spinner.
+            var claimed = emptySet<String>()
+            _refreshingSources.update { inFlight ->
+                claimed = sourceIds - inFlight
+                inFlight + claimed
+            }
+            if (claimed.isEmpty()) return@launch
             try {
-                container.sourceRunner.runDue(clock.now(), force = sourceIds)
+                container.sourceRunner.runDue(clock.now(), force = claimed)
                 reloadOvationGrid()
             } finally {
-                _refreshingSources.value = _refreshingSources.value - sourceIds
+                _refreshingSources.update { it - claimed }
             }
         }
     }

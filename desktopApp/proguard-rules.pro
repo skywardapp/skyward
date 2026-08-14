@@ -20,6 +20,13 @@
 # alone is not enough (measured, not assumed).
 -dontoptimize
 
+# Deliberately NOT `-dontshrink`. Shrinking is the half of ProGuard that still
+# pays for itself here, and the two shrinker failures ADR 0007 records are
+# addressed by the targeted keep rules below rather than by turning it off —
+# if it were off, those rules would be dead weight nobody would maintain.
+# (Both are moot while `proguard.isEnabled` is false; this file describes the
+# configuration M7 will re-enable, not the one currently running.)
+
 # ---------------------------------------------------------------------------
 # two-slices' optional notification backends (§10.3, §19 R8)
 # ---------------------------------------------------------------------------

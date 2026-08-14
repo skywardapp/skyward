@@ -1,10 +1,13 @@
 package dev.fritze.skyward.desktop.autostart
 
 import dev.fritze.skyward.desktop.data.DesktopPaths
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /** What actually happened when autostart was toggled — the two backends differ in how sure they can be. */
@@ -31,7 +34,12 @@ interface AutostartManager {
      */
     fun isEnabled(): Boolean?
 
-    fun setEnabled(enabled: Boolean): AutostartResult
+    /**
+     * Suspending because both backends block: one writes a file, the other
+     * waits on a `gdbus` round trip that can take seconds if the desktop
+     * prompts the user. Neither may run on the Compose UI thread.
+     */
+    suspend fun setEnabled(enabled: Boolean): AutostartResult
 
     companion object {
         fun forEnvironment(paths: DesktopPaths = DesktopPaths()): AutostartManager =
@@ -44,19 +52,32 @@ class XdgAutostartManager(private val paths: DesktopPaths) : AutostartManager {
 
     private fun entryFile() = paths.autostartDir().resolve("$AUTOSTART_BASENAME.desktop")
 
-    override fun isEnabled(): Boolean = runCatching { entryFile().exists() }.getOrDefault(false)
-
-    override fun setEnabled(enabled: Boolean): AutostartResult = try {
+    /**
+     * The file existing is not enough: GNOME's Startup Applications toggle
+     * leaves the entry in place and flips `X-GNOME-Autostart-enabled` to
+     * `false`, so reading only `exists()` would show a switch that disagrees
+     * with the desktop's own UI.
+     */
+    override fun isEnabled(): Boolean = runCatching {
         val file = entryFile()
-        if (enabled) {
-            file.parent.createDirectories()
-            file.writeText(DESKTOP_ENTRY)
-        } else {
-            file.deleteIfExists()
+        file.exists() && !file.readText().lineSequence().any {
+            it.trim().replace(" ", "").equals("X-GNOME-Autostart-enabled=false", ignoreCase = true)
         }
-        AutostartResult.Applied
-    } catch (e: Exception) {
-        AutostartResult.Failed(e.message ?: e::class.simpleName.orEmpty())
+    }.getOrDefault(false)
+
+    override suspend fun setEnabled(enabled: Boolean): AutostartResult = withContext(Dispatchers.IO) {
+        try {
+            val file = entryFile()
+            if (enabled) {
+                file.parent.createDirectories()
+                file.writeText(DESKTOP_ENTRY)
+            } else {
+                file.deleteIfExists()
+            }
+            AutostartResult.Applied
+        } catch (e: Exception) {
+            AutostartResult.Failed(e.message ?: e::class.simpleName.orEmpty())
+        }
     }
 
     private companion object {
@@ -104,7 +125,7 @@ class BackgroundPortalAutostartManager(
      */
     override fun isEnabled(): Boolean? = null
 
-    override fun setEnabled(enabled: Boolean): AutostartResult {
+    override suspend fun setEnabled(enabled: Boolean): AutostartResult = withContext(Dispatchers.IO) {
         val options = buildString {
             append("{'reason': <'Skyward delivers reminders while its window is closed.'>, ")
             append("'autostart': <$enabled>, ")
@@ -121,7 +142,7 @@ class BackgroundPortalAutostartManager(
                 options,
             ),
         )
-        return if (ok) {
+        if (ok) {
             AutostartResult.Requested(
                 if (enabled) {
                     "Asked the desktop to start Skyward at login. Your desktop may ask you to confirm."
