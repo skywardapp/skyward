@@ -1,6 +1,7 @@
 package dev.fritze.skyward.alarm
 
 import android.Manifest
+import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import java.util.UUID
 import kotlin.time.Clock
@@ -34,10 +36,17 @@ import kotlin.time.Instant
 @RunWith(AndroidJUnit4::class)
 class AlarmFlowInstrumentedTest {
 
-    // POST_NOTIFICATIONS is a no-op grant below API 33 (already implicitly
-    // granted there), so this is safe to apply unconditionally.
+    // POST_NOTIFICATIONS only exists from API 33; below that it is implicitly granted and
+    // asking UiAutomation to grant it fails outright ("SecurityException: Error granting
+    // runtime permission"), so the rule has to be a no-op on older emulators rather than an
+    // unconditional grant.
     @get:Rule
-    val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+    val permissionRule: TestRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            TestRule { base, _ -> base }
+        }
 
     private val context = ApplicationProvider.getApplicationContext<SkywardApplication>()
     private val container = context.container
