@@ -17,6 +17,10 @@ class LocationRepo(private val db: SkywardDatabase) {
     fun observeAll(): Flow<List<SavedLocation>> =
         db.savedLocationQueries.selectAll().asFlow().mapToList(Dispatchers.Default).map { rows -> rows.map { it.toModel() } }
 
+    suspend fun getAll(): List<SavedLocation> = withContext(Dispatchers.Default) {
+        db.savedLocationQueries.selectAll().executeAsList().map { it.toModel() }
+    }
+
     suspend fun getById(id: String): SavedLocation? = withContext(Dispatchers.Default) {
         db.savedLocationQueries.selectById(id).executeAsOneOrNull()?.toModel()
     }
