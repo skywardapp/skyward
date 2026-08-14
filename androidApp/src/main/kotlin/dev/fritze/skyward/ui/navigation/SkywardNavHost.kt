@@ -28,6 +28,7 @@ import dev.fritze.skyward.ui.rules.RulesScreen
 import dev.fritze.skyward.ui.settings.AboutScreen
 import dev.fritze.skyward.ui.settings.NotificationsSettingsScreen
 import dev.fritze.skyward.ui.settings.SettingsScreen
+import dev.fritze.skyward.ui.settings.SourcesScreen
 import dev.fritze.skyward.ui.settings.SyncScreen
 import dev.fritze.skyward.ui.upcoming.UpcomingScreen
 
@@ -86,6 +87,7 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
                 SettingsScreen(
                     onLocations = { navController.navigate(Routes.LOCATIONS) },
                     onNotifications = { navController.navigate(Routes.NOTIFICATIONS_SETTINGS) },
+                    onSources = { navController.navigate(Routes.SOURCES) },
                     onSync = { navController.navigate(Routes.SYNC) },
                     onAbout = { navController.navigate(Routes.ABOUT) },
                 )
@@ -106,6 +108,7 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
                 LocationEditorScreen(container, locationId, onDone = { navController.popBackStack() })
             }
             composable(Routes.NOTIFICATIONS_SETTINGS) { NotificationsSettingsScreen(container, onBack = { navController.popBackStack() }) }
+            composable(Routes.SOURCES) { SourcesScreen(container, onBack = { navController.popBackStack() }) }
             composable(Routes.SYNC) { SyncScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.ABOUT) { AboutScreen(onBack = { navController.popBackStack() }) }
         }

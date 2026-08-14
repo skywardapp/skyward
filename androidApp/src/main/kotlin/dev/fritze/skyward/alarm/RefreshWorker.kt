@@ -22,7 +22,7 @@ class RefreshWorker(
         // contract, an OnHorizonChange source never becomes due again on its own after a
         // successful run, so without this the rolling horizon window would stop revealing new
         // occurrences at its far edge after the very first refresh. Cheap (local astronomy,
-        // no network) -- POLLED sources (M4) are unaffected and still run on their own schedule.
+        // no network) -- POLLED sources are unaffected and still run on their own schedule.
         container.sourceRunner.runDue(Clock.System.now(), force = container.computedSources.map { it.id }.toSet())
         return Result.success()
     }

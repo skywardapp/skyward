@@ -20,8 +20,11 @@ import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
+import dev.fritze.skyward.core.sources.AuroraSource
+import dev.fritze.skyward.core.sources.CometSource
 import dev.fritze.skyward.core.sources.ConjunctionSource
 import dev.fritze.skyward.core.sources.EclipseSource
+import dev.fritze.skyward.core.sources.EonetSource
 import dev.fritze.skyward.core.sources.EventSource
 import dev.fritze.skyward.core.sources.MeteorShowerSource
 import dev.fritze.skyward.core.sources.MoonEventSource
@@ -74,21 +77,34 @@ class AppContainer(context: Context) {
         Phenomenon.TERRESTRIAL to TerrestrialVisibilityModel(),
     )
 
-    // AURORA/COMET/EONET are POLLED sources; they land in M4 (§18). Their
-    // visibility models are wired above regardless (M2's own scope), they
-    // just never see any occurrences via SourceRunner until then.
+    // RefreshWorker force-runs exactly these every 15 min (§10.2) -- an
+    // OnHorizonChange source never becomes due on its own, so the rolling
+    // horizon window needs a periodic nudge. POLLED sources below are never
+    // force-run; they rely entirely on SourceRunner.isDue (§6.2).
     val computedSources: List<EventSource> = listOf(EclipseSource(), MeteorShowerSource(), MoonEventSource(), ConjunctionSource())
+
+    // §18/M4: AURORA/COMET/EONET. Each derives its own next-run time
+    // (AuroraSource's tiered poll, §7.3.2) or uses a fixed Schedule.Periodic
+    // (comet monthly, EONET 6-hourly) -- SourceRunner treats them exactly
+    // like the COMPUTED sources otherwise, including per-source failure
+    // isolation, so no network-specific WorkManager wiring is needed here:
+    // a fetch failure while offline is just another refresh() failure,
+    // already handled by SourceRunner's diagnose+backoff path (§6.2).
+    val polledSources: List<EventSource> = listOf(AuroraSource(), CometSource(), EonetSource())
 
     /** Var (not val): instrumented tests substitute a fake per §17.5, since there's no DI framework. */
     var alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)
 
-    val replanCoordinator = ReplanCoordinator(occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityModels)
+    val replanCoordinator = ReplanCoordinator(
+        occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityModels,
+        ovationGridProvider = { AuroraSource.loadOvationGrid(sourceStateRepo) },
+    )
 
     /** One scope per app process (§4.3); sources never launch their own. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val sourceRunner = SourceRunner(
-        computedSources, occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo,
+        computedSources + polledSources, occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo,
         onOccurrencesChanged = { now -> replanAndSync(now) },
     )
 
@@ -99,15 +115,18 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * §10.2: one periodic `skyward-refresh` unique work (15min floor — no
-     * POLLED source exists yet to derive a tighter interval from, M4) plus
-     * the daily alarm-window top-up job.
+     * §10.2: one periodic `skyward-refresh` unique work (15min floor —
+     * matches AuroraSource's active-tier interval, §7.3.2) plus the daily
+     * alarm-window top-up job.
      */
     fun scheduleBackgroundWork() {
         val workManager = WorkManager.getInstance(appContext)
-        // No network constraint: every registered source in M3 is COMPUTED (local astronomy).
-        // POLLED sources (aurora/comet/EONET, M4) will need one, scoped to just those sources --
-        // gating the whole worker on connectivity would also block the COMPUTED horizon re-force above.
+        // No network constraint on the worker itself: it force-runs the
+        // COMPUTED sources (local astronomy, no network) every pass
+        // regardless, and POLLED sources' own network failures are already
+        // handled per-source by SourceRunner's diagnose+backoff (§6.2) --
+        // gating the whole worker on connectivity would also block that
+        // COMPUTED horizon re-force while offline.
         val refreshRequest = PeriodicWorkRequestBuilder<RefreshWorker>(15.minutes.toJavaDuration()).build()
         workManager.enqueueUniquePeriodicWork(RefreshWorker.UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, refreshRequest)
 
