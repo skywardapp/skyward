@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.planner
 
+import dev.fritze.skyward.core.format.renderNotificationCopy
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.LocalDetails
 import dev.fritze.skyward.core.model.NotificationStatus
@@ -24,6 +25,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 /** §9.2 step 3: a rule matching an (occurrence, location). */
@@ -66,13 +68,20 @@ object Planner {
     /**
      * §9.3/§10.4: expand each match's schedule into candidate fire times,
      * dedup by `(occurrenceId, anchorTime, lead-or-"first")`, and render the
-     * winning (rule, location) pair into a [PlannedNotification]. A lead
-     * computed in the past is dropped, not fired (§7.4.3). Notification
-     * copy here is a placeholder for the full §10.5 templates (`core/format/`,
-     * M3) — enough to be useful for debugging/testing, not the polished text.
+     * winning (rule, location) pair into a [PlannedNotification] via §10.5's
+     * `core/format` templates. A lead computed in the past is dropped, not
+     * fired (§7.4.3).
      */
     fun desiredNotifications(matches: List<Match>, now: Instant, deviceZone: TimeZone): List<PlannedNotification> {
-        data class Candidate(val key: String, val rule: Rule, val occ: Occurrence, val loc: SavedLocation, val visres: VisibilityResult, val fireAt: Instant)
+        data class Candidate(
+            val key: String,
+            val rule: Rule,
+            val occ: Occurrence,
+            val loc: SavedLocation,
+            val visres: VisibilityResult,
+            val fireAt: Instant,
+            val leadUntilAnchor: Duration?,
+        )
 
         val candidates = mutableListOf<Candidate>()
         for (m in matches) {
@@ -83,7 +92,7 @@ object Planner {
                     val fireAt = applyQuietHours(rawFireAt, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
                     if (fireAt < now) continue // §7.4.3: a lead computed in the past is dropped, not fired
                     val key = "${m.occ.id}|${anchorTime.epochSeconds}|${lead.inWholeSeconds}"
-                    candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt)
+                    candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt, leadUntilAnchor = lead)
                 }
             }
             if (m.rule.schedule.notifyOnFirstSeen) {
@@ -97,13 +106,14 @@ object Planner {
                 val firstSeenAnchor = m.occ.peakTime ?: m.occ.window.start
                 val fireAt = applyQuietHours(now, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
                 val key = "${m.occ.id}|${firstSeenAnchor.epochSeconds}|first"
-                candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt)
+                candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt, leadUntilAnchor = null)
             }
         }
 
         return candidates.groupBy { it.key }.map { (key, group) ->
             val winner = group.first() // "one notification, listing the first matching rule" (§9.3)
             val bestLocation = group.maxBy { it.visres.quality } // "body shows the best (highest-quality) location"
+            val copy = renderNotificationCopy(winner.occ, bestLocation.loc, bestLocation.visres, winner.rule, winner.fireAt, winner.leadUntilAnchor)
             PlannedNotification(
                 id = key,
                 occurrenceId = winner.occ.id,
@@ -112,8 +122,8 @@ object Planner {
                 fireAt = winner.fireAt,
                 status = NotificationStatus.PENDING,
                 precision = Precision.EXACT,
-                title = winner.occ.title,
-                body = "${bestLocation.loc.name}: ${bestLocation.visres.quality}",
+                title = copy.title,
+                body = copy.body,
                 createdAt = now,
                 firedAt = null,
             )

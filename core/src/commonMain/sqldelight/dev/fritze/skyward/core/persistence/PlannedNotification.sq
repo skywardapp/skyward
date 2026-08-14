@@ -25,6 +25,10 @@ SELECT * FROM planned_notification WHERE occurrence_id = ?;
 selectPendingDue:
 SELECT * FROM planned_notification WHERE status IN ('PENDING', 'REGISTERED') AND fire_at <= ?;
 
+upsert:
+INSERT OR REPLACE INTO planned_notification(id, occurrence_id, rule_id, location_id, fire_at, status, precision, title, body, created_at, fired_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
 updateStatus:
 UPDATE planned_notification SET status = ?, fired_at = ? WHERE id = ?;
 

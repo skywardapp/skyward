@@ -4,7 +4,8 @@
   src/foss/AndroidManifest.xml and src/play/AndroidManifest.xml — the
   only permitted divergence between the two flavours (D13).
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -14,6 +15,7 @@
          services, NO REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (§10.2). -->
 
     <application
+        android:name=".SkywardApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -29,6 +31,73 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- §10.2: exact-path alarm target. Always reached via an explicit,
+             component-targeted PendingIntent (never an implicit broadcast),
+             so it stays unexported. -->
+        <receiver
+            android:name=".alarm.NotificationAlarmReceiver"
+            android:exported="false" />
+
+        <!-- §10.2: "On BOOT_COMPLETED (and MY_PACKAGE_REPLACED): re-register
+             the window." Both are protected system broadcasts (AOSP declares
+             them <protected-broadcast>, so the OS refuses to let any
+             third-party app send them), and a receiver has to be exported for
+             the system to deliver to it at all.
+
+             Reviewed for Sonar xml:S5322 ("make sure intents are received
+             safely"): no android:permission is added because there is no
+             sender permission that meaningfully gates the system here, and
+             naming one risks silently dropping boot delivery, which cannot be
+             covered by our emulator tests. The residual surface is another app
+             sending an *explicit* component-targeted intent; BootReceiver
+             guards on intent.action, and the only reachable effect is an
+             idempotent re-sync of alarms already in our own DB. No data is
+             read from the intent and none leaves the app.
+
+             The finding therefore has to be resolved as "Safe" in the
+             SonarCloud UI: the XML analyser ignores NOSONAR markers for this
+             rule (verified empirically), and Automatic Analysis does not read
+             sonar.issue.ignore.multicriteria from the repository. -->
+        <receiver
+            android:name=".alarm.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- §10.2: exact-alarm permission revoked/granted mid-life; re-sync
+             onto whichever path (exact/approximate) is now correct. API 31+
+             only; the intent-filter is simply inert below that.
+
+             Same xml:S5322 review as BootReceiver above: protected system
+             broadcast, exported only so the system can reach us, action
+             guarded in the receiver, and the only effect is an idempotent
+             AlarmSyncer pass over rows we already own. Resolve as "Safe" in
+             the SonarCloud UI, as above. -->
+        <receiver
+            android:name=".alarm.ExactAlarmPermissionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- WorkManager auto-init replaced by SkywardApplication's own
+             Configuration.Provider (needed to inject AppContainer into
+             workers); see docs/adr/0006-workmanager-custom-initialization.md. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
     </application>
 

@@ -10,8 +10,10 @@ import kotlin.time.Instant
 /**
  * "Local" time as local mean solar time (`lonDeg / 15` hours of offset from
  * UTC) rather than a real IANA timezone — see
- * docs/adr/0005-rule-local-time-approximation.md for why. Used only by
- * [Cond.PeakOnWeekend] and [Cond.PeakInLocalHours].
+ * docs/adr/0005-rule-local-time-approximation.md for why. Used by
+ * [Cond.PeakOnWeekend], [Cond.PeakInLocalHours], and `core/format/`'s
+ * notification-copy time rendering (§10.5) — a location's own approximate
+ * clock, not the device's.
  */
 fun approximateLocalDateTime(instant: Instant, lonDeg: Double): LocalDateTime {
     val offsetSeconds = (lonDeg / 15.0) * 3600.0
