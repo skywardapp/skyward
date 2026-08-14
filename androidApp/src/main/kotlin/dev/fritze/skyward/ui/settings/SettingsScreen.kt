@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.Column
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onLocations: () -> Unit, onNotifications: () -> Unit, onSync: () -> Unit, onAbout: () -> Unit) {
+fun SettingsScreen(onLocations: () -> Unit, onNotifications: () -> Unit, onSources: () -> Unit, onSync: () -> Unit, onAbout: () -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { padding ->
         Column(Modifier.fillMaxWidth().padding(padding)) {
             SettingsRow("Locations", "Where Skyward checks visibility from", onLocations)
             HorizontalDivider()
             SettingsRow("Notifications", "Quiet hours, exact-alarm status", onNotifications)
+            HorizontalDivider()
+            SettingsRow("Sources", "Enable/disable data sources, diagnostics", onSources)
             HorizontalDivider()
             SettingsRow("Sync", "Export / import your settings", onSync)
             HorizontalDivider()

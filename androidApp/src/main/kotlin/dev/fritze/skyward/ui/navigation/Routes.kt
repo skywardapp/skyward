@@ -8,6 +8,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val LOCATIONS = "settings/locations"
     const val NOTIFICATIONS_SETTINGS = "settings/notifications"
+    const val SOURCES = "settings/sources"
     const val SYNC = "settings/sync"
     const val ABOUT = "settings/about"
 
