@@ -63,6 +63,17 @@ class SyncMergeTest {
     }
 
     @Test
+    fun equalTimestampDuplicatesKeepTheFirstIncomingElement() {
+        // Two duplicates sharing both id and modifiedAt: maxBy keeps the first one it sees on a
+        // tie, so this must be deterministic rather than picking whichever happens to compare
+        // "greater" -- distinguish them via isPrimary since loc()'s other fields are fixed by id.
+        val first = loc("a", t0).copy(isPrimary = true)
+        val second = loc("a", t0).copy(isPrimary = false)
+        val result = SyncMerge.newerOrMissing(local = emptyList(), incoming = listOf(first, second), id = { it.id }, modifiedAt = { it.modifiedAt })
+        assertEquals(listOf(first), result, "ties keep the first element in incoming's order")
+    }
+
+    @Test
     fun syntheticFiredHistoryEntryDerivesOccurrenceIdAndIsFired() {
         val entry = SyncMerge.syntheticFiredHistoryEntry("se:20260812|1786556760|7200", t0)
         assertEquals("se:20260812", entry.occurrenceId)

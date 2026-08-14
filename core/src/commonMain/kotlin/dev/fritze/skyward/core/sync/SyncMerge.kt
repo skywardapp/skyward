@@ -20,7 +20,10 @@ object SyncMerge {
      * exporter) contain two records sharing an id, and without this, both
      * would independently pass the "newer than local" check below and get
      * upserted in file order, letting an older-but-later-in-the-file record
-     * silently win over a newer one instead of `modifiedAt` deciding.
+     * silently win over a newer one instead of `modifiedAt` deciding. Ties
+     * (two duplicates sharing both id and `modifiedAt`) keep the first one
+     * in [incoming]'s order -- deterministic (`maxBy` keeps the earliest
+     * element on a tie), not a random or unstable pick.
      */
     fun <T> newerOrMissing(local: List<T>, incoming: List<T>, id: (T) -> String, modifiedAt: (T) -> Instant): List<T> {
         val localById = local.associateBy(id)

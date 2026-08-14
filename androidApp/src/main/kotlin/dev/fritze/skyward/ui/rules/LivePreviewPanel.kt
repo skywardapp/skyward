@@ -94,21 +94,28 @@ private class PreviewState {
         previewFailed = false
         if (!enabled) {
             previewCount = null
+            loading = false // a still-in-flight previous run left this true; nothing will ever flip it back otherwise
             return
         }
         loading = true
-        delay(500)
-        runCatchingCancellable { viewModel.previewCount(rule) }
-            .onSuccess { previewCount = it }
-            .onFailure { previewFailed = true }
-        loading = false
+        try {
+            delay(500)
+            runCatchingCancellable { viewModel.previewCount(rule) }
+                .onSuccess { previewCount = it }
+                .onFailure { previewFailed = true }
+        } finally {
+            loading = false // must still run if this coroutine is cancelled mid-delay/call, not just on normal completion
+        }
     }
 
     fun loadPastCount(scope: CoroutineScope, viewModel: RuleEditorViewModel, rule: Rule) {
         scope.launch {
             pastLoading = true
-            pastCount = runCatchingCancellable { viewModel.pastMatchCount(rule) ?: 0 }.getOrNull()
-            pastLoading = false
+            try {
+                pastCount = runCatchingCancellable { viewModel.pastMatchCount(rule) ?: 0 }.getOrNull()
+            } finally {
+                pastLoading = false
+            }
         }
     }
 }
