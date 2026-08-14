@@ -12,6 +12,8 @@ sqldelight = "2.3.2"
 workManager = "2.10.5"
 androidxCore = "1.18.0"
 androidxActivityCompose = "1.13.0"
+androidxNavigationCompose = "2.9.5"
+androidxLifecycle = "2.9.4"
 androidxTestJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
 composeNativeTray = "1.3.3"
@@ -40,6 +42,9 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "androidxNavigationCompose" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
 
 # Android instrumented tests (§17.5). Not shipped: androidTest* configurations
 # only, so they stay out of the licence-checked runtime classpaths (§16).

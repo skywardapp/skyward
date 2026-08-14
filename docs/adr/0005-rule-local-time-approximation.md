@@ -32,8 +32,12 @@ same kind of spherical-astronomy approximation §8.1 already commits to for
 geodesy ("error is ≤ 0.5%, irrelevant at this app's precision").
 
 `core/rules/LocalTime.kt` implements this as `approximateLocalDateTime`,
-used only by `PeakOnWeekend` and `PeakInLocalHours` — no other part of the
-app (notification copy, other `Cond` types) depends on it.
+used by `PeakOnWeekend`, `PeakInLocalHours`, and (since M3) `core/format`'s
+notification-copy time rendering (§10.5) — a notification about a location
+200km from the device shouldn't render times in the device's own timezone
+assumption. `QuietHours` (§9.1) is the one exception: it's explicitly
+device-local, not location-local (§9.1's own framing), so it uses the
+device's real `TimeZone.currentSystemDefault()` instead.
 
 ## Why this isn't a D-decision reopening
 
