@@ -20,6 +20,26 @@ log() { echo "[run-ui-tests] $*"; }
 
 mkdir -p "$OUT_DIR"
 
+# adb brings no timeouts of its own: `wait-for-device` blocks forever by
+# design, and a `shell` call against a half-up device can hang just as long. A
+# readiness gate that can itself hang is worse than none — it would burn the
+# job's whole 60-minute budget instead of failing in three minutes — so every
+# call below is bounded. `timeout` is coreutils and always present on the CI
+# runner; a dev box without it (macOS) degrades to unbounded rather than
+# refusing to run.
+TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || echo "")
+
+adb_bounded() {
+  local budget=$1
+  shift
+  [ "$budget" -lt 1 ] && budget=1
+  if [ -n "$TIMEOUT_BIN" ]; then
+    "$TIMEOUT_BIN" "$budget" adb "$@"
+  else
+    adb "$@"
+  fi
+}
+
 # `sys.boot_completed` is not on its own proof that the device can be driven:
 # the emulator-runner action has already seen it flip to 1 and then failed on
 # the very next adb call because the system services were not registered yet.
@@ -27,21 +47,28 @@ mkdir -p "$OUT_DIR"
 # otherwise a half-ready device surfaces as an inscrutable Gradle install
 # failure partway through the first flavour, rather than as what it is.
 await_device_ready() {
-  local deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
+  local start=$SECONDS
+  local deadline=$((start + READY_TIMEOUT_SECONDS))
+  local remaining
 
-  adb wait-for-device || { log "adb wait-for-device failed"; return 1; }
+  if ! adb_bounded "$((deadline - SECONDS))" wait-for-device; then
+    log "no device visible to adb within ${READY_TIMEOUT_SECONDS}s"
+    return 1
+  fi
 
   while [ "$SECONDS" -lt "$deadline" ]; do
-    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] &&
-      adb shell pm path android >/dev/null 2>&1; then
-      log "device ready after $((SECONDS))s"
+    remaining=$((deadline - SECONDS))
+    if [ "$(adb_bounded "$remaining" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] &&
+      adb_bounded "$remaining" shell pm path android >/dev/null 2>&1; then
+      log "device ready after $((SECONDS - start))s"
       return 0
     fi
     sleep 2
   done
 
+  # The deadline is spent, so this last look is on its own short budget.
   log "device never became ready within ${READY_TIMEOUT_SECONDS}s" \
-    "(sys.boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n'));" \
+    "(sys.boot_completed=$(adb_bounded 5 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n'));" \
     "not running any flavour against it"
   return 1
 }
