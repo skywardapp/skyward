@@ -13,9 +13,40 @@ set -uo pipefail
 FLAVOURS=${FLAVOURS:-foss play}
 OUT_DIR=${OUT_DIR:-build/ui-test-video}
 APPLICATION_ID=${APPLICATION_ID:-dev.fritze.skyward}
+READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-180}
 export OUT_DIR
 
+log() { echo "[run-ui-tests] $*"; }
+
 mkdir -p "$OUT_DIR"
+
+# `sys.boot_completed` is not on its own proof that the device can be driven:
+# the emulator-runner action has already seen it flip to 1 and then failed on
+# the very next adb call because the system services were not registered yet.
+# Wait for the package manager to actually answer before installing anything —
+# otherwise a half-ready device surfaces as an inscrutable Gradle install
+# failure partway through the first flavour, rather than as what it is.
+await_device_ready() {
+  local deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
+
+  adb wait-for-device || { log "adb wait-for-device failed"; return 1; }
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] &&
+      adb shell pm path android >/dev/null 2>&1; then
+      log "device ready after $((SECONDS))s"
+      return 0
+    fi
+    sleep 2
+  done
+
+  log "device never became ready within ${READY_TIMEOUT_SECONDS}s" \
+    "(sys.boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n'));" \
+    "not running any flavour against it"
+  return 1
+}
+
+await_device_ready || exit 1
 
 status=0
 for flavour in $FLAVOURS; do
