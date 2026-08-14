@@ -62,8 +62,23 @@ jobs:
       # every flavour that has to build and install before testing. The
       # recorder degrades gracefully without ffmpeg, so a failure here must not
       # take a green test run down with it.
+      #
+      # apt's ffmpeg pulls ~90 packages (libsdl2, pulseaudio, jack, pocketsphinx,
+      # openal...) we don't need just to concat two video segments, and one run
+      # hit a throttled azure.archive.ubuntu.com mirror that took 30 minutes to
+      # serve those 63 MB (github.com/skywardapp/skyward/actions/runs/31796936329).
+      # Caching the fetched .debs sidesteps the mirror on repeat runs, and the
+      # timeout bounds the damage on a genuinely bad mirror day to minutes
+      # instead of eating half the job's 60-minute budget.
+      - name: Cache apt packages for ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-ffmpeg-${{ runner.os }}-noble-v1
+
       - name: Install ffmpeg (stitches the video segments)
         continue-on-error: true
+        timeout-minutes: 3
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
