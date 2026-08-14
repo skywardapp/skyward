@@ -32,7 +32,9 @@ TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || echo "")
 adb_bounded() {
   local budget=$1
   shift
-  [ "$budget" -lt 1 ] && budget=1
+  # Deadline already spent: report a timeout rather than granting a fresh
+  # second. 124 is what `timeout` itself exits with.
+  [ "$budget" -lt 1 ] && return 124
   if [ -n "$TIMEOUT_BIN" ]; then
     "$TIMEOUT_BIN" "$budget" adb "$@"
   else
@@ -49,27 +51,31 @@ adb_bounded() {
 await_device_ready() {
   local start=$SECONDS
   local deadline=$((start + READY_TIMEOUT_SECONDS))
-  local remaining
+  local booted=""
 
   if ! adb_bounded "$((deadline - SECONDS))" wait-for-device; then
     log "no device visible to adb within ${READY_TIMEOUT_SECONDS}s"
     return 1
   fi
 
+  # Each call recomputes what is left of the deadline rather than sharing one
+  # per-iteration budget: a slow-but-successful getprop would otherwise hand
+  # the full remainder to the pm probe a second time, and the gate would
+  # overrun the timeout it exists to enforce.
   while [ "$SECONDS" -lt "$deadline" ]; do
-    remaining=$((deadline - SECONDS))
-    if [ "$(adb_bounded "$remaining" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] &&
-      adb_bounded "$remaining" shell pm path android >/dev/null 2>&1; then
+    booted=$(adb_bounded "$((deadline - SECONDS))" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
+    if [ "$booted" = "1" ] &&
+      adb_bounded "$((deadline - SECONDS))" shell pm path android >/dev/null 2>&1; then
       log "device ready after $((SECONDS - start))s"
       return 0
     fi
     sleep 2
   done
 
-  # The deadline is spent, so this last look is on its own short budget.
+  # Report the value already observed above; asking again would spend time we
+  # have by definition run out of.
   log "device never became ready within ${READY_TIMEOUT_SECONDS}s" \
-    "(sys.boot_completed=$(adb_bounded 5 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n'));" \
-    "not running any flavour against it"
+    "(last sys.boot_completed='${booted}'); not running any flavour against it"
   return 1
 }
 
