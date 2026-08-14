@@ -56,6 +56,18 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # ubuntu-24.04 dropped the preinstalled ffmpeg that earlier runner images
+      # had. Without it, any flavour whose run outlives one 170 s screenrecord
+      # segment ships as loose segment files instead of one video — which is
+      # every flavour that has to build and install before testing. The
+      # recorder degrades gracefully without ffmpeg, so a failure here must not
+      # take a green test run down with it.
+      - name: Install ffmpeg (stitches the video segments)
+        continue-on-error: true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
