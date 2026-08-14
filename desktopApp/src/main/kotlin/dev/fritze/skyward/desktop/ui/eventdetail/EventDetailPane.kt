@@ -53,6 +53,7 @@ import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import dev.fritze.skyward.desktop.ui.theme.qualityLabel
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * §14: "Rules/Settings/EventDetail reuse the same core view-models as
@@ -87,28 +88,7 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(occurrence.title, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "${phenomenonLabel(occurrence.phenomenon)} · ${occurrence.certainty.describe()}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = onClose) { Text("Close") }
-        }
-
-        val anchor = occurrence.peakTime ?: occurrence.window.start
-        Text(
-            "${formatDateTime(anchor, state.zone)} — ${formatRelative(now, anchor)}",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Text(
-            "Window ${formatDateTime(occurrence.window.start, state.zone)} → ${formatDateTime(occurrence.window.end, state.zone)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        DetailHeader(state, occurrence, now, onClose)
 
         HorizontalDivider()
 
@@ -120,18 +100,7 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
             }
         }
 
-        when (val payload = occurrence.payload) {
-            is CometPayload -> CometHonestyCard(payload, perLocation.firstOrNull()?.second, state)
-            is TerrestrialPayload -> OutlinedButton(onClick = { openInBrowser(payload.link) }) { Text("Open on NASA EONET") }
-            is SolarEclipsePayload -> if (payload.centralPath.isNotEmpty()) {
-                Text(
-                    "Central path sampled at ${payload.centralPath.size} points — see it on the Map tab.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            else -> Unit
-        }
+        PayloadExtras(state, occurrence, perLocation.firstOrNull()?.second)
 
         HorizontalDivider()
         // §13.3's mute, verbatim: a hidden rule that can never fire on its own,
@@ -139,6 +108,46 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
         OutlinedButton(onClick = { state.launch { toggleMute(state, occurrence, isMuted) } }) {
             Text(if (isMuted) "Unmute this event" else "Mute this event")
         }
+    }
+}
+
+@Composable
+private fun DetailHeader(state: DesktopAppState, occurrence: Occurrence, now: Instant, onClose: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            Text(occurrence.title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "${phenomenonLabel(occurrence.phenomenon)} · ${occurrence.certainty.describe()}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onClose) { Text("Close") }
+    }
+
+    val anchor = occurrence.peakTime ?: occurrence.window.start
+    Text("${formatDateTime(anchor, state.zone)} — ${formatRelative(now, anchor)}", style = MaterialTheme.typography.bodyLarge)
+    Text(
+        "Window ${formatDateTime(occurrence.window.start, state.zone)} → ${formatDateTime(occurrence.window.end, state.zone)}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** The phenomenon-specific tail of the pane: the §7.4.4 comet caveat, the EONET link, the map pointer. */
+@Composable
+private fun PayloadExtras(state: DesktopAppState, occurrence: Occurrence, primaryVisres: VisibilityResult?) {
+    when (val payload = occurrence.payload) {
+        is CometPayload -> CometHonestyCard(payload, primaryVisres, state)
+        is TerrestrialPayload -> OutlinedButton(onClick = { openInBrowser(payload.link) }) { Text("Open on NASA EONET") }
+        is SolarEclipsePayload -> if (payload.centralPath.isNotEmpty()) {
+            Text(
+                "Central path sampled at ${payload.centralPath.size} points — see it on the Map tab.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        else -> Unit
     }
 }
 

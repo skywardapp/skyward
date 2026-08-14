@@ -58,6 +58,16 @@ import kotlin.math.roundToInt
  * vectors with toggleable event layers. No tiles, no network, no licensing
  * burden — the whole map is in the binary.
  */
+/** Everything the canvas draws, gathered once so the draw and hit-test paths agree by construction. */
+private data class MapContent(
+    val landPath: androidx.compose.ui.graphics.Path,
+    val eclipsePaths: List<EclipsePathPolyline>,
+    val eonet: List<EonetMarker>,
+    val locations: List<SavedLocation>,
+    val radii: List<Double>,
+    val overlay: androidx.compose.ui.graphics.ImageBitmap?,
+)
+
 @Composable
 fun EventMapScreen(state: DesktopAppState) {
     val occurrences by state.occurrences.collectAsState()
@@ -69,32 +79,21 @@ fun EventMapScreen(state: DesktopAppState) {
     var camera by remember { mutableStateOf(MapCamera()) }
     var enabledLayers by remember { mutableStateOf(MapLayer.entries.toSet()) }
 
-    // All three are pure functions of data that changes rarely; recomputing
+    // Each of these is a pure function of data that changes rarely; recomputing
     // them per frame would put GeoJSON-scale work in the draw path.
     val landPath = remember { buildLandPath() }
-    val eclipsePaths = remember(occurrences) { eclipsePathPolylines(occurrences.filter { it.phenomenon == Phenomenon.SOLAR_ECLIPSE }) }
-    val eonet = remember(occurrences) { eonetMarkers(occurrences) }
-    val radii = remember(rules) { travelRadiiKm(rules) }
-    val overlay = remember(grid) { grid?.let(::ovationOverlayImage) }
+    val content = MapContent(
+        landPath = landPath,
+        eclipsePaths = remember(occurrences) { eclipsePathPolylines(occurrences.filter { it.phenomenon == Phenomenon.SOLAR_ECLIPSE }) },
+        eonet = remember(occurrences) { eonetMarkers(occurrences) },
+        locations = locations,
+        radii = remember(rules) { travelRadiiKm(rules) },
+        overlay = remember(grid) { grid?.let(::ovationOverlayImage) },
+    )
 
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("Map", style = MaterialTheme.typography.headlineSmall)
-                    Text(
-                        "Equirectangular · ${(camera.zoom * 10).roundToInt() / 10.0}× · drag to pan, scroll to zoom",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { camera = MapCamera() }) { Text("Reset view") }
-            }
-
+            MapHeader(zoom = camera.zoom, onResetView = { camera = MapCamera() })
             LayerChips(enabledLayers) { enabledLayers = it }
 
             // Sized explicitly rather than with aspectRatio(): under
@@ -112,49 +111,20 @@ fun EventMapScreen(state: DesktopAppState) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, drag ->
-                                    change.consume()
-                                    camera = camera.panned(drag, size.toSize())
-                                }
-                            }
-                            .pointerInput(Unit) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        if (event.type != PointerEventType.Scroll) continue
-                                        val change = event.changes.firstOrNull() ?: continue
-                                        val scrollY = change.scrollDelta.y
-                                        if (scrollY == 0f) continue
-                                        // Wheel up (negative delta) zooms in, around the pointer.
-                                        val factor = if (scrollY < 0) ZOOM_STEP else 1f / ZOOM_STEP
-                                        camera = camera.zoomed(factor, change.position, size.toSize())
-                                        change.consume()
-                                    }
-                                }
-                            }
-                            .pointerInput(occurrences, locations, enabledLayers, camera) {
-                                detectTapGestures { position ->
-                                    val hit = hitTest(position, size.toSize(), camera, enabledLayers, eclipsePaths, eonet, locations)
-                                    if (hit != null) state.selectOccurrence(hit)
-                                }
-                            },
+                            .mapGestures(
+                                camera = camera,
+                                onCameraChange = { camera = it },
+                                hitTestKeys = arrayOf(occurrences, locations, enabledLayers, camera),
+                                onTap = { position, size ->
+                                    hitTest(position, size, camera, enabledLayers, content)?.let(state::selectOccurrence)
+                                },
+                            ),
                     ) {
-                        drawMap(
-                            camera = camera,
-                            landPath = landPath,
-                            layers = enabledLayers,
-                            eclipsePaths = eclipsePaths,
-                            eonet = eonet,
-                            locations = locations,
-                            radii = radii,
-                            overlay = overlay,
-                            selectedOccurrenceId = selected,
-                        )
+                        drawMap(camera, content, enabledLayers, selected)
                     }
 
-                    if (MapLayer.ECLIPSE_PATHS in enabledLayers && eclipsePaths.isNotEmpty()) {
-                        EclipseLabels(state, eclipsePaths, camera)
+                    if (MapLayer.ECLIPSE_PATHS in enabledLayers && content.eclipsePaths.isNotEmpty()) {
+                        EclipseLabels(state, content.eclipsePaths, camera)
                     }
                 }
             }
@@ -171,11 +141,68 @@ fun EventMapScreen(state: DesktopAppState) {
     }
 }
 
+@Composable
+private fun MapHeader(zoom: Float, onResetView: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text("Map", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Equirectangular · ${(zoom * 10).roundToInt() / 10.0}× · drag to pan, scroll to zoom",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onResetView) { Text("Reset view") }
+    }
+}
+
+/**
+ * §14.1's "pan/zoom via transformable state" plus click-to-detail, as one
+ * modifier so the screen body isn't three nested gesture blocks deep.
+ */
+private fun Modifier.mapGestures(
+    camera: MapCamera,
+    onCameraChange: (MapCamera) -> Unit,
+    hitTestKeys: Array<Any?>,
+    onTap: (position: Offset, size: Size) -> Unit,
+): Modifier = this
+    .pointerInput(Unit) {
+        detectDragGestures { change, drag ->
+            change.consume()
+            onCameraChange(camera.panned(drag, size.toSize()))
+        }
+    }
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type != PointerEventType.Scroll) continue
+                val change = event.changes.firstOrNull() ?: continue
+                val scrollY = change.scrollDelta.y
+                if (scrollY == 0f) continue
+                // Wheel up (negative delta) zooms in, around the pointer.
+                val factor = if (scrollY < 0) ZOOM_STEP else 1f / ZOOM_STEP
+                onCameraChange(camera.zoomed(factor, change.position, size.toSize()))
+                change.consume()
+            }
+        }
+    }
+    .pointerInput(keys = hitTestKeys) {
+        detectTapGestures { position -> onTap(position, size.toSize()) }
+    }
+
 private const val MAP_ASPECT = 2f
 private const val ZOOM_STEP = 1.2f
 private val OCEAN = Color(0xFF0D1522)
 private val LAND_FILL = Color(0xFF243044)
 private val LAND_STROKE = Color(0xFF4A5B78)
+private val TRAVEL_RADIUS = Color(0xFF8FD3C7).copy(alpha = 0.35f)
+private val PIN_FILL = Color(0xFFF2F5FA)
+private val PIN_OUTLINE = Color(0xFF11151E)
 
 @Composable
 private fun LayerChips(enabled: Set<MapLayer>, onChange: (Set<MapLayer>) -> Unit) {
@@ -246,20 +273,24 @@ private fun Legend(layers: Set<MapLayer>, hasGrid: Boolean) {
 
 private fun DrawScope.drawMap(
     camera: MapCamera,
-    landPath: androidx.compose.ui.graphics.Path,
+    content: MapContent,
     layers: Set<MapLayer>,
-    eclipsePaths: List<EclipsePathPolyline>,
-    eonet: List<EonetMarker>,
-    locations: List<SavedLocation>,
-    radii: List<Double>,
-    overlay: androidx.compose.ui.graphics.ImageBitmap?,
     selectedOccurrenceId: String?,
 ) {
-    val worldScale = size.height * camera.zoom
+    drawBaseMap(camera, content.landPath)
+    if (MapLayer.AURORA in layers) content.overlay?.let { drawAuroraOverlay(camera, it) }
+    if (MapLayer.ECLIPSE_PATHS in layers) drawEclipsePaths(camera, content.eclipsePaths, selectedOccurrenceId)
+    if (MapLayer.EONET in layers) drawEonetMarkers(camera, content.eonet)
+    if (MapLayer.LOCATIONS in layers) drawLocations(camera, content.locations, content.radii)
+}
 
-    // Base layer. The path is in world units, so one transform draws all
-    // 60 000 points; the stroke width is divided back out so the coastline
-    // stays hairline-thin at every zoom instead of growing into a smear.
+/**
+ * The path is in world units, so one transform draws all 60 000 points; the
+ * stroke width is divided back out so the coastline stays hairline-thin at
+ * every zoom instead of growing into a smear.
+ */
+private fun DrawScope.drawBaseMap(camera: MapCamera, landPath: androidx.compose.ui.graphics.Path) {
+    val worldScale = size.height * camera.zoom
     withTransform({
         translate(camera.offset.x, camera.offset.y)
         scale(worldScale, worldScale, pivot = Offset.Zero)
@@ -267,101 +298,102 @@ private fun DrawScope.drawMap(
         drawPath(landPath, LAND_FILL)
         drawPath(landPath, LAND_STROKE, style = Stroke(width = 1f / worldScale))
     }
+}
 
-    if (MapLayer.AURORA in layers && overlay != null) {
-        val topLeft = camera.project(GeoPoint(90.0, -180.0), size)
-        val bottomRight = camera.project(GeoPoint(-90.0, 180.0), size)
-        drawImage(
-            image = overlay,
-            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-            dstSize = IntSize((bottomRight.x - topLeft.x).roundToInt(), (bottomRight.y - topLeft.y).roundToInt()),
-            // Low: these are 1°×1° data cells, not a photograph. Smoothing them
-            // would imply a resolution the OVATION model does not have.
-            filterQuality = FilterQuality.Low,
-        )
-    }
+private fun DrawScope.drawAuroraOverlay(camera: MapCamera, overlay: androidx.compose.ui.graphics.ImageBitmap) {
+    val topLeft = camera.project(GeoPoint(90.0, -180.0), size)
+    val bottomRight = camera.project(GeoPoint(-90.0, 180.0), size)
+    drawImage(
+        image = overlay,
+        dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+        dstSize = IntSize((bottomRight.x - topLeft.x).roundToInt(), (bottomRight.y - topLeft.y).roundToInt()),
+        // Low: these are 1°×1° data cells, not a photograph. Smoothing them
+        // would imply a resolution the OVATION model does not have.
+        filterQuality = FilterQuality.Low,
+    )
+}
 
-    if (MapLayer.ECLIPSE_PATHS in layers) {
-        for (path in eclipsePaths) {
-            val selected = path.occurrenceId == selectedOccurrenceId
-            val color = phenomenonColor(Phenomenon.SOLAR_ECLIPSE)
-            for (segment in path.segments) {
-                for (i in 0 until segment.size - 1) {
-                    drawLine(
-                        color = if (selected) color else color.copy(alpha = 0.75f),
-                        start = camera.project(segment[i], size),
-                        end = camera.project(segment[i + 1], size),
-                        strokeWidth = if (selected) 4f else 2.5f,
-                    )
-                }
-            }
-        }
-    }
-
-    if (MapLayer.EONET in layers) {
-        for (marker in eonet) {
-            val center = camera.project(marker.point, size)
-            val color = phenomenonColor(Phenomenon.TERRESTRIAL)
-            drawCircle(color.copy(alpha = 0.9f), radius = 4f, center = center)
-            drawCircle(color, radius = 7f, center = center, style = Stroke(width = 1.5f))
-        }
-    }
-
-    if (MapLayer.LOCATIONS in layers) {
-        for (location in locations) {
-            val center = camera.project(location.point, size)
-            for (radiusKm in radii) {
-                val (rx, ry) = travelCircleRadii(location.point, radiusKm, camera, size)
-                drawOval(
-                    color = Color(0xFF8FD3C7).copy(alpha = 0.35f),
-                    topLeft = Offset(center.x - rx, center.y - ry),
-                    size = Size(rx * 2, ry * 2),
-                    style = Stroke(width = 1.5f),
+private fun DrawScope.drawEclipsePaths(camera: MapCamera, paths: List<EclipsePathPolyline>, selectedOccurrenceId: String?) {
+    val color = phenomenonColor(Phenomenon.SOLAR_ECLIPSE)
+    for (path in paths) {
+        val selected = path.occurrenceId == selectedOccurrenceId
+        for (segment in path.segments) {
+            for (i in 0 until segment.size - 1) {
+                drawLine(
+                    color = if (selected) color else color.copy(alpha = 0.75f),
+                    start = camera.project(segment[i], size),
+                    end = camera.project(segment[i + 1], size),
+                    strokeWidth = if (selected) 4f else 2.5f,
                 )
             }
-            drawCircle(Color(0xFFF2F5FA), radius = 5f, center = center)
-            drawCircle(Color(0xFF11151E), radius = 5f, center = center, style = Stroke(width = 2f))
         }
+    }
+}
+
+private fun DrawScope.drawEonetMarkers(camera: MapCamera, markers: List<EonetMarker>) {
+    val color = phenomenonColor(Phenomenon.TERRESTRIAL)
+    for (marker in markers) {
+        val center = camera.project(marker.point, size)
+        drawCircle(color.copy(alpha = 0.9f), radius = 4f, center = center)
+        drawCircle(color, radius = 7f, center = center, style = Stroke(width = 1.5f))
+    }
+}
+
+private fun DrawScope.drawLocations(camera: MapCamera, locations: List<SavedLocation>, radii: List<Double>) {
+    for (location in locations) {
+        val center = camera.project(location.point, size)
+        for (radiusKm in radii) {
+            val (rx, ry) = travelCircleRadii(location.point, radiusKm, camera, size)
+            drawOval(
+                color = TRAVEL_RADIUS,
+                topLeft = Offset(center.x - rx, center.y - ry),
+                size = Size(rx * 2, ry * 2),
+                style = Stroke(width = 1.5f),
+            )
+        }
+        drawCircle(PIN_FILL, radius = 5f, center = center)
+        drawCircle(PIN_OUTLINE, radius = 5f, center = center, style = Stroke(width = 2f))
     }
 }
 
 /**
  * Click targets, nearest-first within a pixel threshold. Locations are
  * checked first only to give them priority when a pin sits on a path; a
- * location is not an occurrence, so it returns null and simply swallows the
- * click rather than selecting whatever is underneath it.
+ * location is not an occurrence, so a hit there returns null and simply
+ * swallows the click rather than selecting whatever is underneath it.
  */
 private fun hitTest(
     position: Offset,
     size: Size,
     camera: MapCamera,
     layers: Set<MapLayer>,
-    eclipsePaths: List<EclipsePathPolyline>,
-    eonet: List<EonetMarker>,
-    locations: List<SavedLocation>,
+    content: MapContent,
 ): String? {
-    if (MapLayer.LOCATIONS in layers) {
-        val nearPin = locations.any { distance(camera.project(it.point, size), position) <= PIN_HIT_RADIUS }
-        if (nearPin) return null
+    if (MapLayer.LOCATIONS in layers && content.locations.any { camera.isWithin(it.point, position, size, PIN_HIT_RADIUS) }) {
+        return null
     }
     if (MapLayer.EONET in layers) {
-        val marker = eonet.minByOrNull { distance(camera.project(it.point, size), position) }
-        if (marker != null && distance(camera.project(marker.point, size), position) <= MARKER_HIT_RADIUS) {
-            return marker.occurrenceId
-        }
+        val marker = content.eonet
+            .filter { camera.isWithin(it.point, position, size, MARKER_HIT_RADIUS) }
+            .minByOrNull { distance(camera.project(it.point, size), position) }
+        if (marker != null) return marker.occurrenceId
     }
     if (MapLayer.ECLIPSE_PATHS in layers) {
-        var best: Pair<String, Float>? = null
-        for (path in eclipsePaths) {
-            for (point in path.allPoints) {
-                val d = distance(camera.project(point, size), position)
-                if (d <= PATH_HIT_RADIUS && (best == null || d < best.second)) best = path.occurrenceId to d
+        return content.eclipsePaths
+            .mapNotNull { path ->
+                path.allPoints
+                    .minOfOrNull { distance(camera.project(it, size), position) }
+                    ?.takeIf { it <= PATH_HIT_RADIUS }
+                    ?.let { path.occurrenceId to it }
             }
-        }
-        return best?.first
+            .minByOrNull { it.second }
+            ?.first
     }
     return null
 }
+
+private fun MapCamera.isWithin(point: GeoPoint, position: Offset, size: Size, radiusPx: Float): Boolean =
+    distance(project(point, size), position) <= radiusPx
 
 private const val PIN_HIT_RADIUS = 10f
 private const val MARKER_HIT_RADIUS = 10f

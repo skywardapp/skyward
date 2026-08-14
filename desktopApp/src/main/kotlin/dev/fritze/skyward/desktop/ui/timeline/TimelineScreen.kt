@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -122,29 +123,7 @@ fun TimelineScreen(state: DesktopAppState) {
                 )
             }
 
-            // §14.2: "filter chips shared with Upcoming".
-            Row(
-                Modifier.padding(horizontal = 20.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = filter.scope == UpcomingScope.MATCHED,
-                    onClick = {
-                        filter = filter.copy(scope = if (filter.scope == UpcomingScope.MATCHED) UpcomingScope.ALL else UpcomingScope.MATCHED)
-                    },
-                    label = { Text("Matched only") },
-                )
-                for (phenomenon in Phenomenon.entries) {
-                    FilterChip(
-                        selected = phenomenon in filter.phenomena,
-                        onClick = {
-                            val next = if (phenomenon in filter.phenomena) filter.phenomena - phenomenon else filter.phenomena + phenomenon
-                            filter = filter.copy(phenomena = next)
-                        },
-                        label = { Text(phenomenonLabel(phenomenon)) },
-                    )
-                }
-            }
+            TimelineFilterChips(filter) { filter = it }
 
             Row(Modifier.fillMaxSize().padding(20.dp)) {
                 LaneLabels(lanes)
@@ -164,6 +143,34 @@ fun TimelineScreen(state: DesktopAppState) {
             Box(Modifier.width(420.dp).fillMaxHeight()) {
                 EventDetailPane(state, selected, onClose = { state.selectOccurrence(null) })
             }
+        }
+    }
+}
+
+/** §14.2: "filter chips shared with Upcoming". */
+@Composable
+private fun TimelineFilterChips(filter: UpcomingFilter, onChange: (UpcomingFilter) -> Unit) {
+    Row(
+        Modifier.padding(horizontal = 20.dp).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = filter.scope == UpcomingScope.MATCHED,
+            onClick = {
+                val next = if (filter.scope == UpcomingScope.MATCHED) UpcomingScope.ALL else UpcomingScope.MATCHED
+                onChange(filter.copy(scope = next))
+            },
+            label = { Text("Matched only") },
+        )
+        for (phenomenon in Phenomenon.entries) {
+            FilterChip(
+                selected = phenomenon in filter.phenomena,
+                onClick = {
+                    val next = if (phenomenon in filter.phenomena) filter.phenomena - phenomenon else filter.phenomena + phenomenon
+                    onChange(filter.copy(phenomena = next))
+                },
+                label = { Text(phenomenonLabel(phenomenon)) },
+            )
         }
     }
 }
@@ -232,27 +239,16 @@ private fun TimelineCanvas(
                 // frame from within a frame, which is a recomposition loop
                 // waiting to happen.
                 .onSizeChanged { canvasSize = it.toSize() }
-                .pointerInput(drawItems, laneHeightPx) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            when (event.type) {
-                                PointerEventType.Move -> {
-                                    val position = event.changes.first().position
-                                    hoverPosition = position
-                                    hovered = itemAt(position, drawItems, axisHeightPx, laneHeightPx)
-                                }
-                                PointerEventType.Exit -> hovered = null
-                                else -> Unit
-                            }
-                        }
-                    }
-                }
-                .pointerInput(drawItems, laneHeightPx) {
-                    detectTapGestures { position ->
-                        itemAt(position, drawItems, axisHeightPx, laneHeightPx)?.let { state.selectOccurrence(it.occurrence.id) }
-                    }
-                },
+                .timelinePointerHandling(
+                    items = drawItems,
+                    axisHeightPx = axisHeightPx,
+                    laneHeightPx = laneHeightPx,
+                    onHover = { item, position ->
+                        hovered = item
+                        if (position != null) hoverPosition = position
+                    },
+                    onSelect = { state.selectOccurrence(it.occurrence.id) },
+                ),
         ) {
             drawTimeline(
                 lanes = lanes.size,
@@ -282,6 +278,33 @@ private fun TimelineCanvas(
         }
     }
 }
+
+/** §14.2's "hover tooltip = card summary; click = detail", kept out of the canvas's own modifier chain. */
+private fun Modifier.timelinePointerHandling(
+    items: List<TimelineItem>,
+    axisHeightPx: Float,
+    laneHeightPx: Float,
+    onHover: (TimelineItem?, Offset?) -> Unit,
+    onSelect: (TimelineItem) -> Unit,
+): Modifier = this
+    .pointerInput(items, laneHeightPx) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                when (event.type) {
+                    PointerEventType.Move -> {
+                        val position = event.changes.first().position
+                        onHover(itemAt(position, items, axisHeightPx, laneHeightPx), position)
+                    }
+                    PointerEventType.Exit -> onHover(null, null)
+                    else -> Unit
+                }
+            }
+        }
+    }
+    .pointerInput(items, laneHeightPx) {
+        detectTapGestures { position -> itemAt(position, items, axisHeightPx, laneHeightPx)?.let(onSelect) }
+    }
 
 @Composable
 private fun HoverCard(state: DesktopAppState, item: TimelineItem, position: Offset, canvasSize: Size) {
@@ -361,35 +384,41 @@ private fun DrawScope.drawTimeline(
     nearTermBoundaryX: Float?,
     selectedOccurrenceId: String?,
 ) {
-    val gridColor = Color(0xFF2A3346)
+    val lanesHeight = lanes * laneHeightPx
+    drawLaneBands(lanes, axisHeightPx, laneHeightPx)
+    drawMonthGrid(monthTicks, axisHeightPx, lanesHeight)
+    // The gradient change is real information about the axis; showing it beats
+    // leaving the reader to wonder why January is wider than June.
+    nearTermBoundaryX?.let { boundary ->
+        drawLine(BOUNDARY_COLOR, Offset(boundary, axisHeightPx), Offset(boundary, axisHeightPx + lanesHeight), strokeWidth = 1f)
+    }
+    drawMarkers(items, axisHeightPx, laneHeightPx, selectedOccurrenceId)
+    // §14.2's "today" cursor — always at x = 0, since the axis starts at now.
+    drawLine(TODAY_COLOR, Offset(0f, axisHeightPx - 4f), Offset(0f, axisHeightPx + lanesHeight), strokeWidth = 2f)
+}
 
+private fun DrawScope.drawLaneBands(lanes: Int, axisHeightPx: Float, laneHeightPx: Float) {
+    for (lane in 1 until lanes step 2) {
+        drawRect(
+            color = LANE_BAND_COLOR,
+            topLeft = Offset(0f, axisHeightPx + lane * laneHeightPx),
+            size = Size(size.width, laneHeightPx),
+        )
+    }
+}
+
+private fun DrawScope.drawMonthGrid(monthTicks: List<MonthTick>, axisHeightPx: Float, lanesHeight: Float) {
     for (tick in monthTicks) {
         drawLine(
-            color = if (tick.isYearStart) gridColor.copy(alpha = 0.95f) else gridColor.copy(alpha = 0.45f),
+            color = if (tick.isYearStart) GRID_COLOR.copy(alpha = 0.95f) else GRID_COLOR.copy(alpha = 0.45f),
             start = Offset(tick.x, axisHeightPx),
-            end = Offset(tick.x, axisHeightPx + lanes * laneHeightPx),
+            end = Offset(tick.x, axisHeightPx + lanesHeight),
             strokeWidth = if (tick.isYearStart) 1.5f else 1f,
         )
     }
+}
 
-    for (lane in 0 until lanes) {
-        val top = axisHeightPx + lane * laneHeightPx
-        if (lane % 2 == 1) {
-            drawRect(Color(0xFF161C29), topLeft = Offset(0f, top), size = Size(size.width, laneHeightPx))
-        }
-    }
-
-    // The gradient change is real information about the axis; showing it
-    // beats leaving the reader to wonder why January is wider than June.
-    nearTermBoundaryX?.let { boundary ->
-        drawLine(
-            color = Color(0xFF54617A),
-            start = Offset(boundary, axisHeightPx),
-            end = Offset(boundary, axisHeightPx + lanes * laneHeightPx),
-            strokeWidth = 1f,
-        )
-    }
-
+private fun DrawScope.drawMarkers(items: List<TimelineItem>, axisHeightPx: Float, laneHeightPx: Float, selectedOccurrenceId: String?) {
     for (item in items) {
         val centerY = axisHeightPx + item.laneIndex * laneHeightPx + laneHeightPx / 2f
         val color = qualityColor(item.quality)
@@ -399,7 +428,7 @@ private fun DrawScope.drawTimeline(
                 color = color.copy(alpha = if (selected) 1f else 0.7f),
                 topLeft = Offset(item.startX, centerY - 6f),
                 size = Size(item.endX - item.startX, 12f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f),
+                cornerRadius = CornerRadius(6f, 6f),
             )
         } else {
             drawCircle(color.copy(alpha = if (selected) 1f else 0.85f), radius = 6f, center = Offset(item.centerX, centerY))
@@ -408,15 +437,12 @@ private fun DrawScope.drawTimeline(
             drawCircle(Color.White, radius = 10f, center = Offset(item.centerX, centerY), style = Stroke(width = 2f))
         }
     }
-
-    // §14.2's "today" cursor — always at x = 0, since the axis starts at now.
-    drawLine(
-        color = Color(0xFFE9EEF7),
-        start = Offset(0f, axisHeightPx - 4f),
-        end = Offset(0f, axisHeightPx + lanes * laneHeightPx),
-        strokeWidth = 2f,
-    )
 }
+
+private val GRID_COLOR = Color(0xFF2A3346)
+private val LANE_BAND_COLOR = Color(0xFF161C29)
+private val BOUNDARY_COLOR = Color(0xFF54617A)
+private val TODAY_COLOR = Color(0xFFE9EEF7)
 
 private fun itemAt(position: Offset, items: List<TimelineItem>, axisHeightPx: Float, laneHeightPx: Float): TimelineItem? {
     val lane = ((position.y - axisHeightPx) / laneHeightPx).toInt()

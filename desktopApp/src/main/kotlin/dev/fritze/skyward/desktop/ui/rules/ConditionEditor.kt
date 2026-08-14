@@ -44,21 +44,25 @@ fun ConditionEditor(
 ) {
     when (condition) {
         is Cond.And -> GroupEditor(
-            title = "All of",
-            children = condition.all,
-            onChildrenChange = { onChange(Cond.And(it)) },
-            onSwitchKind = { onChange(Cond.Or(condition.all)) },
-            switchLabel = "Any of",
+            group = ConditionGroup(
+                title = "All of",
+                switchLabel = "Any of",
+                children = condition.all,
+                onChildrenChange = { onChange(Cond.And(it)) },
+                onSwitchKind = { onChange(Cond.Or(condition.all)) },
+            ),
             onRemove = onRemove,
             depth = depth,
             modifier = modifier,
         )
         is Cond.Or -> GroupEditor(
-            title = "Any of",
-            children = condition.any,
-            onChildrenChange = { onChange(Cond.Or(it)) },
-            onSwitchKind = { onChange(Cond.And(condition.any)) },
-            switchLabel = "All of",
+            group = ConditionGroup(
+                title = "Any of",
+                switchLabel = "All of",
+                children = condition.any,
+                onChildrenChange = { onChange(Cond.Or(it)) },
+                onSwitchKind = { onChange(Cond.And(condition.any)) },
+            ),
             onRemove = onRemove,
             depth = depth,
             modifier = modifier,
@@ -77,13 +81,18 @@ fun ConditionEditor(
     }
 }
 
+/** An AND or OR node, in the one shape [GroupEditor] needs — the two differ only in wording and rebuild function. */
+private data class ConditionGroup(
+    val title: String,
+    val switchLabel: String,
+    val children: List<Cond>,
+    val onChildrenChange: (List<Cond>) -> Unit,
+    val onSwitchKind: () -> Unit,
+)
+
 @Composable
 private fun GroupEditor(
-    title: String,
-    children: List<Cond>,
-    onChildrenChange: (List<Cond>) -> Unit,
-    onSwitchKind: () -> Unit,
-    switchLabel: String,
+    group: ConditionGroup,
     onRemove: (() -> Unit)?,
     depth: Int,
     modifier: Modifier,
@@ -91,19 +100,19 @@ private fun GroupEditor(
     OutlinedCard(modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(title, style = MaterialTheme.typography.labelLarge)
-                TextButton(onClick = onSwitchKind) { Text("Switch to \"$switchLabel\"") }
+                Text(group.title, style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = group.onSwitchKind) { Text("Switch to \"${group.switchLabel}\"") }
                 if (onRemove != null) TextButton(onClick = onRemove) { Text("Remove") }
             }
-            children.forEachIndexed { index, child ->
+            group.children.forEachIndexed { index, child ->
                 ConditionEditor(
                     condition = child,
-                    onChange = { updated -> onChildrenChange(children.toMutableList().also { it[index] = updated }) },
-                    onRemove = { onChildrenChange(children.filterIndexed { i, _ -> i != index }) },
+                    onChange = { updated -> group.onChildrenChange(group.children.toMutableList().also { it[index] = updated }) },
+                    onRemove = { group.onChildrenChange(group.children.filterIndexed { i, _ -> i != index }) },
                     depth = depth + 1,
                 )
             }
-            AddConditionMenu(onAdd = { onChildrenChange(children + it) })
+            AddConditionMenu(onAdd = { group.onChildrenChange(group.children + it) })
         }
     }
 }

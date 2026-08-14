@@ -34,6 +34,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -49,6 +51,7 @@ import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.sources.AuroraSource
 import dev.fritze.skyward.core.sources.KpEstimate
 import dev.fritze.skyward.core.sources.KpNowcast
+import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.geomagneticLatitudeDeg
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
@@ -260,7 +263,7 @@ private fun ForecastStripCard(slots: List<ForecastSlot>, issuedAt: Instant?, sta
 }
 
 @Composable
-private fun PolarViewCard(state: DesktopAppState, grid: dev.fritze.skyward.core.visibility.OvationGrid?, locations: List<SavedLocation>) {
+private fun PolarViewCard(state: DesktopAppState, grid: OvationGrid?, locations: List<SavedLocation>) {
     var north by remember { mutableStateOf(true) }
     val raster = remember(grid, north) { grid?.let { AuroraPolarPlot.rasterize(it, north) } }
 
@@ -282,44 +285,10 @@ private fun PolarViewCard(state: DesktopAppState, grid: dev.fritze.skyward.core.
                 Canvas(Modifier.fillMaxSize()) {
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val radius = size.minDimension / 2f - 8f
-
-                    drawCircle(Color(0xFF0D1522), radius = radius, center = center)
-                    drawImage(
-                        image = raster,
-                        dstOffset = IntOffset((center.x - radius).roundToInt(), (center.y - radius).roundToInt()),
-                        dstSize = IntSize((radius * 2).roundToInt(), (radius * 2).roundToInt()),
-                        filterQuality = FilterQuality.Low,
-                    )
-
-                    // Latitude rings at 60° and 75°, plus the 45° rim.
-                    for (latitude in listOf(45.0, 60.0, 75.0)) {
-                        val ringRadius = ((90.0 - latitude) / (90.0 - AuroraPolarPlot.RIM_LATITUDE)).toFloat() * radius
-                        drawCircle(
-                            color = Color(0xFF56637C).copy(alpha = 0.7f),
-                            radius = ringRadius,
-                            center = center,
-                            style = Stroke(width = 1f),
-                        )
-                    }
-                    // Meridian spokes every 45°.
-                    for (spoke in 0 until 8) {
-                        val angle = Math.toRadians(spoke * 45.0)
-                        drawLine(
-                            color = Color(0xFF56637C).copy(alpha = 0.4f),
-                            start = center,
-                            end = Offset(
-                                center.x + (radius * sin(angle)).toFloat(),
-                                center.y - (radius * cos(angle)).toFloat(),
-                            ),
-                            strokeWidth = 1f,
-                        )
-                    }
-
-                    for (location in locations) {
-                        val position = AuroraPolarPlot.project(location.point, center, radius, north) ?: continue
-                        drawCircle(Color(0xFFF2F5FA), radius = 4f, center = position)
-                        drawCircle(Color(0xFF11151E), radius = 4f, center = position, style = Stroke(width = 1.5f))
-                    }
+                    drawCircle(POLAR_BACKGROUND, radius = radius, center = center)
+                    drawPolarRaster(raster, center, radius)
+                    drawPolarGraticule(center, radius)
+                    drawLocationPins(locations, center, radius, north)
                 }
             }
 
@@ -339,6 +308,45 @@ private fun PolarViewCard(state: DesktopAppState, grid: dev.fritze.skyward.core.
         }
     }
 }
+
+private fun DrawScope.drawPolarRaster(raster: ImageBitmap, center: Offset, radius: Float) {
+    drawImage(
+        image = raster,
+        dstOffset = IntOffset((center.x - radius).roundToInt(), (center.y - radius).roundToInt()),
+        dstSize = IntSize((radius * 2).roundToInt(), (radius * 2).roundToInt()),
+        filterQuality = FilterQuality.Low,
+    )
+}
+
+/** Latitude rings at 60° and 75° plus the 45° rim, and a meridian spoke every 45°. */
+private fun DrawScope.drawPolarGraticule(center: Offset, radius: Float) {
+    for (latitude in listOf(45.0, 60.0, 75.0)) {
+        val ringRadius = ((90.0 - latitude) / (90.0 - AuroraPolarPlot.RIM_LATITUDE)).toFloat() * radius
+        drawCircle(GRATICULE.copy(alpha = 0.7f), radius = ringRadius, center = center, style = Stroke(width = 1f))
+    }
+    for (spoke in 0 until 8) {
+        val angle = Math.toRadians(spoke * 45.0)
+        drawLine(
+            color = GRATICULE.copy(alpha = 0.4f),
+            start = center,
+            end = Offset(center.x + (radius * sin(angle)).toFloat(), center.y - (radius * cos(angle)).toFloat()),
+            strokeWidth = 1f,
+        )
+    }
+}
+
+private fun DrawScope.drawLocationPins(locations: List<SavedLocation>, center: Offset, radius: Float, north: Boolean) {
+    for (location in locations) {
+        val position = AuroraPolarPlot.project(location.point, center, radius, north) ?: continue
+        drawCircle(PIN_FILL, radius = 4f, center = position)
+        drawCircle(PIN_OUTLINE, radius = 4f, center = position, style = Stroke(width = 1.5f))
+    }
+}
+
+private val POLAR_BACKGROUND = Color(0xFF0D1522)
+private val GRATICULE = Color(0xFF56637C)
+private val PIN_FILL = Color(0xFFF2F5FA)
+private val PIN_OUTLINE = Color(0xFF11151E)
 
 @Composable
 private fun ProbabilityColorbar() {

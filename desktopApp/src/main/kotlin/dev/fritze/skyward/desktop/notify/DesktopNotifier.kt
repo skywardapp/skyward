@@ -13,7 +13,7 @@ data class DesktopNotification(
     val occurrenceId: String?,
 )
 
-interface DesktopNotifier {
+fun interface DesktopNotifier {
     /**
      * Posts [notification]. Returns false if this backend could not deliver
      * it at all, so a chain can try the next one — a thrown exception counts

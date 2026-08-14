@@ -55,74 +55,82 @@ fun SettingsScreen(state: DesktopAppState) {
 @Composable
 private fun DesktopIntegrationSection(state: DesktopAppState) {
     val settings by state.settings.collectAsState()
-    val backgroundMode = settings[DesktopContainer.KEY_BACKGROUND_MODE] == "true"
-    // The XDG backend can read the real state off disk; the portal cannot, so
-    // there the persisted setting is the only record of what we asked for.
-    val autostartEnabled = state.autostart.isEnabled() ?: (settings[DesktopContainer.KEY_AUTOSTART] == "true")
-    var autostartNote by remember { mutableStateOf<String?>(null) }
-    var notifyNote by remember { mutableStateOf<String?>(null) }
 
     SectionCard("Desktop integration") {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Switch(
-                checked = backgroundMode,
-                onCheckedChange = { on ->
-                    state.launch { state.container.settingsRepo.set(DesktopContainer.KEY_BACKGROUND_MODE, on.toString()) }
-                },
-            )
-            Column {
-                Text("Keep running in the background")
-                Text(
-                    "Closing the window hides Skyward to the tray instead of exiting, so reminders keep arriving.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        BackgroundModeRow(state, enabled = settings[DesktopContainer.KEY_BACKGROUND_MODE] == "true")
+        AutostartRow(state, persistedSetting = settings[DesktopContainer.KEY_AUTOSTART] == "true")
+        TestNotificationRow(state)
+    }
+}
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Switch(
-                checked = autostartEnabled,
-                onCheckedChange = { on ->
-                    val result = state.autostart.setEnabled(on)
-                    autostartNote = when (result) {
-                        is AutostartResult.Applied -> null
-                        is AutostartResult.Requested -> result.note
-                        is AutostartResult.Failed -> "Could not change autostart: ${result.message}"
-                    }
-                    if (result !is AutostartResult.Failed) {
-                        state.launch { state.container.settingsRepo.set(DesktopContainer.KEY_AUTOSTART, on.toString()) }
-                    }
-                },
-            )
-            Column {
-                Text("Start Skyward at login")
-                Text(
-                    if (state.paths.isFlatpak) {
-                        "Requested through the desktop's background portal."
-                    } else {
-                        "Writes ~/.config/autostart/skyward.desktop."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        autostartNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+@Composable
+private fun BackgroundModeRow(state: DesktopAppState, enabled: Boolean) {
+    SettingSwitchRow(
+        checked = enabled,
+        onCheckedChange = { on ->
+            state.launch { state.container.settingsRepo.set(DesktopContainer.KEY_BACKGROUND_MODE, on.toString()) }
+        },
+        title = "Keep running in the background",
+        subtitle = "Closing the window hides Skyward to the tray instead of exiting, so reminders keep arriving.",
+    )
+}
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton(onClick = {
-                val delivered = state.notifier.post(
-                    DesktopNotification("Skyward test", "Notifications are working.", occurrenceId = null),
-                    onActivated = {},
-                )
-                notifyNote = if (delivered) {
-                    "Sent — if nothing appeared, check your desktop's notification settings."
-                } else {
-                    "No notification backend accepted it. Reminders will still be listed in the app."
-                }
-            }) { Text("Send a test notification") }
-            notifyNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+@Composable
+private fun AutostartRow(state: DesktopAppState, persistedSetting: Boolean) {
+    // The XDG backend can read the real state off disk; the portal cannot, so
+    // there the persisted setting is the only record of what we asked for.
+    val enabled = state.autostart.isEnabled() ?: persistedSetting
+    var note by remember { mutableStateOf<String?>(null) }
+
+    SettingSwitchRow(
+        checked = enabled,
+        onCheckedChange = { on ->
+            val result = state.autostart.setEnabled(on)
+            note = when (result) {
+                is AutostartResult.Applied -> null
+                is AutostartResult.Requested -> result.note
+                is AutostartResult.Failed -> "Could not change autostart: ${result.message}"
+            }
+            if (result !is AutostartResult.Failed) {
+                state.launch { state.container.settingsRepo.set(DesktopContainer.KEY_AUTOSTART, on.toString()) }
+            }
+        },
+        title = "Start Skyward at login",
+        subtitle = if (state.paths.isFlatpak) {
+            "Requested through the desktop's background portal."
+        } else {
+            "Writes ~/.config/autostart/skyward.desktop."
+        },
+    )
+    note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+}
+
+@Composable
+private fun TestNotificationRow(state: DesktopAppState) {
+    var note by remember { mutableStateOf<String?>(null) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        TextButton(onClick = {
+            val delivered = state.notifier.post(
+                DesktopNotification("Skyward test", "Notifications are working.", occurrenceId = null),
+                onActivated = {},
+            )
+            note = if (delivered) {
+                "Sent — if nothing appeared, check your desktop's notification settings."
+            } else {
+                "No notification backend accepted it. Reminders will still be listed in the app."
+            }
+        }) { Text("Send a test notification") }
+        note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title: String, subtitle: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Column {
+            Text(title)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

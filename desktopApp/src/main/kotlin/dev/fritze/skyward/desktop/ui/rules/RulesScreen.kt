@@ -96,7 +96,7 @@ fun RulesScreen(state: DesktopAppState) {
                         editingId = fresh.id
                     },
                     enabled = allRules.size < RuleLimits.MAX_RULES,
-                ) { Text("New rule") }
+                ) { Text(NEW_RULE_TITLE) }
             }
 
             LazyColumn(
@@ -179,7 +179,6 @@ private fun RuleEditorPane(
     existing: Boolean,
     onClose: () -> Unit,
 ) {
-    val locations by state.locations.collectAsState()
     val violations = remember(draft) { RuleLimits.violations(draft) }
 
     Column(
@@ -187,7 +186,7 @@ private fun RuleEditorPane(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (existing) "Edit rule" else "New rule", style = MaterialTheme.typography.titleLarge)
+            Text(if (existing) "Edit rule" else NEW_RULE_TITLE, style = MaterialTheme.typography.titleLarge)
             TextButton(onClick = onClose) { Text("Close") }
         }
 
@@ -199,46 +198,8 @@ private fun RuleEditorPane(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        SectionCard("Phenomena") {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (row in Phenomenon.entries.chunked(3)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (phenomenon in row) {
-                            FilterChip(
-                                selected = phenomenon in draft.phenomena,
-                                onClick = {
-                                    val next = if (phenomenon in draft.phenomena) draft.phenomena - phenomenon else draft.phenomena + phenomenon
-                                    onDraftChange(draft.copy(phenomena = next))
-                                },
-                                label = { Text(phenomenonLabel(phenomenon)) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        SectionCard("Locations") {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
-                    selected = draft.locationIds == null,
-                    onClick = { onDraftChange(draft.copy(locationIds = null)) },
-                    label = { Text("All saved locations") },
-                )
-                for (location in locations) {
-                    val selected = draft.locationIds?.contains(location.id) == true
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            val current = draft.locationIds ?: emptyList()
-                            val next = if (selected) current - location.id else current + location.id
-                            onDraftChange(draft.copy(locationIds = next.ifEmpty { null }))
-                        },
-                        label = { Text(location.name) },
-                    )
-                }
-            }
-        }
+        PhenomenaSection(draft, onDraftChange)
+        LocationsSection(state, draft, onDraftChange)
 
         SectionCard("Condition") {
             ConditionEditor(draft.condition, onChange = { onDraftChange(draft.copy(condition = it)) })
@@ -252,26 +213,79 @@ private fun RuleEditorPane(
             Text(violations.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = {
-                    state.launch {
-                        state.container.ruleRepo.upsert(draft.copy(modifiedAt = Clock.System.now()))
-                        state.container.replan()
+        EditorActions(state, draft, existing, canSave = violations.isEmpty(), onClose = onClose)
+    }
+}
+
+@Composable
+private fun PhenomenaSection(draft: Rule, onDraftChange: (Rule) -> Unit) {
+    SectionCard("Phenomena") {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (row in Phenomenon.entries.chunked(3)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (phenomenon in row) {
+                        FilterChip(
+                            selected = phenomenon in draft.phenomena,
+                            onClick = { onDraftChange(draft.copy(phenomena = draft.phenomena.toggle(phenomenon))) },
+                            label = { Text(phenomenonLabel(phenomenon)) },
+                        )
                     }
-                    onClose()
-                },
-                enabled = violations.isEmpty() && draft.phenomena.isNotEmpty() && draft.name.isNotBlank(),
-            ) { Text("Save") }
-            if (existing) {
-                OutlinedButton(onClick = {
-                    state.launch {
-                        state.container.ruleRepo.delete(draft.id)
-                        state.container.replan()
-                    }
-                    onClose()
-                }) { Text("Delete") }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocationsSection(state: DesktopAppState, draft: Rule, onDraftChange: (Rule) -> Unit) {
+    val locations by state.locations.collectAsState()
+    SectionCard("Locations") {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+                selected = draft.locationIds == null,
+                onClick = { onDraftChange(draft.copy(locationIds = null)) },
+                label = { Text("All saved locations") },
+            )
+            for (location in locations) {
+                val selected = draft.locationIds?.contains(location.id) == true
+                FilterChip(
+                    selected = selected,
+                    onClick = {
+                        val current = draft.locationIds.orEmpty()
+                        val next = if (selected) current - location.id else current + location.id
+                        // null means "all locations" (§9.1), so an empty
+                        // selection must collapse back to that rather than
+                        // becoming a rule that matches nowhere.
+                        onDraftChange(draft.copy(locationIds = next.ifEmpty { null }))
+                    },
+                    label = { Text(location.name) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorActions(state: DesktopAppState, draft: Rule, existing: Boolean, canSave: Boolean, onClose: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(
+            onClick = {
+                state.launch {
+                    state.container.ruleRepo.upsert(draft.copy(modifiedAt = Clock.System.now()))
+                    state.container.replan()
+                }
+                onClose()
+            },
+            enabled = canSave && draft.phenomena.isNotEmpty() && draft.name.isNotBlank(),
+        ) { Text("Save") }
+        if (existing) {
+            OutlinedButton(onClick = {
+                state.launch {
+                    state.container.ruleRepo.delete(draft.id)
+                    state.container.replan()
+                }
+                onClose()
+            }) { Text("Delete") }
         }
     }
 }
@@ -283,22 +297,7 @@ private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) 
     SectionCard("When to notify") {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Leads before the anchor", style = MaterialTheme.typography.labelMedium)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (row in LEAD_PRESETS.chunked(4)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (lead in row) {
-                            FilterChip(
-                                selected = lead in schedule.leads,
-                                onClick = {
-                                    val next = if (lead in schedule.leads) schedule.leads - lead else (schedule.leads + lead).sortedDescending()
-                                    onChange(schedule.copy(leads = next))
-                                },
-                                label = { Text(describeLead(lead)) },
-                            )
-                        }
-                    }
-                }
-            }
+            LeadChips(schedule, onChange)
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Anchor")
@@ -310,22 +309,55 @@ private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) 
                 Text("Notify as soon as it first matches")
             }
 
-            val quiet = schedule.quietHours
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(
-                    checked = quiet != null,
-                    onCheckedChange = { on -> onChange(schedule.copy(quietHours = if (on) QuietHours(23, 7) else null)) },
-                )
-                Text("Quiet hours")
-                if (quiet != null) {
-                    NumberField(quiet.fromHour.toDouble(), { onChange(schedule.copy(quietHours = quiet.copy(fromHour = it.toInt().coerceIn(0, 23)))) }, decimals = false)
-                    Text("to")
-                    NumberField(quiet.toHour.toDouble(), { onChange(schedule.copy(quietHours = quiet.copy(toHour = it.toInt().coerceIn(0, 23)))) }, decimals = false)
+            QuietHoursRow(schedule, onChange)
+        }
+    }
+}
+
+@Composable
+private fun LeadChips(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (row in LEAD_PRESETS.chunked(4)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (lead in row) {
+                    FilterChip(
+                        selected = lead in schedule.leads,
+                        onClick = {
+                            // Descending so the furthest-out reminder is first,
+                            // matching how §9.6's shipped rules read.
+                            val next = if (lead in schedule.leads) schedule.leads - lead else (schedule.leads + lead).sortedDescending()
+                            onChange(schedule.copy(leads = next))
+                        },
+                        label = { Text(describeLead(lead)) },
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun QuietHoursRow(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {
+    val quiet = schedule.quietHours
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Switch(
+            checked = quiet != null,
+            onCheckedChange = { on -> onChange(schedule.copy(quietHours = if (on) DEFAULT_QUIET_HOURS else null)) },
+        )
+        Text("Quiet hours")
+        if (quiet != null) {
+            NumberField(quiet.fromHour.toDouble(), { onChange(schedule.copy(quietHours = quiet.copy(fromHour = it.toHourOfDay()))) }, decimals = false)
+            Text("to")
+            NumberField(quiet.toHour.toDouble(), { onChange(schedule.copy(quietHours = quiet.copy(toHour = it.toHourOfDay()))) }, decimals = false)
+        }
+    }
+}
+
+private val DEFAULT_QUIET_HOURS = QuietHours(23, 7)
+
+private fun Double.toHourOfDay(): Int = toInt().coerceIn(0, 23)
+
+private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
 
 /**
  * §13.4's live preview: "matches N upcoming events — run the engine on the
@@ -381,11 +413,14 @@ private fun LivePreviewCard(state: DesktopAppState, draft: Rule) {
 
 private const val PREVIEW_DEBOUNCE_MS = 500L
 
+/** Shown on the button, as the editor's heading, and as a fresh rule's starting name. */
+private const val NEW_RULE_TITLE = "New rule"
+
 private fun newRule(): Rule {
     val now = Clock.System.now()
     return Rule(
         id = UUID.randomUUID().toString(),
-        name = "New rule",
+        name = NEW_RULE_TITLE,
         enabled = true,
         phenomena = emptySet(),
         locationIds = null,
