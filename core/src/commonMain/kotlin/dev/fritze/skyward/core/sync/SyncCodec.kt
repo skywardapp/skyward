@@ -15,9 +15,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Instant
 
 /** One rule that failed to decode fully and was imported disabled instead (§12.3). */
@@ -32,6 +33,8 @@ data class ParsedSyncFile(
     val settings: Map<String, String>,
     val firedNotificationIds: List<String>,
     val ruleWarnings: List<RuleImportWarning>,
+    /** Ids of [rules] whose condition tree couldn't be decoded and was replaced by an inert placeholder (§12.3). Merge callers should not let one of these overwrite an intact local rule with the same id. */
+    val degradedRuleIds: Set<String>,
 )
 
 sealed class SyncImportError(message: String) : Exception(message) {
@@ -64,23 +67,24 @@ object SyncCodec {
         val root = runCatching { json.parseToJsonElement(text) as JsonObject }
             .getOrElse { throw SyncImportError.Malformed(it.message ?: "invalid JSON") }
 
-        val format = root["format"]?.jsonPrimitive?.content
+        val format = root["format"].primitiveContentOrNull()
         if (format != SyncFile.FORMAT) throw SyncImportError.WrongFormat(format)
 
-        val formatVersion = root["formatVersion"]?.jsonPrimitive?.intOrNull
+        val formatVersion = root["formatVersion"].primitiveIntOrNull()
         if (formatVersion != SyncFile.FORMAT_VERSION) throw SyncImportError.UnknownFormatVersion(formatVersion)
 
-        val exportedAt = runCatching { Instant.parse(root.getValue("exportedAt").jsonPrimitive.content) }
+        val exportedAt = runCatching { Instant.parse(root["exportedAt"].primitiveContentOrNull() ?: error("missing")) }
             .getOrElse { throw SyncImportError.Malformed("exportedAt: ${it.message}") }
-        val appVersion = root["appVersion"]?.jsonPrimitive?.content ?: ""
+        val appVersion = root["appVersion"].primitiveContentOrNull() ?: ""
 
         val locations = decodeField(root, "locations") { ListSerializer(SavedLocation.serializer()) }
         val settings = decodeField(root, "settings") { MapSerializer(String.serializer(), String.serializer()) } ?: emptyMap()
         val firedNotificationIds = decodeField(root, "firedNotificationIds") { ListSerializer(String.serializer()) } ?: emptyList()
 
         val warnings = mutableListOf<RuleImportWarning>()
+        val degradedIds = mutableSetOf<String>()
         val ruleElements = (root["rules"] as? JsonArray) ?: JsonArray(emptyList())
-        val rules = ruleElements.mapNotNull { decodeRuleOrDisabled(it, warnings) }
+        val rules = ruleElements.mapNotNull { decodeRuleOrDisabled(it, warnings, degradedIds) }
 
         return ParsedSyncFile(
             exportedAt = exportedAt,
@@ -90,6 +94,7 @@ object SyncCodec {
             settings = settings,
             firedNotificationIds = firedNotificationIds,
             ruleWarnings = warnings,
+            degradedRuleIds = degradedIds,
         )
     }
 
@@ -99,7 +104,7 @@ object SyncCodec {
             .getOrElse { throw SyncImportError.Malformed("$key: ${it.message}") }
     }
 
-    private fun decodeRuleOrDisabled(element: JsonElement, warnings: MutableList<RuleImportWarning>): Rule? {
+    private fun decodeRuleOrDisabled(element: JsonElement, warnings: MutableList<RuleImportWarning>, degradedIds: MutableSet<String>): Rule? {
         runCatching { json.decodeFromJsonElement(Rule.serializer(), element) }.getOrNull()?.let { return it }
 
         // Full decode failed. Every Rule field but `condition` is a closed, stable type, so this is
@@ -110,13 +115,14 @@ object SyncCodec {
             // Not just an unknown condition type -- some other field is malformed too. Nothing
             // recoverable to import; still warn, using whatever id/name we can scrape out raw.
             val obj = element as? JsonObject
-            val id = obj?.get("id")?.jsonPrimitive?.content ?: "unknown"
-            val name = obj?.get("name")?.jsonPrimitive?.content ?: id
+            val id = obj?.get("id").primitiveContentOrNull() ?: "unknown"
+            val name = obj?.get("name").primitiveContentOrNull() ?: id
             warnings += RuleImportWarning(id, name)
             return null
         }
 
         warnings += RuleImportWarning(skeleton.id, skeleton.name)
+        degradedIds += skeleton.id
         return Rule(
             id = skeleton.id,
             name = skeleton.name,
@@ -134,6 +140,15 @@ object SyncCodec {
     /** Always evaluates `false` (`Not(And(emptyList()))`, and `all` on an empty list is vacuously `true`) -- inert placeholder for a condition tree that couldn't be recovered. Paired with `enabled = false`, so it's purely defensive. */
     private val UNRECOGNIZED_CONDITION = Cond.Not(Cond.And(emptyList()))
 }
+
+/**
+ * Safe alternatives to `JsonElement.jsonPrimitive`, which throws
+ * `IllegalArgumentException` when the element is a `JsonObject`/`JsonArray`.
+ * File content is user-picked-but-unvalidated, so a shape mismatch here must
+ * surface as [SyncImportError.Malformed], never a raw exception.
+ */
+private fun JsonElement?.primitiveContentOrNull(): String? = (this as? JsonPrimitive)?.contentOrNull
+private fun JsonElement?.primitiveIntOrNull(): Int? = (this as? JsonPrimitive)?.intOrNull
 
 /** Mirrors [Rule] field-for-field except [condition], left as raw JSON so an unknown [Cond] subtype elsewhere doesn't block decoding the rest of the rule. */
 @Serializable

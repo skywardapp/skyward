@@ -20,10 +20,23 @@ import dev.fritze.skyward.core.rules.Cond
  */
 enum class GroupOp { AND, OR }
 
+/**
+ * [id] is a stable per-node identity for Compose's `key()`, generated once
+ * when a node is first created (new leaf/group, or loaded from a [Cond] via
+ * [toNode]) and then carried through every `copy()` a subsequent edit makes.
+ * Without it, [ConditionGroupEditor] would key its children on list
+ * position: deleting a sibling shifts every node after it down one index, so
+ * any remembered per-child UI state (an open "add condition" menu, a pending
+ * delete confirmation) would reattach to whatever node now occupies that
+ * position instead of following the node it belonged to.
+ */
 sealed class ConditionNode {
-    data class Group(val op: GroupOp, val children: List<ConditionNode>) : ConditionNode()
-    data class Leaf(val cond: Cond) : ConditionNode()
+    abstract val id: String
+    data class Group(val op: GroupOp, val children: List<ConditionNode>, override val id: String = newNodeId()) : ConditionNode()
+    data class Leaf(val cond: Cond, override val id: String = newNodeId()) : ConditionNode()
 }
+
+private fun newNodeId(): String = java.util.UUID.randomUUID().toString()
 
 fun Cond.toNode(): ConditionNode = when (this) {
     is Cond.And -> ConditionNode.Group(GroupOp.AND, all.map { it.toNode() })
@@ -70,4 +83,6 @@ val EONET_CATEGORIES: List<Pair<String, String>> = listOf(
     "wildfires" to "Wildfires",
 )
 
-fun condTypeLabel(cond: Cond): String = COND_TYPE_OPTIONS.firstOrNull { it.default()::class == cond::class }?.label ?: "Unsupported condition"
+private val COND_TYPE_LABELS_BY_CLASS = COND_TYPE_OPTIONS.associate { it.default()::class to it.label }
+
+fun condTypeLabel(cond: Cond): String = COND_TYPE_LABELS_BY_CLASS[cond::class] ?: "Unsupported condition"

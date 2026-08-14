@@ -13,11 +13,13 @@ import dev.fritze.skyward.core.sources.RefreshRequest
 import dev.fritze.skyward.core.sources.SourceSettings
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.data.AppContainer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
@@ -34,13 +36,19 @@ class RuleEditorViewModel(private val container: AppContainer, private val ruleI
 
     suspend fun load(): Rule? = ruleId?.let { container.ruleRepo.getById(it) }
 
-    /** §13.4 live preview: "matches N upcoming events" against current DB occurrences, ignoring the draft's own enabled toggle so editing a disabled rule still previews. */
-    suspend fun previewCount(draft: Rule): Int {
+    /**
+     * §13.4 live preview: "matches N upcoming events" against current DB
+     * occurrences, ignoring the draft's own enabled toggle so editing a
+     * disabled rule still previews. `Planner.computeMatches` and
+     * `AuroraSource.loadOvationGrid` do their own dispatcher switching, so
+     * this runs on [Dispatchers.Default] rather than the caller's (Main).
+     */
+    suspend fun previewCount(draft: Rule): Int = withContext(Dispatchers.Default) {
         val occurrences = container.occurrenceRepo.getAll()
         val locs = container.locationRepo.getAll()
         val ctx = VisibilityContext(now = Clock.System.now(), ovationGrid = AuroraSource.loadOvationGrid(container.sourceStateRepo))
         val matches = Planner.computeMatches(occurrences, locs, listOf(draft.copy(enabled = true)), container.visibilityModels, ctx)
-        return matches.distinctBy { it.occ.id }.size
+        matches.distinctBy { it.occ.id }.size
     }
 
     /** True if at least one selected phenomenon is COMPUTED (sources are pure functions of time, so a past horizon can be queried). */
@@ -53,9 +61,9 @@ class RuleEditorViewModel(private val container: AppContainer, private val ruleI
      * temporary in-memory list, never into the DB." Returns null when no
      * selected phenomenon is COMPUTED (nothing to enumerate).
      */
-    suspend fun pastMatchCount(draft: Rule): Int? {
+    suspend fun pastMatchCount(draft: Rule): Int? = withContext(Dispatchers.Default) {
         val relevantSources = container.computedSources.filter { source -> source.phenomena.any { it in draft.phenomena } }
-        if (relevantSources.isEmpty()) return null
+        if (relevantSources.isEmpty()) return@withContext null
 
         val now = Clock.System.now()
         val locs = container.locationRepo.getAll()
@@ -70,7 +78,7 @@ class RuleEditorViewModel(private val container: AppContainer, private val ruleI
         val pastOccurrences = relevantSources.flatMap { it.refresh(request).occurrences }
         val ctx = VisibilityContext(now = now, ovationGrid = null) // COMPUTED phenomena never read the aurora grid
         val matches = Planner.computeMatches(pastOccurrences, locs, listOf(draft.copy(enabled = true)), container.visibilityModels, ctx)
-        return matches.distinctBy { it.occ.id }.size
+        matches.distinctBy { it.occ.id }.size
     }
 
     fun save(rule: Rule, onDone: () -> Unit) {

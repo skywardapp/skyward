@@ -161,16 +161,38 @@ private class RuleDraftState {
         )
     }
 
-    fun isSaveable(violations: List<String>): Boolean =
-        loaded && name.isNotBlank() && phenomena.isNotEmpty() && conditionRoot.children.isNotEmpty() && violations.isEmpty()
+    fun isSaveable(violations: List<String>): Boolean = loaded && name.isNotBlank() && phenomena.isNotEmpty() && violations.isEmpty()
 }
 
-/** §9.5's caps, checked against the in-progress draft, plus the rule-set-wide count (only relevant for a brand-new rule). */
+/**
+ * §9.5's caps, checked against the in-progress draft, plus the rule-set-wide
+ * count (only relevant for a brand-new rule) and two guardrails the builder
+ * itself can produce: an empty AND/OR group anywhere in the tree (not just
+ * the root -- an empty `Cond.And` evaluates true, which can make an
+ * enclosing OR match every occurrence of the selected phenomena) and an
+ * empty location selection (an empty, non-null `locationIds` makes
+ * `RuleEngine.matches` false for every location, i.e. the rule can never
+ * fire, which is never what "not all locations" was meant to express).
+ */
 private fun ruleDraftViolations(state: RuleDraftState, existingRuleCount: Int): List<String> {
     if (!state.loaded) return emptyList()
-    val ruleSetCapExceeded = state.existing == null && existingRuleCount >= RuleLimits.MAX_RULES
-    val capMessage = if (ruleSetCapExceeded) "you already have ${RuleLimits.MAX_RULES} rules, the maximum" else null
-    return RuleLimits.violations(state.toRule("preview")) + listOfNotNull(capMessage)
+    val violations = mutableListOf<String>()
+    if (state.existing == null && existingRuleCount >= RuleLimits.MAX_RULES) {
+        violations += "you already have ${RuleLimits.MAX_RULES} rules, the maximum"
+    }
+    if (hasEmptyGroup(state.conditionRoot)) {
+        violations += "every group needs at least one condition or subgroup"
+    }
+    if (!state.useAllLocations && state.chosenLocationIds.isEmpty()) {
+        violations += "pick at least one location, or switch to all saved locations"
+    }
+    violations += RuleLimits.violations(state.toRule("preview"))
+    return violations
+}
+
+private fun hasEmptyGroup(node: ConditionNode): Boolean = when (node) {
+    is ConditionNode.Group -> node.children.isEmpty() || node.children.any(::hasEmptyGroup)
+    is ConditionNode.Leaf -> false
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

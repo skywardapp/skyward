@@ -71,29 +71,42 @@ private fun buildPreviewRule(phenomena: Set<Phenomenon>, locationIds: List<Strin
     hidden = false, createdAt = PREVIEW_TIMESTAMP, modifiedAt = PREVIEW_TIMESTAMP,
 )
 
-/** The preview's own mutable state, kept separate so [LivePreviewPanel] itself stays plain wiring. */
+/**
+ * The preview's own mutable state, kept separate so [LivePreviewPanel] itself
+ * stays plain wiring. Both [refresh] and [loadPastCount] guard their suspend
+ * call with `runCatching`: `previewCount`/`pastMatchCount` reach
+ * `Planner.computeMatches` and, for the past-horizon check,
+ * `EventSource.refresh` for every COMPUTED source -- the most failure-prone
+ * path in this panel -- so an unguarded exception here would otherwise
+ * propagate out of `LaunchedEffect`/`launch` and crash the screen (or, for
+ * the past-count button, leave `pastLoading` stuck `true` with no retry).
+ */
 private class PreviewState {
     var loading by mutableStateOf(false); private set
     var previewCount by mutableStateOf<Int?>(null); private set
+    var previewFailed by mutableStateOf(false); private set
     var pastCount by mutableStateOf<Int?>(null); private set
     var pastLoading by mutableStateOf(false); private set
 
     suspend fun refresh(viewModel: RuleEditorViewModel, rule: Rule, enabled: Boolean) {
         pastCount = null // condition/phenomena changed -- a cached past count no longer applies
+        previewFailed = false
         if (!enabled) {
             previewCount = null
             return
         }
         loading = true
         delay(500)
-        previewCount = viewModel.previewCount(rule)
+        runCatching { viewModel.previewCount(rule) }
+            .onSuccess { previewCount = it }
+            .onFailure { previewFailed = true }
         loading = false
     }
 
     fun loadPastCount(scope: CoroutineScope, viewModel: RuleEditorViewModel, rule: Rule) {
         scope.launch {
             pastLoading = true
-            pastCount = viewModel.pastMatchCount(rule) ?: 0
+            pastCount = runCatching { viewModel.pastMatchCount(rule) ?: 0 }.getOrNull()
             pastLoading = false
         }
     }
@@ -107,6 +120,10 @@ private fun PreviewBody(enabledForPreview: Boolean, isComputedPreviewable: Boole
     }
     if (state.loading && state.previewCount == null) {
         CircularProgressIndicator(modifier = Modifier.size(20.dp))
+        return
+    }
+    if (state.previewFailed) {
+        Text("Couldn't compute a preview right now.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         return
     }
     val count = state.previewCount ?: 0

@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,13 +45,17 @@ import kotlin.math.roundToInt
 
 @Composable
 fun LabeledIntSlider(label: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
+    // One tick per step reads fine for a small range (hours 0..23) but clutters the track for a
+    // wide one (days 1..365, ZHR 0..300) without adding real precision -- onValueChange already
+    // snaps to whole numbers via roundToInt, so ticks are a display aid, not what makes it discrete.
+    val span = range.last - range.first
     Column {
         Text("$label: $value", style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.roundToInt().coerceIn(range)) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first - 1).coerceAtLeast(0),
+            steps = if (span in 1..24) span - 1 else 0,
         )
     }
 }
@@ -192,9 +197,11 @@ private fun GroupChildrenList(node: ConditionNode.Group, phenomena: Set<Phenomen
     for ((index, child) in node.children.withIndex()) {
         fun replace(updated: ConditionNode) = onChange(node.copy(children = node.children.toMutableList().apply { set(index, updated) }))
         fun remove() = onChange(node.copy(children = node.children.toMutableList().apply { removeAt(index) }))
-        when (child) {
-            is ConditionNode.Group -> ConditionGroupEditor(child, phenomena, depth + 1, onChange = ::replace, onDeleteSelf = ::remove)
-            is ConditionNode.Leaf -> ConditionLeafEditor(child, onChange = ::replace, onDelete = ::remove)
+        key(child.id) {
+            when (child) {
+                is ConditionNode.Group -> ConditionGroupEditor(child, phenomena, depth + 1, onChange = ::replace, onDeleteSelf = ::remove)
+                is ConditionNode.Leaf -> ConditionLeafEditor(child, onChange = ::replace, onDelete = ::remove)
+            }
         }
     }
 }

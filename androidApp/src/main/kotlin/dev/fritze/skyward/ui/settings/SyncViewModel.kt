@@ -16,6 +16,8 @@ data class ImportSummary(
     val settingsImported: Int,
     val firedIdsImported: Int,
     val ruleWarnings: List<RuleImportWarning>,
+    /** True if data imported successfully but the post-import re-plan (§9.7) failed -- the import itself still committed. */
+    val replanFailed: Boolean = false,
 )
 
 /** §12: export/import (backs [SyncScreen]). */
@@ -52,7 +54,15 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
         val locationsToWrite = SyncMerge.newerOrMissing(container.locationRepo.getAll(), parsed.locations, { it.id }, { it.modifiedAt })
         for (location in locationsToWrite) container.locationRepo.upsert(location)
 
-        val rulesToWrite = SyncMerge.newerOrMissing(container.ruleRepo.getAll(), parsed.rules, { it.id }, { it.modifiedAt })
+        val localRules = container.ruleRepo.getAll()
+        val localRuleIds = localRules.mapTo(mutableSetOf()) { it.id }
+        // A rule this app version couldn't fully decode was reconstructed with an inert placeholder
+        // condition but keeps the original `modifiedAt` (SyncCodec.ParsedSyncFile.degradedRuleIds) --
+        // without this filter, a newer `modifiedAt` alone would let it win the merge below and
+        // silently destroy an intact local rule sharing its id. Never import a degraded rule over
+        // one that already exists locally; still take it if there's no local copy at all.
+        val importableRules = parsed.rules.filterNot { it.id in parsed.degradedRuleIds && it.id in localRuleIds }
+        val rulesToWrite = SyncMerge.newerOrMissing(localRules, importableRules, { it.id }, { it.modifiedAt })
         for (rule in rulesToWrite) container.ruleRepo.upsert(rule)
 
         for ((key, value) in parsed.settings) container.settingsRepo.set(key, value)
@@ -65,7 +75,10 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
 
-        container.replanAndSync() // §12.3: "After import: full re-plan (§9.7)."
+        // §12.3: "After import: full re-plan (§9.7)." The data above is already committed, so a
+        // re-plan failure must not be reported as an import failure (that would route through the
+        // generic "couldn't read that file" message and could prompt a needless destructive retry).
+        val replanFailed = runCatching { container.replanAndSync() }.isFailure
 
         return ImportSummary(
             locationsImported = locationsToWrite.size,
@@ -73,6 +86,7 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
             settingsImported = parsed.settings.size,
             firedIdsImported = firedImported,
             ruleWarnings = parsed.ruleWarnings,
+            replanFailed = replanFailed,
         )
     }
 }
