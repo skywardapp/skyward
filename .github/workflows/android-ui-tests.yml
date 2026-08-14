@@ -108,29 +108,37 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Booting a cold AVD is most of this job's wall-clock. Cache the AVD with
-      # a boot snapshot and the emulator resumes instead of booting.
-      - name: Cache AVD snapshot
-        uses: actions/cache@v4
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-${{ matrix.api-level }}-${{ env.EMULATOR_TARGET }}-${{ env.EMULATOR_ARCH }}
-
-      - name: Create AVD and generate snapshot
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          target: ${{ env.EMULATOR_TARGET }}
-          arch: ${{ env.EMULATOR_ARCH }}
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
-
+      # DO NOT re-add an AVD snapshot cache here. It looks like free wall-clock
+      # (a cached `default_boot` snapshot resumes in ~1 s instead of booting for
+      # ~60 s) and it wedged this job completely for half a day on 2026-08-14.
+      #
+      # Restoring a quick-boot snapshot brings back a RAM image in which
+      # `sys.boot_completed` is *already* 1, so the runner action's
+      # `waitForDevice()` returns about two seconds after `Loading snapshot`,
+      # while the guest has not finished re-registering its system services. The
+      # action then unconditionally sends a wake keyevent — before, not as part
+      # of, `disable-animations` — and dies:
+      #
+      #   Successfully loaded snapshot 'default_boot' using 1141 ms
+      #   adb -s emulator-5554 shell input keyevent 82
+      #   java.lang.IllegalStateException: ...ServiceNotFoundException:
+      #     No service published for: input
+      #
+      # That is deterministic on a cache hit, and it happens inside the action,
+      # before run-ui-tests.sh gets to run — so the job fails in under a minute
+      # with no video, no logcat and no test report to explain itself.
+      #
+      # What makes it a trap rather than a nuisance: actions/cache only writes
+      # its entry post-job *on success*, and the key was fixed with no salt. So
+      # exactly one passing run ever populated it, that entry then failed every
+      # subsequent run, and no run could pass to replace it. Re-running is not a
+      # workaround, and rotating the key is not a fix either — the first green
+      # run just re-poisons it. Five retries on #9 were doomed before they
+      # started.
+      #
+      # Cold-booting is also cheaper than it looks: the cache-miss path booted
+      # the emulator twice (once to seed the snapshot, once to test) and shipped
+      # ~1.1 GB each way. One cold boot beats that.
       - name: Run instrumented UI tests (both flavours, screen recorded)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -138,7 +146,9 @@ jobs:
           target: ${{ env.EMULATOR_TARGET }}
           arch: ${{ env.EMULATOR_ARCH }}
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot, not -no-snapshot-save: quick-boot must neither load
+          # nor save. See the comment above before changing this.
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: tools/ci/run-ui-tests.sh
 

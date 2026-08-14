@@ -13,9 +13,73 @@ set -uo pipefail
 FLAVOURS=${FLAVOURS:-foss play}
 OUT_DIR=${OUT_DIR:-build/ui-test-video}
 APPLICATION_ID=${APPLICATION_ID:-dev.fritze.skyward}
+READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-180}
 export OUT_DIR
 
+log() { echo "[run-ui-tests] $*"; }
+
 mkdir -p "$OUT_DIR"
+
+# adb brings no timeouts of its own: `wait-for-device` blocks forever by
+# design, and a `shell` call against a half-up device can hang just as long. A
+# readiness gate that can itself hang is worse than none — it would burn the
+# job's whole 60-minute budget instead of failing in three minutes — so every
+# call below is bounded. `timeout` is coreutils and always present on the CI
+# runner; a dev box without it (macOS) degrades to unbounded rather than
+# refusing to run.
+TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || echo "")
+
+adb_bounded() {
+  local budget=$1
+  shift
+  # Deadline already spent: report a timeout rather than granting a fresh
+  # second. 124 is what `timeout` itself exits with.
+  [ "$budget" -lt 1 ] && return 124
+  if [ -n "$TIMEOUT_BIN" ]; then
+    "$TIMEOUT_BIN" "$budget" adb "$@"
+  else
+    adb "$@"
+  fi
+}
+
+# `sys.boot_completed` is not on its own proof that the device can be driven:
+# the emulator-runner action has already seen it flip to 1 and then failed on
+# the very next adb call because the system services were not registered yet.
+# Wait for the package manager to actually answer before installing anything —
+# otherwise a half-ready device surfaces as an inscrutable Gradle install
+# failure partway through the first flavour, rather than as what it is.
+await_device_ready() {
+  local start=$SECONDS
+  local deadline=$((start + READY_TIMEOUT_SECONDS))
+  local booted=""
+
+  if ! adb_bounded "$((deadline - SECONDS))" wait-for-device; then
+    log "no device visible to adb within ${READY_TIMEOUT_SECONDS}s"
+    return 1
+  fi
+
+  # Each call recomputes what is left of the deadline rather than sharing one
+  # per-iteration budget: a slow-but-successful getprop would otherwise hand
+  # the full remainder to the pm probe a second time, and the gate would
+  # overrun the timeout it exists to enforce.
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    booted=$(adb_bounded "$((deadline - SECONDS))" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
+    if [ "$booted" = "1" ] &&
+      adb_bounded "$((deadline - SECONDS))" shell pm path android >/dev/null 2>&1; then
+      log "device ready after $((SECONDS - start))s"
+      return 0
+    fi
+    sleep 2
+  done
+
+  # Report the value already observed above; asking again would spend time we
+  # have by definition run out of.
+  log "device never became ready within ${READY_TIMEOUT_SECONDS}s" \
+    "(last sys.boot_completed='${booted}'); not running any flavour against it"
+  return 1
+}
+
+await_device_ready || exit 1
 
 status=0
 for flavour in $FLAVOURS; do
