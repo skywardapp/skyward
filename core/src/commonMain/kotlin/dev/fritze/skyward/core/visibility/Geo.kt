@@ -17,8 +17,8 @@ import kotlin.math.sqrt
 /** Mean Earth radius, km (§8.1). */
 const val EARTH_RADIUS_KM = 6371.0088
 
-private fun Double.toRadians() = this * PI / 180.0
-private fun Double.toDegrees() = this * 180.0 / PI
+internal fun Double.toRadians() = this * PI / 180.0
+internal fun Double.toDegrees() = this * 180.0 / PI
 
 /** Great-circle distance between [a] and [b], in km. */
 fun haversineDistanceKm(a: GeoPoint, b: GeoPoint): Double {
@@ -66,4 +66,17 @@ fun destinationPoint(origin: GeoPoint, distanceKm: Double, bearingDeg: Double): 
     // Normalize longitude to [-180, 180).
     val normalizedLonDeg = ((lon2.toDegrees() + 540.0) % 360.0) - 180.0
     return GeoPoint(lat2.toDegrees(), normalizedLonDeg)
+}
+
+/** Geomagnetic north pole (IGRF-14/WMM2025, epoch 2025) — Appendix D. Drift is ~0.1 deg/yr (§19 R7). */
+const val GEOMAGNETIC_POLE_LAT_DEG = 80.85
+const val GEOMAGNETIC_POLE_LON_DEG = -72.76
+val GEOMAGNETIC_POLE = GeoPoint(GEOMAGNETIC_POLE_LAT_DEG, GEOMAGNETIC_POLE_LON_DEG)
+
+/** Dipole geomagnetic latitude of [p], degrees (Appendix D formula; §8.4). */
+fun geomagneticLatitudeDeg(p: GeoPoint): Double {
+    val lat = p.latDeg.toRadians()
+    val poleLat = GEOMAGNETIC_POLE_LAT_DEG.toRadians()
+    val dLon = (p.lonDeg - GEOMAGNETIC_POLE_LON_DEG).toRadians()
+    return asin(sin(lat) * sin(poleLat) + cos(lat) * cos(poleLat) * cos(dLon)).toDegrees()
 }

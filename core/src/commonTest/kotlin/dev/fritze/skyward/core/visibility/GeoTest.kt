@@ -110,4 +110,16 @@ class GeoTest {
         // Half the mean-radius great circle: 6371.0088 * PI ~= 20015.09 km.
         assertEquals(20015.09, haversineDistanceKm(a, b), 0.5)
     }
+
+    @Test
+    fun geomagneticLatitudeMatchesAppendixAsFrozenValues() {
+        // §17.4: "dipole-latitude function vs. frozen expected values computed
+        // with the Appendix D formula (Tromso 67.5, Berlin 52.2, Calgary 57.4,
+        // Munich 48.2 - tolerance +/-0.2deg)". City coordinates are standard
+        // Wikipedia-infobox values.
+        assertEquals(67.5, geomagneticLatitudeDeg(GeoPoint(69.6492, 18.9553)), 0.2) // Tromso
+        assertEquals(52.2, geomagneticLatitudeDeg(GeoPoint(52.52, 13.405)), 0.2) // Berlin
+        assertEquals(57.4, geomagneticLatitudeDeg(GeoPoint(51.0447, -114.0719)), 0.2) // Calgary
+        assertEquals(48.2, geomagneticLatitudeDeg(GeoPoint(48.1351, 11.5820)), 0.2) // Munich
+    }
 }
