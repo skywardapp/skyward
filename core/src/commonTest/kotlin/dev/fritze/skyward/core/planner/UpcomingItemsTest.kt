@@ -48,13 +48,11 @@ class UpcomingItemsTest {
     )
 
     @Test
-    fun matchedScopeIncludesRuleMatchesAndExcludesNonMatches() {
+    fun matchedScopeIncludesEveryRuleMatchWithItsRuleName() {
         val matching = occ("matches", now + 1.days)
         val nonMatching = occ("no-match", now + 2.days)
         val ctx = VisibilityContext(now, null)
         val models = mapOf(Phenomenon.SOLAR_ECLIPSE to FixedQualityModel(Quality.GOOD))
-        // A rule requiring EXCELLENT so only-GOOD occurrences never satisfy it directly;
-        // instead simulate matching by using MARGINAL threshold for `matching`.
         val rules = listOf(rule(Quality.MARGINAL))
 
         val items = computeUpcomingItems(listOf(matching, nonMatching), listOf(home), rules, models, ctx, UpcomingFilter(UpcomingScope.MATCHED))
@@ -81,7 +79,6 @@ class UpcomingItemsTest {
         val occurrence = occ("notable", now + 1.days)
         val ctx = VisibilityContext(now, null)
         val models = mapOf(Phenomenon.SOLAR_ECLIPSE to FixedQualityModel(Quality.EXCELLENT))
-        val rules = listOf(rule(Quality.GOOD)) // EXCELLENT satisfies this too, but test intent is the notable path
 
         val items = computeUpcomingItems(listOf(occurrence), listOf(home), emptyList(), models, ctx, UpcomingFilter(UpcomingScope.MATCHED))
 

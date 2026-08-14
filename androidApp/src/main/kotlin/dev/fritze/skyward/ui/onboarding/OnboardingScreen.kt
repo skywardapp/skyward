@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.rememberLocationPermissionRequester
+import kotlinx.coroutines.launch
 
 private enum class OnboardingStep { WELCOME, LOCATION, NOTIFICATIONS, EXACT_ALARM, RULES_PREVIEW }
 
@@ -41,6 +43,7 @@ private enum class OnboardingStep { WELCOME, LOCATION, NOTIFICATIONS, EXACT_ALAR
 fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
     val viewModel: OnboardingViewModel = viewModel { OnboardingViewModel(container) }
     var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -50,8 +53,13 @@ fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
                 OnboardingStep.NOTIFICATIONS -> NotificationsStep(onNext = { step = OnboardingStep.EXACT_ALARM })
                 OnboardingStep.EXACT_ALARM -> ExactAlarmStep(onNext = { step = OnboardingStep.RULES_PREVIEW })
                 OnboardingStep.RULES_PREVIEW -> RulesPreviewStep(viewModel) {
-                    viewModel.finish()
-                    onDone()
+                    // coroutineScope (tied to this composition, not the ViewModel) so finish()'s
+                    // work is awaited in full before onDone() pops Routes.ONBOARDING -- otherwise
+                    // the navigation itself would race the write it's meant to wait for.
+                    coroutineScope.launch {
+                        viewModel.finish()
+                        onDone()
+                    }
                 }
             }
         }

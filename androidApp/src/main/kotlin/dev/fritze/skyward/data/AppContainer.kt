@@ -1,9 +1,7 @@
 package dev.fritze.skyward.data
 
 import android.content.Context
-import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
@@ -107,9 +105,10 @@ class AppContainer(context: Context) {
      */
     fun scheduleBackgroundWork() {
         val workManager = WorkManager.getInstance(appContext)
-        val refreshRequest = PeriodicWorkRequestBuilder<RefreshWorker>(15.minutes.toJavaDuration())
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .build()
+        // No network constraint: every registered source in M3 is COMPUTED (local astronomy).
+        // POLLED sources (aurora/comet/EONET, M4) will need one, scoped to just those sources --
+        // gating the whole worker on connectivity would also block the COMPUTED horizon re-force above.
+        val refreshRequest = PeriodicWorkRequestBuilder<RefreshWorker>(15.minutes.toJavaDuration()).build()
         workManager.enqueueUniquePeriodicWork(RefreshWorker.UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, refreshRequest)
 
         val topUpRequest = PeriodicWorkRequestBuilder<AlarmWindowTopUpWorker>(1.days.toJavaDuration()).build()

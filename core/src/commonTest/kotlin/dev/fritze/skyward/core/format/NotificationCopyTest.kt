@@ -154,6 +154,22 @@ class NotificationCopyTest {
         assertTrue(copy.body.contains("dark skies"), copy.body)
     }
 
+    @Test
+    fun meteorShowerCopyOmitsRadiantAltitudeClauseWhenUnknownInsteadOfClaimingZeroDegrees() {
+        val peak = now + 5.days
+        val occ = Occurrence(
+            id = "ms:QUA:2026", phenomenon = Phenomenon.METEOR_SHOWER, sourceId = "meteors", title = "Quadrantids",
+            window = TimeWindow(peak - 1.days, peak + 1.days), peakTime = peak, certainty = Certainty.CERTAIN,
+            payload = MeteorShowerPayload("QUA", "Quadrantids", 120, null, 230.0, 49.0, 41.0, null, now, now, 0.5),
+            fetchedAt = now, expiresAt = null,
+        )
+        // No LocalDetails.MeteorLocal -- maxRadiantAltDeg is unknown, not zero.
+        val copy = renderNotificationCopy(occ, home, visres(), rule(), fireAt = now, leadUntilAnchor = null)
+
+        assertTrue(!copy.body.contains("Radiant up to 0"), "must not claim the radiant never rises when altitude is simply unknown: ${copy.body}")
+        assertTrue(copy.body.contains("Moon 50%"), copy.body)
+    }
+
     // ---- comet ----
 
     @Test
@@ -222,6 +238,19 @@ class NotificationCopyTest {
         val copy = renderNotificationCopy(occ, home, visres(), rule(), fireAt = now, leadUntilAnchor = null)
         assertTrue(copy.title.contains("Venus") && copy.title.contains("Jupiter"), copy.title)
         assertTrue(copy.body.contains("0.5°"), copy.body)
+    }
+
+    @Test
+    fun terrestrialCopyOmitsDirectionWordWithoutADoubleSpaceWhenBearingIsUnknown() {
+        val occ = Occurrence(
+            id = "eo:2", phenomenon = Phenomenon.TERRESTRIAL, sourceId = "eonet", title = "t",
+            window = TimeWindow(now, now + 1.hours), peakTime = null, certainty = Certainty.FORECAST,
+            payload = TerrestrialPayload("EONET_2", "volcanoes", "Volcanoes", GeoPoint(0.0, 0.0), now, null, null, "https://x", false),
+            fetchedAt = now, expiresAt = null,
+        )
+        val copy = renderNotificationCopy(occ, home, visres(travelKm = 42.0, travelBearingDeg = null), rule(), fireAt = now, leadUntilAnchor = null)
+        assertTrue(copy.body.contains("42 km of Home"), copy.body)
+        assertTrue(!copy.body.contains("km  of"), "must not double-space when direction is unknown: ${copy.body}")
     }
 
     @Test

@@ -78,4 +78,13 @@ class MaterialChangeTest {
         val b = a.copy(fetchedAt = now + 1.days)
         assertFalse(isMaterialChange(a, b))
     }
+
+    @Test
+    fun peakTimeAppearingOrDisappearingIsMaterialButBothNullIsNot() {
+        val withPeak = auroraOcc(4.0).copy(peakTime = now)
+        val withoutPeak = auroraOcc(4.0)
+        assertTrue(isMaterialChange(withoutPeak, withPeak))
+        assertTrue(isMaterialChange(withPeak, withoutPeak))
+        assertFalse(isMaterialChange(withoutPeak, withoutPeak))
+    }
 }

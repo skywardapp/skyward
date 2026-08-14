@@ -21,14 +21,19 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 
     override fun schedule(n: PlannedNotification): Precision {
-        cancelApproximate(n.id) // idempotent re-schedule may be switching paths; never leave both registered
+        // Always keep a WorkManager backup, even on the exact path: revoking the exact-alarm
+        // permission deletes the OS alarm without sending ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED
+        // (that broadcast only fires on grant), so without a standing fallback a revocation mid-life
+        // would silently drop any alarm already registered until the next daily top-up. The two paths
+        // racing to post the same id is safe -- NotificationPoster.postNotificationFor is idempotent
+        // on status.
+        scheduleApproximate(n)
         return if (canScheduleExact()) {
             val pendingIntent = notificationPendingIntent(context, n.id)
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, n.fireAt.toEpochMilliseconds(), pendingIntent)
             Precision.EXACT
         } else {
             alarmManager.cancel(notificationPendingIntent(context, n.id))
-            scheduleApproximate(n)
             Precision.APPROXIMATE
         }
     }

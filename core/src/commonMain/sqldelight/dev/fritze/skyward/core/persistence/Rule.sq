@@ -7,14 +7,16 @@ CREATE TABLE rule (
   created_at TEXT NOT NULL, modified_at TEXT NOT NULL
 );
 
+-- id ASC as a tie-breaker: created_at alone isn't unique (e.g. the seeded default rules all
+-- share one timestamp), and an unstable order would make list ordering flaky.
 selectAll:
-SELECT * FROM rule ORDER BY created_at ASC;
+SELECT * FROM rule ORDER BY created_at ASC, id ASC;
 
 selectVisible:
-SELECT * FROM rule WHERE hidden = 0 ORDER BY created_at ASC;
+SELECT * FROM rule WHERE hidden = 0 ORDER BY created_at ASC, id ASC;
 
 selectEnabled:
-SELECT * FROM rule WHERE enabled = 1;
+SELECT * FROM rule WHERE enabled = 1 ORDER BY created_at ASC, id ASC;
 
 selectById:
 SELECT * FROM rule WHERE id = ?;

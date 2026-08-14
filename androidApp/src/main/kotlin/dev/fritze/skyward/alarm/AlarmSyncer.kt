@@ -23,7 +23,13 @@ object AlarmSyncer {
         for (n in reconciled) {
             when (n.status) {
                 NotificationStatus.PENDING, NotificationStatus.REGISTERED -> {
-                    if (n.fireAt <= horizon) {
+                    if (n.fireAt < now) {
+                        // Already past due by the time this sync ran (e.g. boot recovery after
+                        // the device was off past fireAt) -- don't register an alarm that would
+                        // fire immediately; the user already missed the window.
+                        scheduler.cancel(n.id)
+                        notificationRepo.updateStatus(n.id, NotificationStatus.MISSED, firedAt = null)
+                    } else if (n.fireAt <= horizon) {
                         val precision = scheduler.schedule(n)
                         notificationRepo.updatePrecision(n.id, precision)
                         notificationRepo.updateStatus(n.id, NotificationStatus.REGISTERED, firedAt = null)

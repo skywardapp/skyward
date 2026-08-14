@@ -55,7 +55,7 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
     ) { padding ->
         val occurrence = state.occurrence
         if (occurrence == null) {
-            Column(Modifier.fillMaxSize().padding(padding)) { Text("Loading…", Modifier.padding(16.dp)) }
+            LoadingContent(padding)
             return@Scaffold
         }
 
@@ -63,27 +63,36 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
             items(state.perLocation, key = { it.first.id }) { (location, visres) ->
                 LocationCard(location, visres)
             }
-
-            item {
-                val payload = occurrence.payload
-                if (payload is CometPayload) {
-                    CometComplianceBlock(payload, state.perLocation.firstOrNull()?.second)
-                }
-                if (payload is TerrestrialPayload) {
-                    OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }) {
-                        Text("Open on EONET")
-                    }
-                }
-            }
-
-            item {
-                HorizontalDivider()
-                Row2 {
-                    Button(onClick = viewModel::toggleMute) { Text(if (state.isMuted) "Unmute this event" else "Mute this event") }
-                    TextButton(onClick = { shareOccurrence(context, occurrence.title, state.perLocation) }) { Text("Share") }
-                }
-            }
+            item { PayloadExtras(occurrence.payload, state.perLocation.firstOrNull()?.second, context) }
+            item { EventDetailActions(state.isMuted, onToggleMute = viewModel::toggleMute, onShare = { shareOccurrence(context, occurrence.title, state.perLocation) }) }
         }
+    }
+}
+
+@Composable
+private fun LoadingContent(padding: androidx.compose.foundation.layout.PaddingValues) {
+    Column(Modifier.fillMaxSize().padding(padding)) { Text("Loading…", Modifier.padding(16.dp)) }
+}
+
+/** The comet-compliance block and/or EONET link, depending on which payload type this occurrence carries. */
+@Composable
+private fun PayloadExtras(payload: dev.fritze.skyward.core.model.OccurrencePayload, primaryVisres: VisibilityResult?, context: android.content.Context) {
+    if (payload is CometPayload) {
+        CometComplianceBlock(payload, primaryVisres)
+    }
+    if (payload is TerrestrialPayload) {
+        OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }) {
+            Text("Open on EONET")
+        }
+    }
+}
+
+@Composable
+private fun EventDetailActions(isMuted: Boolean, onToggleMute: () -> Unit, onShare: () -> Unit) {
+    HorizontalDivider()
+    Row2 {
+        Button(onClick = onToggleMute) { Text(if (isMuted) "Unmute this event" else "Mute this event") }
+        TextButton(onClick = onShare) { Text("Share") }
     }
 }
 

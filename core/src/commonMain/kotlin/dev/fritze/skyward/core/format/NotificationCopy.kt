@@ -82,7 +82,7 @@ private fun solarEclipseCopy(
         val title = "${solarEclipseKindName(payload.kind)} solar eclipse — ${formatMonthDayYear(payload.greatestEclipseTime, location)}"
         val parts = mutableListOf<String>()
         if (travelWorthMentioning) {
-            parts += "Path of totality passes ${travelKm.roundToKm()} km ${compassOf(visres.travelBearingDeg)} of ${location.name}."
+            parts += "Path of totality passes ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
         }
         if (details != null) {
             parts += "At ${location.name}: ${details.maxObscuration.toPercent()}% partial at ${hhmm(details.peak, location)}."
@@ -96,7 +96,7 @@ private fun solarEclipseCopy(
         parts += "First contact at ${location.name} ${hhmm(details.partialBegin, location)}, max ${hhmm(details.peak, location)} (${details.maxObscuration.toPercent()}%)."
     }
     if (travelWorthMentioning) {
-        parts += "Totality ${travelKm.roundToKm()} km ${compassOf(visres.travelBearingDeg)} — leave by ${hhmm(fireAt, location)} to be safe."
+        parts += "Totality ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}— leave by ${hhmm(fireAt, location)} to be safe."
     }
     return NotificationCopy(title, parts.joinToString(" ").ifEmpty { "Today, from ${location.name}." })
 }
@@ -122,9 +122,13 @@ private fun meteorShowerCopy(payload: MeteorShowerPayload, visres: VisibilityRes
         parts += "Best ${hhmm(details.bestViewingStart, location)}–${hhmm(details.bestViewingEnd, location)} at ${location.name}."
     }
     val moonIllumination = details?.moonIllumination ?: payload.moonIlluminationAtPeak
-    val radiantAlt = details?.maxRadiantAltDeg?.roundToInt() ?: 0
     val skyDescription = if (moonIllumination > 0.3 && (details?.moonUpDuringBest == true)) "moonlit skies" else "dark skies"
-    parts += "Radiant up to $radiantAlt°, Moon ${moonIllumination.toPercent()}% — $skyDescription."
+    val radiantAlt = details?.maxRadiantAltDeg?.roundToInt()
+    parts += if (radiantAlt != null) {
+        "Radiant up to $radiantAlt°, Moon ${moonIllumination.toPercent()}% — $skyDescription."
+    } else {
+        "Moon ${moonIllumination.toPercent()}% — $skyDescription."
+    }
     payload.zhr?.let { parts += "Expect up to ~${zhrPhrase(it)} under clear skies." }
     return NotificationCopy(title, parts.joinToString(" "))
 }
@@ -162,7 +166,7 @@ private fun auroraThreeDayCopy(payload: AuroraPayload, visres: VisibilityResult,
     parts += if (visres.visibleAtLocation) {
         "${location.name} may see it directly if skies are clear."
     } else if (travelKm != null) {
-        "Best chance ${travelKm.roundToKm()} km ${compassOf(visres.travelBearingDeg)} of ${location.name}."
+        "Best chance ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
     } else {
         "Watch the sky from ${location.name}."
     }
@@ -190,7 +194,7 @@ private fun terrestrialCopy(payload: TerrestrialPayload, visres: VisibilityResul
     val title = "${payload.categoryTitle}: $statusWord event nearby"
     val travelKm = visres.travelDistanceKm
     val body = if (travelKm != null) {
-        "${travelKm.roundToKm()} km ${compassOf(visres.travelBearingDeg)} of ${location.name}."
+        "${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
     } else {
         "Near ${location.name}."
     }
@@ -213,7 +217,10 @@ fun applyApproximateHedge(body: String, isFirstApproximateEver: Boolean): String
     }
 }
 
-private val TIME_PATTERN = Regex("""\b\d{2}:\d{2}\b""")
+// Excludes a UTC forecast-issue timestamp (only auroraNowcastCopy's "(HH:mm UTC forecast)"
+// fragment) -- that's when the data was issued, not when this alarm fires, so hedging it
+// would misleadingly suggest the forecast's own issue time is approximate.
+private val TIME_PATTERN = Regex("""\b\d{2}:\d{2}\b(?!\s*UTC)""")
 
 private fun reachableWithinKm(cond: Cond): Double? = when (cond) {
     is Cond.And -> cond.all.firstNotNullOfOrNull { reachableWithinKm(it) }
@@ -261,8 +268,15 @@ private fun Int.pad2(): String = if (this < 10) "0$this" else toString()
 private val MONTH_ABBREVIATIONS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 private fun formatMonthDayYear(instant: Instant, location: SavedLocation): String {
     val local = approximateLocalDateTime(instant, location.point.lonDeg)
+    // .month.number / .day (the non-deprecated kotlinx-datetime replacements) don't resolve
+    // against this project's kotlinx-datetime version -- monthNumber/dayOfMonth are deprecated
+    // but the only ones that actually compile here.
+    @Suppress("DEPRECATION")
     return "${MONTH_ABBREVIATIONS[local.monthNumber - 1]} ${local.dayOfMonth}, ${local.year}"
 }
+
+/** [compassOf] followed by a trailing space, or "" when [bearingDeg] is null -- avoids a double space at call sites that join it against a following word ("... of Home"). */
+private fun directionOf(bearingDeg: Double?): String = compassOf(bearingDeg).let { if (it.isEmpty()) "" else "$it " }
 
 /** 16-point compass abbreviation for a bearing in `[0, 360)`, e.g. "SSE" (§8.1: `travelBearingDeg`'s own doc comment). */
 fun compassOf(bearingDeg: Double?): String {

@@ -46,10 +46,10 @@ class ThresholdDerivationTest {
     }
 
     @Test
-    fun ignoresDisabledRulesBecauseTheyAreFilteredBeforeCallingIn() {
+    fun countsEveryRulePassedInBecauseFilteringIsTheCallersJob() {
         // deriveThresholds trusts its input list is already "enabled" rules
-        // (the caller's job, per SourceRunner) -- passing none in means none count.
-        val thresholds = deriveThresholds(emptyList())
-        assertNull(thresholds.minKpOfInterest)
+        // (the caller's job, per SourceRunner), so it ignores the flag itself.
+        val disabled = ruleWith(Cond.KpAtLeast(6.0)).copy(enabled = false)
+        assertEquals(6.0, deriveThresholds(listOf(disabled)).minKpOfInterest)
     }
 }

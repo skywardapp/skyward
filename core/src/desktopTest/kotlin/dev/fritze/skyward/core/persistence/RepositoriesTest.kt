@@ -25,6 +25,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
@@ -150,6 +151,18 @@ class RepositoriesTest {
         assertEquals(listOf(n), repo.getByOccurrence("se:20260812"))
         assertEquals(listOf(n), repo.getPendingDue(now + 2.hours))
         assertTrue(repo.getPendingDue(now).isEmpty(), "not yet due")
+
+        // A fireAt with a sub-second component: Instant.toString() would render this without a
+        // trailing zero-padded fraction (or none at all for whole seconds), which breaks
+        // lexicographic ("<=") comparison against other rows once stored as SQL TEXT.
+        val fractional = PlannedNotification(
+            id = "se:20260812|456|60", occurrenceId = "se:20260812", ruleId = "r1", locationId = "home",
+            fireAt = now + 1.hours + 250.milliseconds, status = NotificationStatus.PENDING, precision = Precision.EXACT,
+            title = "t2", body = "b2", createdAt = now, firedAt = null,
+        )
+        repo.upsert(fractional)
+        assertEquals(setOf(n.id, fractional.id), repo.getPendingDue(now + 2.hours).map { it.id }.toSet(), "both due at the same boundary instant")
+        assertTrue(repo.getPendingDue(now + 1.hours).none { it.id == fractional.id }, "not yet due one instant before its fireAt")
 
         repo.updatePrecision(n.id, Precision.APPROXIMATE)
         assertEquals(Precision.APPROXIMATE, repo.getById(n.id)?.precision)

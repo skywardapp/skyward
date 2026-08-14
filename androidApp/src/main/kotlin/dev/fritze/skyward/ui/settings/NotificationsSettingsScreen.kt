@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.fritze.skyward.data.AppContainer
 
 /** §13.1/§10.1: channels shortcut, the honesty explainer, and exact-alarm permission state. Quiet hours are per-rule (§9.1), editable via the full RuleEditor (M5) -- shown read-only here. */
@@ -37,6 +39,11 @@ import dev.fritze.skyward.data.AppContainer
 fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val context = LocalContext.current
     var canScheduleExact by remember { mutableStateOf(container.alarmScheduler.canScheduleExact()) }
+    // The system settings screen for enabling exact alarms is a separate Activity; re-read on
+    // resume so coming back here reflects a change made there instead of showing a stale value.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canScheduleExact = container.alarmScheduler.canScheduleExact()
+    }
 
     Scaffold(
         topBar = {

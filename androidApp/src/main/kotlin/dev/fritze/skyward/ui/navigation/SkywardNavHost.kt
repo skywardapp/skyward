@@ -15,8 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -115,8 +113,12 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
 }
 
 private fun androidx.navigation.NavController.navigateToTopLevel(route: String) {
+    // Routes.UPCOMING, not graph.findStartDestination().id: the bottom bar (and thus this
+    // function) is only ever shown once onboarding is done, but the graph's start destination
+    // is still ONBOARDING for the composition that removed it, so findStartDestination() can
+    // resolve to a route that's no longer on the back stack and silently no-op the popUpTo.
     navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(Routes.UPCOMING) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }

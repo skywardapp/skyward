@@ -1,5 +1,6 @@
 package dev.fritze.skyward.ui.upcoming
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,7 +96,7 @@ private fun FilterRow(
         FilterChip(selected = scope == UpcomingScope.ALL, onClick = { onScopeChange(UpcomingScope.ALL) }, label = { Text("All") })
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         for (phenomenon in Phenomenon.entries) {
@@ -134,11 +136,12 @@ private fun anchor(occ: Occurrence): Instant = occ.peakTime ?: occ.window.start
 
 private fun locationLine(item: UpcomingItem): String {
     val travelKm = item.bestVisres.travelDistanceKm
-    return if (item.bestVisres.visibleAtLocation || travelKm == null) {
-        "Visible from ${item.bestLocation.name} — ${qualityLabel(item.bestVisres.quality)}"
-    } else {
-        "${travelKm.toInt()} km ${dev.fritze.skyward.core.format.compassOf(item.bestVisres.travelBearingDeg)} of ${item.bestLocation.name}"
+    if (item.bestVisres.visibleAtLocation || travelKm == null) {
+        return "Visible from ${item.bestLocation.name} — ${qualityLabel(item.bestVisres.quality)}"
     }
+    val compass = dev.fritze.skyward.core.format.compassOf(item.bestVisres.travelBearingDeg)
+    val direction = if (compass.isEmpty()) "" else "$compass "
+    return "${travelKm.toInt()} km ${direction}of ${item.bestLocation.name}"
 }
 
 private fun qualityLabel(quality: Quality) = when (quality) {

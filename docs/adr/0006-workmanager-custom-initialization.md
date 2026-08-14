@@ -15,8 +15,9 @@ no-arg constructor.
 
 WorkManager's default auto-initialization (via the `androidx.startup`
 `InitializationProvider`, wired automatically by the `work-runtime-ktx`
-manifest merge) only knows how to construct workers with a no-arg
-`(Context, WorkerParameters)` constructor via reflection.
+manifest merge) only knows how to construct workers reflectively via the
+standard two-argument `(Context, WorkerParameters)` constructor that
+WorkManager 2.10.5 supplies itself.
 
 ## Decision
 

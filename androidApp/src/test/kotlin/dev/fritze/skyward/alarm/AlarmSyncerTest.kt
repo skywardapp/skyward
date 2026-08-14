@@ -116,6 +116,23 @@ class AlarmSyncerTest {
     }
 
     @Test
+    fun pastDuePendingOrRegisteredRowIsMarkedMissedInsteadOfFiringImmediately() = runTest {
+        val repository = repo()
+        val pending = notification("n1", now - 1.hours, NotificationStatus.PENDING)
+        val registered = notification("n2", now - 2.hours, NotificationStatus.REGISTERED)
+        repository.upsert(pending)
+        repository.upsert(registered)
+        val scheduler = FakeAlarmScheduler()
+
+        AlarmSyncer.sync(listOf(pending, registered), scheduler, repository, now)
+
+        assertEquals(0, scheduler.scheduled.size)
+        assertEquals(setOf("n1", "n2"), scheduler.cancelled)
+        assertEquals(NotificationStatus.MISSED, repository.getById(pending.id)?.status)
+        assertEquals(NotificationStatus.MISSED, repository.getById(registered.id)?.status)
+    }
+
+    @Test
     fun firedRowsAreLeftAlone() = runTest {
         val repository = repo()
         val n = notification("n1", now - 1.hours, NotificationStatus.FIRED)

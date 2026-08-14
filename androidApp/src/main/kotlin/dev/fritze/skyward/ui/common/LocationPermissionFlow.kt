@@ -2,7 +2,9 @@ package dev.fritze.skyward.ui.common
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.location.Location
 import android.location.LocationManager
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
@@ -65,14 +67,22 @@ fun rememberLocationPermissionRequester(onLocation: (GeoPoint?) -> Unit): () -> 
     }
 }
 
+/** getLastKnownLocation() can return "quite old" cached fixes (its own docs say to always check age); reject anything older than this. */
+private val MAX_LOCATION_AGE_MILLIS = 30 * 60 * 1000L
+
 private fun readLastKnownCoarseLocation(context: android.content.Context): GeoPoint? {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
     val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager ?: return null
     val providers = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
-    for (provider in providers) {
-        if (!manager.isProviderEnabled(provider)) continue
-        val location = runCatching { manager.getLastKnownLocation(provider) }.getOrNull() ?: continue
-        return GeoPoint(location.latitude, location.longitude)
-    }
-    return null
+    // Collect every enabled provider's cached fix and pick the newest by elapsed-realtime (not
+    // Location.getTime()/wall-clock, which isn't monotonic) -- the first enabled provider isn't
+    // necessarily the freshest one.
+    val newest = providers
+        .filter { manager.isProviderEnabled(it) }
+        .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+        .maxByOrNull(Location::getElapsedRealtimeNanos)
+        ?: return null
+    val ageMillis = (SystemClock.elapsedRealtimeNanos() - newest.elapsedRealtimeNanos) / 1_000_000
+    if (ageMillis > MAX_LOCATION_AGE_MILLIS) return null
+    return GeoPoint(newest.latitude, newest.longitude)
 }

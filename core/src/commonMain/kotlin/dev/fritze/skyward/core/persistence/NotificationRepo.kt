@@ -30,7 +30,7 @@ class NotificationRepo(private val db: SkywardDatabase) {
     }
 
     suspend fun getPendingDue(now: Instant): List<PlannedNotification> = withContext(Dispatchers.Default) {
-        db.plannedNotificationQueries.selectPendingDue(now.toString()).executeAsList().map { it.toModel() }
+        db.plannedNotificationQueries.selectPendingDue(now.toIsoFixed()).executeAsList().map { it.toModel() }
     }
 
     suspend fun upsert(notification: PlannedNotification) = withContext(Dispatchers.Default) {
@@ -39,18 +39,18 @@ class NotificationRepo(private val db: SkywardDatabase) {
             occurrence_id = notification.occurrenceId,
             rule_id = notification.ruleId,
             location_id = notification.locationId,
-            fire_at = notification.fireAt.toString(),
+            fire_at = notification.fireAt.toIsoFixed(),
             status = notification.status.name,
             precision = notification.precision.name,
             title = notification.title,
             body = notification.body,
-            created_at = notification.createdAt.toString(),
-            fired_at = notification.firedAt?.toString(),
+            created_at = notification.createdAt.toIsoFixed(),
+            fired_at = notification.firedAt?.toIsoFixed(),
         )
     }
 
     suspend fun updateStatus(id: String, status: NotificationStatus, firedAt: Instant?) = withContext(Dispatchers.Default) {
-        db.plannedNotificationQueries.updateStatus(status.name, firedAt?.toString(), id)
+        db.plannedNotificationQueries.updateStatus(status.name, firedAt?.toIsoFixed(), id)
     }
 
     suspend fun updatePrecision(id: String, precision: Precision) = withContext(Dispatchers.Default) {
@@ -62,7 +62,7 @@ class NotificationRepo(private val db: SkywardDatabase) {
     }
 
     suspend fun pruneFiredBefore(instant: Instant) = withContext(Dispatchers.Default) {
-        db.plannedNotificationQueries.pruneFiredBefore(instant.toString())
+        db.plannedNotificationQueries.pruneFiredBefore(instant.toIsoFixed())
     }
 
     private fun Planned_notification.toModel() = PlannedNotification(
