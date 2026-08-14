@@ -18,6 +18,7 @@ import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
+import dev.fritze.skyward.core.persistence.SyncImportRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
 import dev.fritze.skyward.core.sources.AuroraSource
@@ -65,6 +66,7 @@ class AppContainer(context: Context) {
     val notificationRepo = NotificationRepo(database)
     val sourceStateRepo = SourceStateRepo(database)
     val settingsRepo = SettingsRepo(database)
+    val syncImportRepo = SyncImportRepo(database)
 
     val visibilityModels: Map<Phenomenon, VisibilityModel> = mapOf(
         Phenomenon.SOLAR_ECLIPSE to SolarEclipseVisibilityModel(),

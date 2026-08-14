@@ -46,13 +46,14 @@ class LocationRepo(private val db: SkywardDatabase) {
     suspend fun delete(id: String) = withContext(Dispatchers.Default) {
         db.savedLocationQueries.deleteById(id)
     }
-
-    private fun Saved_location.toModel() = SavedLocation(
-        id = id,
-        name = name,
-        point = GeoPoint(lat_deg, lon_deg),
-        isPrimary = is_primary != 0L,
-        createdAt = Instant.parse(created_at),
-        modifiedAt = Instant.parse(modified_at),
-    )
 }
+
+/** Also used by [SyncImportRepo], which reads/writes `saved_location` rows on its own transaction. */
+internal fun Saved_location.toModel() = SavedLocation(
+    id = id,
+    name = name,
+    point = GeoPoint(lat_deg, lon_deg),
+    isPrimary = is_primary != 0L,
+    createdAt = Instant.parse(created_at),
+    modifiedAt = Instant.parse(modified_at),
+)
