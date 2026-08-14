@@ -31,10 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.sync.SyncImportError
 import dev.fritze.skyward.data.AppContainer
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,7 +58,11 @@ private val IMPORT_MIME_FILTER = arrayOf("*/*")
 fun SyncScreen(container: AppContainer, onBack: () -> Unit) {
     val viewModel: SyncViewModel = viewModel { SyncViewModel(container) }
     val context = LocalContext.current
-    val controller = remember { SyncUiController(viewModel, context.contentResolver) }
+    // container.applicationScope, not viewModelScope: this screen's ViewModel is scoped to its
+    // Navigation-Compose back-stack entry, which is cleared -- cancelling viewModelScope -- the
+    // moment onBack() pops it, i.e. exactly when a destructive "replace everything" import is
+    // most likely to be mid-flight. applicationScope is process-lifetime, so it survives that.
+    val controller = remember { SyncUiController(viewModel, container.applicationScope, context.contentResolver) }
     var showReplaceConfirm by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(EXPORT_MIME)) { uri ->
@@ -128,14 +132,16 @@ fun SyncScreen(container: AppContainer, onBack: () -> Unit) {
 
 /**
  * Owns the export/import mutable UI state and IO so [SyncScreen] itself
- * stays declarative wiring. Launches on [SyncViewModel.viewModelScope]
- * rather than a composition-scoped coroutine, so navigating back mid-import
- * can't cancel it after `applyImport`'s destructive "replace everything"
- * deletes have already run; [isBusy] rejects a second call while one is in
- * flight, so a double-tap can't interleave two imports.
+ * stays declarative wiring. Launches on the process-lifetime [scope]
+ * (`container.applicationScope`) rather than a composition- or
+ * ViewModel-scoped coroutine, so navigating back mid-import can't cancel it
+ * after `applyImport`'s destructive "replace everything" deletes have
+ * already run; [isBusy] rejects a second call while one is in flight, so a
+ * double-tap can't interleave two imports.
  */
 private class SyncUiController(
     private val viewModel: SyncViewModel,
+    private val scope: CoroutineScope,
     private val contentResolver: ContentResolver,
 ) {
     var statusMessage by mutableStateOf<String?>(null); private set
@@ -146,7 +152,7 @@ private class SyncUiController(
     fun export(uri: Uri?, appVersion: String) {
         if (uri == null || isBusy) return
         isBusy = true
-        viewModel.viewModelScope.launch {
+        scope.launch {
             val text = viewModel.buildExportText(appVersion)
             val wrote = runCatching { withContext(Dispatchers.IO) { contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } } }.isSuccess
             if (wrote) {
@@ -163,7 +169,7 @@ private class SyncUiController(
     fun import(uri: Uri?, replaceEverything: Boolean) {
         if (uri == null || isBusy) return
         isBusy = true
-        viewModel.viewModelScope.launch {
+        scope.launch {
             val text = withContext(Dispatchers.IO) { readText(uri) }
             if (text == null) {
                 errorMessage = "Couldn't read that file."
