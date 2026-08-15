@@ -269,6 +269,13 @@ jobs:
       # one that already published. `gh release create` uploads every asset
       # before the release goes live (a draft under the hood), which is the
       # sequencing Immutable Releases requires — nothing extra to do for it.
+      #
+      # --verify-tag matters here specifically because the release becomes
+      # permanent the moment it publishes: without it, `gh release create`
+      # silently creates a *new* tag off the default branch if `$TAG` isn't
+      # found on the remote (e.g. deleted between the checkout above and this
+      # step), so the published release would point at the wrong commit —
+      # with no way to fix it afterwards. Fail instead of guessing.
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -285,5 +292,6 @@ jobs:
           fi
           gh release create "$TAG" "$APK" "$FLATPACK" \
             --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
             --title "$TAG" \
             --generate-notes

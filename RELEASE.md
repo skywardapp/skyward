@@ -224,12 +224,13 @@ flatpak/build.sh
 GitHub's [Immutable Releases](https://github.blog/changelog/2025-08-26-releases-now-support-immutability-in-public-preview/)
 (public preview) locks a release's tag and assets the moment it publishes —
 none of them can be added, replaced or deleted afterwards, including by an
-admin. There is no API for it yet, so this is a manual, one-time toggle:
-**repo Settings → General → "Releases"**. `release-on-tag.yml` (above) is
-already written to only ever create a release and never overwrite one, so
-turning this on changes nothing about how it runs — it just makes GitHub
-enforce, at the platform level, what the workflow already refuses to do
-itself.
+admin. This is a one-time toggle, either in **repo Settings → General →
+"Releases"**, or via the REST API (`PUT /repos/{owner}/{repo}/immutable-releases`,
+needs admin access; `GET` on the same path checks current status). Either
+way, `release-on-tag.yml` (above) is already written to only ever create a
+release and never overwrite one, so turning this on changes nothing about
+how it runs — it just makes GitHub enforce, at the platform level, what the
+workflow already refuses to do itself.
 
 Independent of every other item here — no dependency either way — so do it
 whenever, ideally before the first tag ships: the setting only protects
