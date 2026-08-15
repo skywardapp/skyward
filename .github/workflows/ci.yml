@@ -12,9 +12,21 @@ concurrency:
 # Android instrumented tests (§17.5) are NOT here — they need an emulator and
 # live in android-ui-tests.yml, which records the screen while they run.
 #
-# §17.5b's release-build checks (assembleFossRelease / assemblePlayRelease,
-# reproducibility diffoscope diff, dependency-set-parity between flavours)
-# need a real signing config and land with M7.
+# §17.5b's release-build checks land with M7:
+#   - dependency-set-parity between flavours runs inside `./gradlew check`
+#     (checkFlavourDependencyParity, androidApp/build.gradle.kts) alongside
+#     the manifest-diff and licence-allowlist checks, all three in the
+#     `check` job below.
+#   - assembleFossRelease/assemblePlayRelease succeeding is exercised by the
+#     `check` job too. No real signing key is required for either — both
+#     flavours' release build types are wired to sign with the owner's key
+#     only when keystore.properties/env vars supply one (§15.4); absent
+#     that, the release APK builds unsigned, which is sufficient for these
+#     checks (the reproducibility check below explicitly excludes the
+#     signing block from its comparison).
+#   - the reproducibility check (two clean fossRelease builds, byte-identical
+#     excluding the signing block) is its own job below — it does two full
+#     clean builds and would otherwise double the main job's runtime.
 jobs:
   check:
     name: Build & check
@@ -71,6 +83,9 @@ jobs:
             | tee /tmp/debug-matches.txt
           grep -q "occurrences in horizon" /tmp/debug-matches.txt
 
+      - name: Assemble both Android flavours (release)
+        run: ./gradlew :androidApp:assembleFossRelease :androidApp:assemblePlayRelease --stacktrace
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,3 +96,35 @@ jobs:
             **/build/reports/lint-results-*.html
           retention-days: 14
           if-no-files-found: ignore
+
+  # §15.4/§17.5b: two clean fossRelease builds must be byte-identical
+  # (excluding the signing block) — this is what makes F-Droid's own rebuild
+  # able to verify and republish the developer-signed APK. A separate job
+  # because tools/ci/check-reproducible-build.sh does two full clean builds
+  # on its own; folding it into `check` above would double that job's time.
+  reproducible-build:
+    name: fossRelease reproducibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform & build-tools
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build fossRelease twice and diff (excluding the signing block)
+        run: tools/ci/check-reproducible-build.sh

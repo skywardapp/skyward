@@ -1,10 +1,36 @@
 import java.io.File
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose.compiler)
 }
+
+// §15.4 (D11): the production signing key is generated and held by the owner
+// locally — it must never be committed. It reaches this build either via a
+// gitignored `keystore.properties` at the repo root (see keystore.properties.example)
+// or via env vars, so CI/release automation can supply it without a file on disk.
+// Its absence must not break anything: assembleFossRelease/assemblePlayRelease
+// and the reproducibility check (§17.5b) both work fine against an *unsigned*
+// release APK, since that check strips the signing block before comparing
+// anyway. A real key only matters at actual publish time.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun releaseSigningValue(propertyKey: String, envVar: String): String? =
+    keystoreProperties.getProperty(propertyKey)?.ifBlank { null } ?: System.getenv(envVar)?.ifBlank { null }
+
+val releaseStoreFile = releaseSigningValue("storeFile", "SKYWARD_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseSigningValue("storePassword", "SKYWARD_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("keyAlias", "SKYWARD_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("keyPassword", "SKYWARD_RELEASE_KEY_PASSWORD")
+val hasReleaseSigningConfig =
+    releaseStoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "dev.fritze.skyward"
@@ -31,10 +57,27 @@ android {
         create("play") { dimension = "store" }   // Google Play
     }
 
+    signingConfigs {
+        // Same signing config for both flavours (§15.4 step 3) — created only
+        // when the owner's key is actually available, so a signingConfigs
+        // block with unresolved nulls never reaches AGP.
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -168,6 +211,49 @@ run {
     }
 }
 
+// §17.5b (c) / D13: dependency-set parity between flavours. The manifest-diff
+// check above catches permission drift; a flavour pulling in an extra
+// dependency would be a subtler D13 violation that manifest diffing can't
+// see (there is currently no such source — both flavours share the same
+// `dependencies {}` block — but this is the automated enforcement called for
+// by §17.5b, not just a manual invariant to remember).
+run {
+    val fossConfigName = "fossReleaseRuntimeClasspath"
+    val playConfigName = "playReleaseRuntimeClasspath"
+
+    tasks.register("checkFlavourDependencyParity") {
+        group = "verification"
+        description = "Fails if the foss/play release variants resolve to different dependency sets (§17.5b, D13)."
+        outputs.upToDateWhen { false }
+
+        doLast {
+            fun resolvedCoordinates(configName: String): Set<String> {
+                val configuration = configurations.findByName(configName)
+                    ?: error("$configName not found — check androidApp's productFlavors/buildTypes")
+                return configuration.incoming.resolutionResult.allComponents
+                    .mapNotNull { it.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+                    .map { "${it.group}:${it.module}:${it.version}" }
+                    .toSet()
+            }
+
+            val fossDeps = resolvedCoordinates(fossConfigName)
+            val playDeps = resolvedCoordinates(playConfigName)
+            val onlyInFoss = fossDeps - playDeps
+            val onlyInPlay = playDeps - fossDeps
+
+            if (onlyInFoss.isNotEmpty() || onlyInPlay.isNotEmpty()) {
+                throw GradleException(
+                    "androidApp flavours resolve to different dependency sets (D13):\n" +
+                        "  foss-only: $onlyInFoss\n  play-only: $onlyInPlay"
+                )
+            }
+            logger.lifecycle(
+                "checkFlavourDependencyParity: OK — ${fossDeps.size} shared dependencies, no flavour-specific drift."
+            )
+        }
+    }
+}
+
 tasks.named("check") {
-    dependsOn("checkFlavourManifestParity")
+    dependsOn("checkFlavourManifestParity", "checkFlavourDependencyParity")
 }
