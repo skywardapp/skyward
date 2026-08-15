@@ -18,14 +18,16 @@ this repository implements it. In particular:
 
 ## Status
 
-**M6 — Desktop app.** The Linux desktop app is the full §14 application:
-Overview, event map, timeline, sky chart, aurora dashboard, rules and
-settings, with reminders delivered by an in-process scheduler that keeps
-running when the window is closed (tray, autostart, desktop notifications).
+**M7 — Release engineering (in progress).** Signing config, the
+manifest/dependency-parity checks, and the reproducible-build check
+(§17.5b) are wired and green; F-Droid RFP, Play Console setup, Android
+Developer Verification and Flatpak submission are wall-clock, owner-only
+steps still outstanding — see [`RELEASE.md`](RELEASE.md) for the runbook.
 
 Previously landed: M0 skeleton & CI, M1 astronomy core, M2 visibility +
 rules + planner, M3 Android MVP, M4 polled sources, M5 full RuleEditor +
-settings sync. Next is M7 (release engineering).
+settings sync, M6 desktop app (Overview, event map, timeline, sky chart,
+aurora dashboard, rules/settings, tray/autostart/notifications).
 
 ### Running the desktop app
 

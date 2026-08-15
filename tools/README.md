@@ -23,6 +23,12 @@ Both land with the milestones above, not M0.
   segments in the background and stitches them with ffmpeg on stop. Recording
   is best-effort: no device, no `screenrecord`, no ffmpeg → the tests still
   run and the job's result is unchanged.
+- **`check-reproducible-build.sh`** — §15.4/§17.5b's reproducibility check:
+  builds `fossRelease` twice in a clean workspace and asserts the two APKs
+  are reproducible — byte-for-byte identical, or (weaker, logged as such)
+  identical once the signing block is stripped. Lands with M7. Runnable
+  locally too; it just runs `./gradlew clean :androidApp:assembleFossRelease`
+  twice and diffs the results, so budget for two full clean builds.
 
 Both are runnable against a local emulator too — `adb devices` showing one
 device is the only prerequisite:

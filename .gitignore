@@ -20,3 +20,9 @@ desktopApp/build/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png.orig
+
+# §15.4: the release signing key and its credentials — never committed.
+# See keystore.properties.example.
+keystore.properties
+*.jks
+*.keystore
