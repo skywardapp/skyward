@@ -1,5 +1,6 @@
 package dev.fritze.skyward.desktop
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -78,6 +79,15 @@ fun main(args: Array<String>) {
             ),
         )
 
+        // `--background` starts hidden, but whether there is a tray to restore
+        // the window from is only known once the check has answered (null until
+        // then). Without one, staying hidden would leave a running process with
+        // no window and no icon — unreachable. Showing the window is the
+        // degradation; the reminders it was started for keep working either way.
+        LaunchedEffect(trayAvailable) {
+            if (trayAvailable == false) windowVisibility.value = true
+        }
+
         val windowState = rememberWindowState(
             position = WindowPosition.Aligned(Alignment.Center),
             size = DpSize(1280.dp, 800.dp),
@@ -86,7 +96,7 @@ fun main(args: Array<String>) {
             // Background mode without a tray icon would hide the window with
             // nothing left to restore it from, so the tray's absence overrides
             // the setting (§10.3's no-tray degradation path).
-            onCloseRequest = { if (backgroundMode && trayAvailable) windowVisibility.value = false else quit() },
+            onCloseRequest = { if (backgroundMode && trayAvailable == true) windowVisibility.value = false else quit() },
             title = "Skyward",
             state = windowState,
             visible = visible,

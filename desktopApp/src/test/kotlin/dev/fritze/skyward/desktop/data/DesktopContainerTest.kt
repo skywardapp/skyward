@@ -70,28 +70,18 @@ class DesktopContainerTest {
     }
 
     @Test
-    fun aDatabaseBehindTheCurrentSchemaIsMigratedForward() = runBlocking {
-        val file = createTempDirectory("skyward-test").resolve("skyward.db")
-        val container = DesktopContainer(DesktopContainer.openDriver(file))
-        container.locationRepo.upsert(
-            SavedLocation("home", "Home", GeoPoint(52.0, 7.6), isPrimary = true, createdAt = now, modifiedAt = now),
-        )
-        container.close()
-
-        // Pretend the file was written by an older build. The schema is
-        // already at the current shape, so `migrate` has nothing to do — what
-        // is under test is that the stamp is brought forward rather than left
-        // behind, which would re-run the migration on every single launch.
-        val driver = DesktopContainer.openDriver(file)
-        setUserVersion(driver, 1L)
-        DesktopContainer.migrateIfNeeded(driver)
-        assertEquals(SkywardDatabase.Schema.version, readUserVersion(driver))
-        driver.close()
-
-        val reopened = DesktopContainer(DesktopContainer.openDriver(file))
-        val locations = reopened.locationRepo.getAll()
-        reopened.close()
-        assertEquals(1, locations.size, "migration must not lose rows")
+    fun theOpenDecisionCoversEveryVersionRelationship() {
+        // Tested through `schemaAction` rather than a real file, because the
+        // MIGRATE branch cannot be reached through the live schema: it is at
+        // version 1, and the only lower value is 0, which means "no database
+        // yet". Driving it here means the branch is covered *now*, rather than
+        // the first time someone adds a `.sqm` and finds out.
+        assertEquals(DesktopContainer.SchemaAction.CREATE, DesktopContainer.schemaAction(currentVersion = 0L, schemaVersion = 1L))
+        assertEquals(DesktopContainer.SchemaAction.NONE, DesktopContainer.schemaAction(currentVersion = 1L, schemaVersion = 1L))
+        assertEquals(DesktopContainer.SchemaAction.MIGRATE, DesktopContainer.schemaAction(currentVersion = 1L, schemaVersion = 2L))
+        assertEquals(DesktopContainer.SchemaAction.MIGRATE, DesktopContainer.schemaAction(currentVersion = 3L, schemaVersion = 7L))
+        // A file from a newer build: never downgraded, never recreated.
+        assertEquals(DesktopContainer.SchemaAction.NONE, DesktopContainer.schemaAction(currentVersion = 9L, schemaVersion = 1L))
     }
 
     @Test

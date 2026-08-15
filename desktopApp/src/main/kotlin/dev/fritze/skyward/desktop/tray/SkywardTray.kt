@@ -3,7 +3,8 @@ package dev.fritze.skyward.desktop.tray
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -11,6 +12,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.window.ApplicationScope
 import com.kdroid.composetray.tray.api.Tray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -37,17 +41,21 @@ data class TrayActions(
  * available — §10.3's specified "no-tray degradation path". A desktop
  * without a tray must still run the app; it just loses the shortcut.
  *
- * Returns whether an icon was actually rendered, because background mode is
- * unusable without one: hiding the window with no tray to restore it from
- * would strand the process with no way back to it.
+ * Returns whether an icon was actually rendered — null while that is still
+ * being determined. Callers need this because background mode is unusable
+ * without an icon: hiding the window with no tray to restore it from would
+ * strand the process with no way back to it.
  */
 @Composable
-fun ApplicationScope.SkywardTray(actions: TrayActions): Boolean {
-    // The library throws (or logs and no-ops) when StatusNotifierWatcher isn't
-    // on the bus. Deciding once, at first composition, keeps a missing tray
-    // from being retried on every recomposition.
-    val trayAvailable = remember { runCatching { isTrayHostLikelyPresent() }.getOrDefault(false) }
-    if (!trayAvailable) return false
+fun ApplicationScope.SkywardTray(actions: TrayActions): Boolean? {
+    // Asked once per process, off the composition thread: the check shells out
+    // to `gdbus`, and a session bus that never answers would otherwise freeze
+    // the first frame for as long as the timeout. Null until it answers, so
+    // nobody acts on a guess.
+    val trayAvailable by produceState<Boolean?>(initialValue = null) {
+        value = withContext(Dispatchers.IO) { runCatching { isTrayHostLikelyPresent() }.getOrDefault(false) }
+    }
+    if (trayAvailable != true) return trayAvailable
 
     // No try/catch around the call itself: it is a composable, and the library
     // does its actual DBus work inside a LaunchedEffect where a throw would not
@@ -69,14 +77,60 @@ fun ApplicationScope.SkywardTray(actions: TrayActions): Boolean {
 }
 
 /**
- * A cheap pre-flight check. `DISPLAY`/`WAYLAND_DISPLAY` being absent means
- * there is no session to put an icon into at all — the case that actually
- * matters, since a headless run (CI, a `--background` launch from a script
- * with no session) is where an unguarded tray call would blow up rather than
- * degrade.
+ * Whether an icon put in the tray would actually appear somewhere.
+ *
+ * The answer gates more than the icon: background mode hides the window and
+ * relies on the tray to bring it back, so a wrong "yes" here strands the
+ * process with no reachable UI. A `DISPLAY` check alone is not enough for
+ * that — a bare X server (Xvfb, a minimal WM, a session whose panel died)
+ * has a display and no status-notifier host at all.
+ *
+ * So: no session, no tray; otherwise ask the session bus who owns
+ * `org.kde.StatusNotifierWatcher`, which is the name both StatusNotifierItem
+ * hosts and AppIndicator implementations register. `gdbus` is glib, always
+ * present in `org.freedesktop.Platform` — the same reasoning as §10.3's
+ * `notify-send` fallback, and it keeps a DBus client library out of the
+ * build (§19 R8).
  */
-private fun isTrayHostLikelyPresent(): Boolean =
-    !System.getenv("WAYLAND_DISPLAY").isNullOrBlank() || !System.getenv("DISPLAY").isNullOrBlank()
+private fun isTrayHostLikelyPresent(): Boolean {
+    val hasSession = !System.getenv("WAYLAND_DISPLAY").isNullOrBlank() || !System.getenv("DISPLAY").isNullOrBlank()
+    if (!hasSession) return false
+    // Unknown (no gdbus, no session bus, a timeout) is treated as "no tray":
+    // losing the icon degrades gracefully, whereas hiding the window into a
+    // tray that isn't there does not.
+    return dbusNameHasOwner(STATUS_NOTIFIER_WATCHER) == true
+}
+
+private const val STATUS_NOTIFIER_WATCHER = "org.kde.StatusNotifierWatcher"
+private const val DBUS_QUERY_TIMEOUT_SECONDS = 3L
+
+/** Null when the question could not be asked at all, as opposed to answered "no". */
+private fun dbusNameHasOwner(name: String): Boolean? = try {
+    val process = ProcessBuilder(
+        "gdbus", "call", "--session",
+        "--dest", "org.freedesktop.DBus",
+        "--object-path", "/org/freedesktop/DBus",
+        "--method", "org.freedesktop.DBus.NameHasOwner",
+        name,
+    ).redirectErrorStream(true).start()
+
+    if (!process.waitFor(DBUS_QUERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        process.destroy()
+        null
+    } else {
+        // Prints "(true,)" or "(false,)"; anything else means it never got to ask.
+        val output = process.inputStream.bufferedReader().readText().trim()
+        when {
+            process.exitValue() != 0 -> null
+            output.startsWith("(true") -> true
+            output.startsWith("(false") -> false
+            else -> null
+        }
+    }
+} catch (e: Exception) {
+    if (e is InterruptedException) Thread.currentThread().interrupt()
+    null
+}
 
 /**
  * Drawn rather than shipped as a PNG: the icon has to look right against

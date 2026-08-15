@@ -111,6 +111,17 @@ class DesktopContainer(
         driver.close()
     }
 
+    /**
+     * What opening a database file at a given `user_version` should do.
+     *
+     * Split out from [migrateIfNeeded] so the decision can be tested on its
+     * own: while the schema is at version 1 the [MIGRATE] branch is
+     * unreachable through the real schema — the only value below 1 is 0, which
+     * means "no database yet" — and an untestable branch is one that quietly
+     * rots until the first `.sqm` file makes it matter.
+     */
+    internal enum class SchemaAction { CREATE, MIGRATE, NONE }
+
     companion object {
         const val KEY_DEFAULT_RULES_SEEDED = "default_rules_seeded"
 
@@ -135,6 +146,17 @@ class DesktopContainer(
             return driver
         }
 
+        internal fun schemaAction(currentVersion: Long, schemaVersion: Long): SchemaAction = when {
+            currentVersion == 0L -> SchemaAction.CREATE
+            currentVersion < schemaVersion -> SchemaAction.MIGRATE
+            // current >= schema.version. Equal needs nothing; greater is a DB
+            // written by a newer build, and is left alone rather than
+            // "migrated" backwards — SQLDelight has no downgrade path, and
+            // clobbering user data is worse than the failure the queries will
+            // report honestly.
+            else -> SchemaAction.NONE
+        }
+
         internal fun migrateIfNeeded(driver: SqlDriver) {
             val schema = SkywardDatabase.Schema
             val current = driver.executeQuery(
@@ -144,19 +166,16 @@ class DesktopContainer(
                 parameters = 0,
             ).value
 
-            when {
-                current == 0L -> {
+            when (schemaAction(current, schema.version)) {
+                SchemaAction.CREATE -> {
                     schema.create(driver).value
                     setUserVersion(driver, schema.version)
                 }
-                current < schema.version -> {
+                SchemaAction.MIGRATE -> {
                     schema.migrate(driver, current, schema.version).value
                     setUserVersion(driver, schema.version)
                 }
-                // current > schema.version: a DB written by a newer build. Leave it
-                // alone rather than "migrating" backwards — SQLDelight has no
-                // downgrade path, and clobbering user data is worse than the
-                // failure the queries below will report honestly.
+                SchemaAction.NONE -> Unit
             }
         }
 
