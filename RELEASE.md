@@ -41,6 +41,17 @@ doesn't start is a day added to the critical path.
   `-PskywardVersionCode` override the derivation where git history isn't
   available (a source tarball, or a pinned F-Droid recipe).
 
+  **The encoding is positional, so components are bounded: minor and patch
+  ≤ 999, major ≤ 2100** (Android's `versionCode` ceiling is 2100000000), and
+  `v0.0.0` is invalid since Android requires `versionCode` ≥ 1. Out of range,
+  two releases collide on one `versionCode` — `v0.0.1000` and `v0.1.0` both
+  encode to 1000 — so the build and both workflows reject such a tag instead.
+  A version code is permanent once published (no store accepts a re-used or
+  lowered one), which is why this fails loudly rather than warning. Since
+  `auto-tag-main` bumps the patch on every push to `main`, the patch bound is
+  the one you'll actually meet: cut the next minor tag by hand
+  (`git tag v0.2.0 && git push origin --tags`) to reset the patch field.
+
   Because the version is read from `git describe`, any build that needs the
   real version needs the tags fetched — CI checkouts use `fetch-depth: 0` for
   exactly this reason. It stays reproducible (§15.4/§17.5b) because it is a

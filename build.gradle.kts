@@ -76,8 +76,38 @@ run {
         ?.let { (a, b, c) -> Triple(a.toInt(), b.toInt(), c.toInt()) }
         ?: Triple(0, 0, 0)
 
-    // Monotonic and human-decodable: 0.1.0 -> 1000, 1.2.3 -> 1002003. Leaves
-    // room for 999 minors/patches and stays far below Android's 2100000000 cap.
+    // Monotonic and human-decodable: 0.1.0 -> 1000, 1.2.3 -> 1002003.
+    //
+    // The encoding is positional, so each component has to stay inside its
+    // field or it carries into the next one and collides: v0.0.1000 and v0.1.0
+    // both encode to 1000. That is not a hypothetical here — auto-tag-main
+    // increments the patch on every push to main, so the patch component climbs
+    // steadily on its own. Major is bounded too, by Android's 2100000000 ceiling.
+    //
+    // Failing the build is the only safe response. A versionCode is permanent
+    // once published — a store will not accept a re-used or lowered one — so a
+    // collision discovered after the fact cannot be corrected, only worked
+    // around forever. The fix when this trips is to cut the next minor or major
+    // tag by hand, which resets the patch field.
+    val maxComponent = 999
+    val maxMajor = 2100
+    if (baseTag != null) {
+        val problems = buildList {
+            if (major > maxMajor) add("major $major exceeds $maxMajor (Android's versionCode ceiling)")
+            if (minor > maxComponent) add("minor $minor exceeds $maxComponent")
+            if (patch > maxComponent) add("patch $patch exceeds $maxComponent — cut a minor release to reset it")
+            if (major == 0 && minor == 0 && patch == 0) add("v0.0.0 encodes to 0, but Android requires versionCode >= 1")
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                "Release tag $baseTag cannot be encoded as an Android versionCode: " +
+                    problems.joinToString("; ") + ".\n" +
+                    "The MAJOR*1000000 + MINOR*1000 + PATCH encoding needs each component " +
+                    "in range or two different releases can encode to the same versionCode."
+            )
+        }
+    }
+
     // An untagged build gets 1 — deliberately lower than any real release, so a
     // version-less build that reaches a store is rejected as a downgrade rather
     // than silently published over a real one.

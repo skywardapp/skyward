@@ -13,5 +13,8 @@ build file (see the version block in the root `build.gradle.kts`):
     vMAJOR.MINOR.PATCH -> MAJOR * 1000000 + MINOR * 1000 + PATCH
 
 so `v0.1.0` is `1000.txt`, `v0.2.0` is `2000.txt`, `v1.2.3` is `1002003.txt`.
+(Minor and patch are bounded at 999 and major at 2100 so the fields can't carry
+into each other — see RELEASE.md; a tag outside that range is rejected rather
+than built.)
 `./gradlew :androidApp:properties | grep versionCode` prints the current one if
 you'd rather not do the arithmetic.
