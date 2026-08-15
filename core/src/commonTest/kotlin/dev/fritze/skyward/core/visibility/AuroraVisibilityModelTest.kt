@@ -21,6 +21,8 @@ class AuroraVisibilityModelTest {
 
     private val model = AuroraVisibilityModel()
     private val tromso = GeoPoint(69.6492, 18.9553)
+    private val berlin = GeoPoint(52.52, 13.405)
+    private val calgary = GeoPoint(51.0447, -114.0719)
     private val munich = GeoPoint(48.1351, 11.5820)
 
     private fun loc(point: GeoPoint) = SavedLocation(
@@ -58,6 +60,27 @@ class AuroraVisibilityModelTest {
     private val tromsoWinterNight = TimeWindow(Instant.parse("2026-12-15T18:00:00Z"), Instant.parse("2026-12-15T22:00:00Z"))
     // Munich at local noon in July: unambiguous broad daylight.
     private val munichSummerNoon = TimeWindow(Instant.parse("2026-07-15T11:00:00Z"), Instant.parse("2026-07-15T13:00:00Z"))
+    private val fixtureWindow = TimeWindow(Instant.parse("2026-01-15T00:00:00Z"), Instant.parse("2026-01-15T02:00:00Z"))
+
+    @Test
+    fun auroraLocalDetailsFreezeAppendixFixturesForGeomagneticLatitudeAndKpNeeded() {
+        data class Fixture(val point: GeoPoint, val expectedGeomagneticLatDeg: Double, val expectedKpNeeded: Double)
+
+        val fixtures = mapOf(
+            "Tromso" to Fixture(tromso, 67.5, 0.0),
+            "Berlin" to Fixture(berlin, 52.2, 6.9),
+            "Calgary" to Fixture(calgary, 57.4, 4.3),
+            "Munich" to Fixture(munich, 48.2, 8.9),
+        )
+        val occ = threeDayOccurrence(kp = 3.0, window = fixtureWindow)
+
+        fixtures.forEach { (name, fixture) ->
+            val result = model.evaluate(occ, loc(fixture.point), VisibilityContext(now = fixtureWindow.start, ovationGrid = null))
+            val details = assertNotNull(result.localDetails as? LocalDetails.AuroraLocal, name)
+            assertEquals(fixture.expectedGeomagneticLatDeg, details.geomagneticLatDeg, 0.2, name)
+            assertEquals(fixture.expectedKpNeeded, details.kpNeeded, 0.1, name)
+        }
+    }
 
     @Test
     fun highGeomagneticLatitudeAtModerateKpIsExcellentInDarkness() {
@@ -74,7 +97,7 @@ class AuroraVisibilityModelTest {
 
     @Test
     fun lowGeomagneticLatitudeGetsTravelGuidanceTowardThePole() {
-        val occ = threeDayOccurrence(kp = 3.0, window = tromsoWinterNight) // visLat = 66-6 = 60; Munich gmLat ~48.2
+        val occ = threeDayOccurrence(kp = 3.0, window = tromsoWinterNight) // visLat = 66-6 = 60
         val result = model.evaluate(occ, loc(munich), VisibilityContext(now = tromsoWinterNight.start, ovationGrid = null))
 
         assertTrue(!result.visibleAtLocation)
