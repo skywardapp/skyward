@@ -61,15 +61,16 @@ android {
         // nothing here needs editing to match it.
         versionCode = rootProject.extra["skywardVersionCode"] as Int
         versionName = rootProject.extra["skywardVersionName"] as String
+        buildConfigField("String", "SKYWARD_RELEASE_TAG", "\"${rootProject.extra["skywardReleaseTag"] as String}\"")
         // §17.5: the instrumented smoke tests run against BOTH flavours, so the
         // runner is configured on defaultConfig rather than per-flavour.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // §15.1 / D13: the ONLY difference between the two flavours is the exact-alarm
-    // permission (§10.2). No BuildConfig fields, no dependency differences, no
-    // source-set Kotlin code — see androidApp/src/foss and src/play, which
-    // each contain exactly one file (AndroidManifest.xml).
+    // permission (§10.2). No flavour-specific BuildConfig fields, dependency
+    // differences, or source-set Kotlin code — see androidApp/src/foss and
+    // src/play, which each contain exactly one file (AndroidManifest.xml).
     flavorDimensions += "store"
     productFlavors {
         create("foss") { dimension = "store" }   // F-Droid + GitHub releases

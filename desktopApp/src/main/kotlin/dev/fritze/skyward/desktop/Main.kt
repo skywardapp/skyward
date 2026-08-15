@@ -22,8 +22,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
-/** Shown in the About section and written into §12 export files. Kept in step with `compose.desktop`'s `packageVersion`. */
-const val APP_VERSION = "0.1.0"
+/** Shown in the About section and written into §12 export files. */
+val APP_VERSION: String get() = DesktopBuildInfo.appVersion
 
 /**
  * §14: single window, ~1280×800 default, left nav rail. §10.3: with

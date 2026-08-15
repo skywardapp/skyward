@@ -33,4 +33,6 @@ providers (NOAA, NASA) to fetch aurora, comet, and terrestrial-event data —
 everything else (eclipses, meteor showers, moon events, sky positions) is
 computed entirely on-device. Your saved locations never leave your device.
 
+Privacy policy: https://skywardapp.github.io/skyward/privacy-policy.html
+
 Free software, GPL-3.0-or-later.

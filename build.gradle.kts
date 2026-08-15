@@ -119,6 +119,7 @@ run {
 
     extra["skywardVersionName"] = overrideVersionName ?: derivedVersionName
     extra["skywardVersionCode"] = overrideVersionCode ?: derivedVersionCode
+    extra["skywardReleaseTag"] = if (baseTag != null && describedVersion == baseTag) baseTag else ""
     // jpackage rejects anything but numeric MAJOR.MINOR.PATCH, so the desktop
     // packaging gets the bare tag numbers with no "-3-gabc1234" suffix. Untagged
     // desktop builds keep 0.1.0 rather than 0.0.0, since some jpackage targets
