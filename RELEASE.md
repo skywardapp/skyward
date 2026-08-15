@@ -19,9 +19,12 @@ doesn't start is a day added to the critical path.
 - **`checkDependencyLicenses`** (root `build.gradle.kts`) — fails the build on
   any shipped dependency whose licence isn't on the §16 allowlist.
 - **`tools/ci/check-reproducible-build.sh`** — builds `fossRelease` twice from
-  a clean workspace and asserts the two APKs are identical once the signing
-  block is stripped (§15.4/§17.5b). Runs in its own CI job
-  (`.github/workflows/ci.yml`, `reproducible-build`) and locally:
+  a clean workspace and asserts the two APKs are reproducible (§15.4/§17.5b):
+  byte-for-byte identical first, and only if that fails, identical *content*
+  once the signing block is stripped (weaker — logged as such, since it can
+  miss zip-level nondeterminism the byte comparison would have caught). Runs
+  in its own CI job (`.github/workflows/ci.yml`, `reproducible-build`) and
+  locally:
   ```sh
   tools/ci/check-reproducible-build.sh
   ```

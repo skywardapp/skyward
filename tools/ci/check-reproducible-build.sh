@@ -61,16 +61,24 @@ fi
 
 log "builds are not byte-for-byte identical — checking whether the difference is confined to the signing block..."
 
-# "Excluding the signature block" (§15.4) means stripping META-INF's signing
-# entries (MANIFEST.MF, the certificate/signature files a real signing config
-# adds) before comparing what's left. This is the fallback, not the primary
-# check, precisely because it only compares extracted *content* and can't see
-# zip-level nondeterminism the byte comparison above already ruled out.
+# "Excluding the signature block" (§15.4) means stripping only the actual
+# v1 jar-signing artifacts — MANIFEST.MF and the certificate/signature files
+# (*.RSA/*.DSA/*.EC/*.SF) a real signing config adds directly under
+# META-INF/ — not the whole directory. META-INF/ also carries real content
+# unrelated to signing (e.g. META-INF/services/* ServiceLoader registration
+# for Ktor's engine/serialization discovery — see desktopApp's ADR 0007 for
+# why that mechanism matters here); deleting all of META-INF/ would let a
+# genuine difference there pass silently. This is the fallback tier, not the
+# primary check, precisely because it only compares extracted *content* and
+# can't see zip-level nondeterminism the byte comparison above already ruled
+# out.
 extract_stripped() {
   local apk="$1" dest="$2"
   mkdir -p "$dest"
   unzip -q "$apk" -d "$dest"
-  rm -rf "$dest/META-INF"
+  find "$dest/META-INF" -maxdepth 1 -type f \
+    \( -iname 'MANIFEST.MF' -o -iname '*.RSA' -o -iname '*.DSA' -o -iname '*.EC' -o -iname '*.SF' \) \
+    -delete 2>/dev/null || true
 }
 
 extract_stripped "$WORKDIR/build1.apk" "$WORKDIR/build1"
