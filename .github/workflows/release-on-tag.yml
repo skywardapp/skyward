@@ -38,7 +38,10 @@ on:
         required: false
         type: string
     # Declared so a caller can map just these rather than `secrets: inherit`.
-    # All optional: absent, the build below produces a valid unsigned APK.
+    # `required: false` only keeps this schema-valid for a caller that omits
+    # them (e.g. before the owner has generated the release key) — the job
+    # itself now refuses to publish without all four, see "Require release
+    # signing secrets" below.
     secrets:
       SKYWARD_RELEASE_STORE_FILE_BASE64:
         required: false
@@ -96,6 +99,37 @@ jobs:
           fi
           if [ "$((10#$major))" -eq 0 ] && [ "$((10#$minor))" -eq 0 ] && [ "$((10#$patch))" -eq 0 ]; then
             echo "Tag 'v0.0.0' encodes to versionCode 0, but Android requires >= 1." >&2
+            exit 1
+          fi
+
+      # The four SKYWARD_RELEASE_* secrets are individually optional (a caller
+      # can supply none, and the build below falls back to a valid *unsigned*
+      # APK — see build.gradle.kts) but an unsigned APK cannot be installed on
+      # Android at all ("App not installed as package appears to be invalid").
+      # That fallback exists so CI and local builds never break while the
+      # owner's release key doesn't exist yet (RELEASE.md item 1) — it was
+      # never meant to reach a public GitHub Release. Fail fast, before
+      # spending any build time, rather than publishing another asset that
+      # looks like a real release but can't be installed.
+      - name: Require release signing secrets
+        env:
+          SKYWARD_RELEASE_STORE_FILE_BASE64: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}
+          SKYWARD_RELEASE_STORE_PASSWORD: ${{ secrets.SKYWARD_RELEASE_STORE_PASSWORD }}
+          SKYWARD_RELEASE_KEY_ALIAS: ${{ secrets.SKYWARD_RELEASE_KEY_ALIAS }}
+          SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SKYWARD_RELEASE_STORE_FILE_BASE64:-}" ] && missing+=(SKYWARD_RELEASE_STORE_FILE_BASE64)
+          [ -z "${SKYWARD_RELEASE_STORE_PASSWORD:-}" ] && missing+=(SKYWARD_RELEASE_STORE_PASSWORD)
+          [ -z "${SKYWARD_RELEASE_KEY_ALIAS:-}" ] && missing+=(SKYWARD_RELEASE_KEY_ALIAS)
+          [ -z "${SKYWARD_RELEASE_KEY_PASSWORD:-}" ] && missing+=(SKYWARD_RELEASE_KEY_PASSWORD)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Refusing to publish tag '$TAG': missing repo secret(s) ${missing[*]}." >&2
+            echo "Without them the fossRelease APK builds unsigned, and an unsigned APK" >&2
+            echo "cannot be installed on Android — publishing it would only hand users a" >&2
+            echo "broken download. Generate the release key and add these as repo secrets" >&2
+            echo "first (RELEASE.md item 1), then re-run this workflow." >&2
             exit 1
           fi
 

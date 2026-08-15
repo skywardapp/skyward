@@ -62,7 +62,11 @@ doesn't start is a day added to the critical path.
   "flat pack" (the `createReleaseDistributable` jlinked tree, tarred up
   as-is — no installer, unpack and run `bin/skyward`) for that tag and
   publishes a GitHub Release with generated notes and both attached.
-  Pushing a `v*` tag by hand does the same thing on its own.
+  Pushing a `v*` tag by hand does the same thing on its own. The publish job
+  refuses to run without all four `SKYWARD_RELEASE_*` secrets (item 1 below)
+  — an unsigned APK can't be installed on Android at all, so until the key
+  exists this job fails loudly instead of publishing a broken download (this
+  currently blocks the flat pack too, since it's built in the same job).
 - **Release signing wiring** (`androidApp/build.gradle.kts`) — reads a
   keystore from `keystore.properties` (gitignored, see
   `keystore.properties.example`) or `SKYWARD_RELEASE_STORE_FILE` /
