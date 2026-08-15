@@ -48,19 +48,30 @@ Every item below needs a human with legal identity, payment method, or
 standing in a review community — none of which this repo's automation can
 stand in for. Ordered by how early each has to start, not by execution order.
 
-### 0. Decide the app name and id (R9) — blocks everything else
+### 0. Decide the app id (R9) — blocks everything else
 
-`dev.fritze.skyward` is a placeholder applicationId; `Skyward` is a
-placeholder name. Both are **immutable after first publication on either
-store**, and Play additionally locks the developer identity to whatever id
-is used first. Decide before doing anything below — a same-day rename after
-the RFP/tester-gate has started forces starting over on both stores.
+`dev.fritze.skyward` is a placeholder applicationId. **The applicationId is
+immutable after first publication on either store**, and Play additionally
+locks the developer identity to whatever id is used first — decide it
+before doing anything below, since a rename after the RFP/tester-gate has
+started means starting over on both stores.
+
+`Skyward` (the store-listing display name/title) is a separate, much lower-
+stakes decision: both stores let you change it after publication without
+touching the applicationId. Still worth deciding deliberately up front —
+the F-Droid RFP and metadata reference it as filed — but it isn't the R9
+gate; the applicationId is.
 
 If the id changes: update `applicationId`/`namespace` in
 `androidApp/build.gradle.kts`, `flatpak/dev.fritze.Skyward.*`'s reverse-DNS
 name, and `fastlane/metadata/android/en-US/title.txt`.
 
-### 1. Generate the signing key (§15.4 step 1) — gates everything else
+### 1. Generate the signing key (§15.4 step 1)
+
+Gates Play publication and Android Developer Verification, and gates
+F-Droid's *developer-signed* republish (item 3's step 3) — but not starting
+the F-Droid RFP itself, which only needs item 0. Do this in parallel with
+item 3, not after it.
 
 Locally, once, and keep it somewhere backed up and never committed:
 
@@ -111,6 +122,13 @@ runs on its own schedule. Neither speeds up by writing more code.
 
 ### 3. F-Droid RFP + `fdroiddata` merge request
 
+The RFP and volunteer review below need only item 0 (the app id) — F-Droid
+initially builds and signs with *its own* key, so this doesn't wait on item
+1. What does need item 1 is reproducibility: F-Droid only switches to
+publishing the *developer-signed* APK (§15.4's whole point — the thing that
+makes cross-store updates work) once it can verify a build against the real
+key, so get item 1 done before or during review rather than after.
+
 1. File a "Request For Packaging" (RFP) issue against
    [`fdroiddata`](https://gitlab.com/fdroid/fdroiddata) once the app id (item
    0) is final.
@@ -121,8 +139,10 @@ runs on its own schedule. Neither speeds up by writing more code.
    nothing to prepare there beyond keeping `changelogs/<versionCode>.txt`
    current per release (`fastlane/README.md`).
 3. Open the merge request. This is volunteer-reviewed — **budget weeks, not
-   days** (§15.4). Once merged, publishing is 24–48h and later version bumps
-   are picked up automatically via `UpdateCheckMode`.
+   days** (§15.4). Once merged, publishing typically follows in 24–48h
+   (F-Droid's own estimate; actual timing varies with their build queue —
+   check [F-Droid Monitor](https://monitor.f-droid.org/) for current status),
+   and later version bumps are picked up automatically via `UpdateCheckMode`.
 4. Locally verify before submitting: `fdroid build` in the official F-Droid
    builder Docker image (§18's accept criterion) — this needs the
    `fdroidserver` tooling and is intentionally not part of this repo's own
@@ -154,8 +174,11 @@ flatpak/build.sh
 
 ## Order of operations
 
-Item 0 (name/id) blocks 1, 3, 4, and 5. Item 1 (signing key) blocks 2's
-step 3 onward, 3, and 4. Items 2 and 3 run independently once 0 and 1 are
-done — start 2 as early as possible since its 12×14-day gate is the longest
-pole. Item 4 needs 1 and should be scheduled well before 2026-09-30. Item 5
-is independent of the Android-side items entirely.
+Item 0 (app id) blocks 1, 2, 3's RFP, 4, and 5. Item 1 (signing key) blocks
+2's step 3 onward and 4; it does *not* block starting item 3 — the RFP and
+volunteer review only need the app id, and only F-Droid's later switch to
+publishing the developer-signed APK needs the real key, so run 1 and 3 in
+parallel rather than sequencing them. Start item 2 as early as possible once
+0 is done — its 12×14-day tester gate is the longest pole regardless of
+what else is in flight. Item 4 needs 1 and should be scheduled well before
+2026-09-30. Item 5 is independent of the Android-side items entirely.

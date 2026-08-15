@@ -29,8 +29,23 @@ val releaseStoreFile = releaseSigningValue("storeFile", "SKYWARD_RELEASE_STORE_F
 val releaseStorePassword = releaseSigningValue("storePassword", "SKYWARD_RELEASE_STORE_PASSWORD")
 val releaseKeyAlias = releaseSigningValue("keyAlias", "SKYWARD_RELEASE_KEY_ALIAS")
 val releaseKeyPassword = releaseSigningValue("keyPassword", "SKYWARD_RELEASE_KEY_PASSWORD")
-val hasReleaseSigningConfig =
-    releaseStoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
+
+// All four or none: a *partial* config (e.g. a typo'd property key silently
+// dropping just the password) must fail loudly rather than quietly falling
+// back to an unsigned release build — that failure mode would only surface
+// at actual publish time, the worst possible place to discover it.
+val suppliedReleaseSigningInputs = mapOf(
+    "storeFile" to releaseStoreFile,
+    "storePassword" to releaseStorePassword,
+    "keyAlias" to releaseKeyAlias,
+    "keyPassword" to releaseKeyPassword,
+).filterValues { it != null }
+val hasReleaseSigningConfig = suppliedReleaseSigningInputs.size == 4
+check(suppliedReleaseSigningInputs.isEmpty() || hasReleaseSigningConfig) {
+    "Partial release signing configuration: only ${suppliedReleaseSigningInputs.keys} supplied " +
+        "(via keystore.properties or SKYWARD_RELEASE_* env vars) — storeFile, storePassword, " +
+        "keyAlias and keyPassword are required together, or none at all (§15.4)."
+}
 
 android {
     namespace = "dev.fritze.skyward"
@@ -63,7 +78,11 @@ android {
         // block with unresolved nulls never reaches AGP.
         if (hasReleaseSigningConfig) {
             create("release") {
-                storeFile = file(releaseStoreFile!!)
+                // rootProject.file, not the module-local `file()`: keystore.properties.example
+                // and RELEASE.md both document storeFile as relative to the repo root (where
+                // `keytool -genkey ... -keystore skyward-release.jks` is run from), not to
+                // androidApp/.
+                storeFile = rootProject.file(releaseStoreFile!!)
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
@@ -227,12 +246,21 @@ run {
         outputs.upToDateWhen { false }
 
         doLast {
+            // Every resolved component is encoded, not just external Maven modules:
+            // dropping project(":core")-style dependencies here would leave a future
+            // flavour-specific *project* dependency (unlike today, where both flavours
+            // pull the same :core) invisible to this check.
             fun resolvedCoordinates(configName: String): Set<String> {
                 val configuration = configurations.findByName(configName)
                     ?: error("$configName not found — check androidApp's productFlavors/buildTypes")
                 return configuration.incoming.resolutionResult.allComponents
-                    .mapNotNull { it.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier }
-                    .map { "${it.group}:${it.module}:${it.version}" }
+                    .map { component ->
+                        when (val id = component.id) {
+                            is org.gradle.api.artifacts.component.ModuleComponentIdentifier -> "${id.group}:${id.module}:${id.version}"
+                            is org.gradle.api.artifacts.component.ProjectComponentIdentifier -> "project:${id.projectPath}"
+                            else -> "other:${id.displayName}"
+                        }
+                    }
                     .toSet()
             }
 

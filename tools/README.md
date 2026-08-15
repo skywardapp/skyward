@@ -25,7 +25,8 @@ Both land with the milestones above, not M0.
   run and the job's result is unchanged.
 - **`check-reproducible-build.sh`** — §15.4/§17.5b's reproducibility check:
   builds `fossRelease` twice in a clean workspace and asserts the two APKs
-  are identical once the signing block is stripped. Lands with M7. Runnable
+  are reproducible — byte-for-byte identical, or (weaker, logged as such)
+  identical once the signing block is stripped. Lands with M7. Runnable
   locally too; it just runs `./gradlew clean :androidApp:assembleFossRelease`
   twice and diffs the results, so budget for two full clean builds.
 
