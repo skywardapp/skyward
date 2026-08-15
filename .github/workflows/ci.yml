@@ -12,9 +12,9 @@ concurrency:
 # Android instrumented tests (§17.5) are NOT here — they need an emulator and
 # live in android-ui-tests.yml, which records the screen while they run.
 #
-# M0 scope only (§18). §17.5b's release-build checks (assembleFossRelease /
-# assemblePlayRelease, reproducibility diffoscope diff, dependency-set-parity
-# between flavours) need a real signing config and land with M7.
+# §17.5b's release-build checks (assembleFossRelease / assemblePlayRelease,
+# reproducibility diffoscope diff, dependency-set-parity between flavours)
+# need a real signing config and land with M7.
 jobs:
   check:
     name: Build & check
@@ -40,9 +40,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # M0 (§18): commonTest on JVM, both flavours assemble, manifest-diff
-      # and licence-allowlist checks (§17.5b). Later milestones extend this
-      # job rather than replace it — see §17 for the full testing strategy.
+      # commonTest on JVM (which since M6 includes the desktop app's own
+      # tests, §17), both flavours assemble, manifest-diff and
+      # licence-allowlist checks (§17.5b). Later milestones extend this job
+      # rather than replace it — see §17 for the full testing strategy.
       - name: Check (commonTest, lint, manifest parity, dependency licences)
         run: ./gradlew check --stacktrace
 
@@ -51,6 +52,24 @@ jobs:
 
       - name: Compile desktop app
         run: ./gradlew :desktopApp:compileKotlin --stacktrace
+
+      # §18/M6 accept: "runs under Flatpak locally". CI does not run
+      # flatpak-builder — it builds the tree the manifest repackages
+      # (flatpak/dev.fritze.Skyward.yml), which is the only build that
+      # exercises jlink's module set and the packaging config. A missing JDK
+      # module (java.sql, jdk.crypto.ec) compiles perfectly and then dies on
+      # first launch, so compiling alone would not catch it. The Flatpak build
+      # itself stays a local/release step.
+      - name: Build the self-contained desktop distributable
+        run: ./gradlew :desktopApp:createReleaseDistributable --stacktrace
+
+      # Runs the packaged binary rather than the Gradle classpath: this is the
+      # startup path that a packaging mistake actually breaks (see ADR 0007).
+      - name: Smoke-test the packaged binary
+        run: |
+          desktopApp/build/compose/binaries/main-release/app/skyward/bin/skyward debug-matches \
+            | tee /tmp/debug-matches.txt
+          grep -q "occurrences in horizon" /tmp/debug-matches.txt
 
       - name: Upload test reports
         if: always()

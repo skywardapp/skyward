@@ -14,11 +14,35 @@
     </p>
   </description>
   <launchable type="desktop-id">dev.fritze.Skyward.desktop</launchable>
+  <url type="homepage">https://github.com/skywardapp/skyward</url>
+  <url type="bugtracker">https://github.com/skywardapp/skyward/issues</url>
+  <developer id="dev.fritze">
+    <name>Skyward contributors</name>
+  </developer>
   <content_rating type="oars-1.1" />
+  <categories>
+    <category>Science</category>
+    <category>Astronomy</category>
+    <category>Education</category>
+  </categories>
+  <keywords>
+    <keyword>eclipse</keyword>
+    <keyword>aurora</keyword>
+    <keyword>meteor</keyword>
+    <keyword>comet</keyword>
+    <keyword>astronomy</keyword>
+  </keywords>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <releases>
-    <release version="0.1.0" date="2026-08-12">
+    <release version="0.1.0" date="2026-08-14">
       <description>
-        <p>Initial scaffold — not yet a usable release (M0).</p>
+        <p>
+          Desktop application: overview, event map, timeline, sky chart and
+          aurora dashboard, with reminders delivered while the window is
+          closed.
+        </p>
       </description>
     </release>
   </releases>

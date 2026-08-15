@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Skyward app icon: a crescent moon and a star, the same two shapes the
+     tray icon draws (desktopApp/.../tray/SkywardTray.kt). Flat, single
+     colour, no gradients — it has to read at 16px in a panel. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect width="128" height="128" rx="24" fill="#0B0E14"/>
+  <path d="M84 30a38 38 0 1 0 22 68 44 44 0 1 1-22-68z" fill="#9FC6FF"/>
+  <path d="M44 26l4.6 10.2L59 40.8l-10.4 4.6L44 55.6l-4.6-10.2L29 40.8l10.4-4.6z" fill="#E9EEF7"/>
+</svg>

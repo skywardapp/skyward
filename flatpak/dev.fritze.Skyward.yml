@@ -1,10 +1,14 @@
-## PLACEHOLDER — not built or tested by CI yet (M6/M7 work, §15.5).
+## Flatpak manifest (§15.5).
 ##
-## Intended shape: repackage desktopApp's `createReleaseDistributable`
-## jlinked tree with flatpak-builder rather than running Gradle inside the
-## (network-isolated) Flathub build sandbox — the FeedFlow-proven pattern
-## §15.5 references. This file is not that yet; it's a placeholder that
-## records the target runtime/permissions so M6 starts from something.
+## This packages a PREBUILT tree, it does not build from source: Flathub's
+## build sandbox has no network, and a Gradle build needs one. So the flow is
+##
+##   ./gradlew :desktopApp:createReleaseDistributable
+##   flatpak-builder --force-clean build flatpak/dev.fritze.Skyward.yml
+##
+## with the manifest's `dir` source pointing at the jlinked tree the first
+## command produced. That is the FeedFlow-proven pattern §15.5 references.
+## `flatpak/build.sh` runs both steps.
 
 app-id: dev.fritze.Skyward
 runtime: org.freedesktop.Platform
@@ -13,21 +17,51 @@ sdk: org.freedesktop.Sdk
 command: skyward
 
 finish-args:
-  # Direct HTTPS to NOAA/NASA/JPL only (P1) — no other network use.
+  # Flatpak has no per-host network filter: this is unrestricted outbound
+  # network access. What keeps it to NOAA/NASA/JPL (P1) is the app's own
+  # source list, not the sandbox.
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
+  # §10.3's notification path: two-slices talks to this over DBus, and
+  # `notify-send` (in the runtime) falls back onto the same interface.
   - --talk-name=org.freedesktop.Notifications
+  # §10.3's tray: ComposeNativeTray registers a StatusNotifierItem.
   - --talk-name=org.kde.StatusNotifierWatcher
-  # Background portal, for optional autostart (§10.3) — not blanket background access.
-  - --talk-name=org.freedesktop.portal.Background
+  # §12's export/import uses Swing's JFileChooser, which is not portal-aware —
+  # it browses the sandbox's own view of the filesystem, so without a grant
+  # there is nowhere the user could put an export. This is the narrowest
+  # useful one; deliberately NOT `--filesystem=home`.
+  - --filesystem=xdg-download
+  #
+  # No --talk-name entries for org.freedesktop.portal.*: flatpak's default
+  # policy already lets every app talk to org.freedesktop.portal.Desktop,
+  # which is how the Background portal (autostart, §10.3) and OpenURI (JPL and
+  # EONET links, §13.3) are reached. Listing them again grants nothing.
 
 modules:
   - name: skyward
     buildsystem: simple
     build-commands:
-      # TODO(M6/M7): copy the prebuilt createReleaseDistributable tree into
-      # /app and install dev.fritze.Skyward.desktop + metainfo.xml. Left
-      # unimplemented deliberately — there's nothing real to package yet.
-      - "echo 'flatpak build not implemented yet — see flatpak/README.md' && false"
-    sources: []
+      # The jlinked tree is self-contained (its own JRE under lib/runtime),
+      # so /app/skyward plus a launcher on PATH is the whole install.
+      - mkdir -p /app/skyward
+      - cp -r distributable/* /app/skyward/
+      - install -Dm755 skyward.sh /app/bin/skyward
+      - install -Dm644 dev.fritze.Skyward.desktop /app/share/applications/dev.fritze.Skyward.desktop
+      - install -Dm644 dev.fritze.Skyward.metainfo.xml /app/share/metainfo/dev.fritze.Skyward.metainfo.xml
+      - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/dev.fritze.Skyward.svg
+    sources:
+      # Produced by `./gradlew :desktopApp:createReleaseDistributable`; see
+      # flatpak/build.sh, which copies it here before invoking flatpak-builder.
+      - type: dir
+        path: ../desktopApp/build/compose/binaries/main-release/app/skyward
+        dest: distributable
+      - type: file
+        path: skyward.sh
+      - type: file
+        path: dev.fritze.Skyward.desktop
+      - type: file
+        path: dev.fritze.Skyward.metainfo.xml
+      - type: file
+        path: icon.svg

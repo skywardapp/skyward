@@ -2,6 +2,8 @@ package dev.fritze.skyward.alarm
 
 import android.Manifest
 import android.os.Build
+import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -53,8 +55,40 @@ class AlarmFlowInstrumentedTest {
 
     @Before
     fun clearNotifications() {
+        // Both cancelAll() and notify() are one-way calls into system_server:
+        // they return before the shade has caught up. Waiting for the cancel to
+        // land keeps the *previous* test's teardown from arriving after this
+        // test has already posted, and taking its notification with it.
         NotificationManagerCompat.from(context).cancelAll()
+        // Asserted, not merely awaited: on a timeout the helper returns whatever
+        // is still up, and starting a test with a leftover notification would
+        // show as a confusing failure in the test body instead of here.
+        val remaining = awaitNotifications { it.isEmpty() }
+        assertTrue("notifications did not clear before the test started", remaining.isEmpty())
     }
+
+    /**
+     * Polls `activeNotifications` until [predicate] holds, or the deadline
+     * passes. Reading it once, immediately after `notify()`, is a race that
+     * usually wins — which is the worst kind: it made this suite fail
+     * intermittently on CI rather than never.
+     */
+    private fun awaitNotifications(
+        timeoutMillis: Long = NOTIFICATION_TIMEOUT_MILLIS,
+        predicate: (List<StatusBarNotification>) -> Boolean,
+    ): List<StatusBarNotification> {
+        val deadline = SystemClock.uptimeMillis() + timeoutMillis
+        var active = NotificationManagerCompat.from(context).activeNotifications
+        while (!predicate(active) && SystemClock.uptimeMillis() < deadline) {
+            Thread.sleep(NOTIFICATION_POLL_MILLIS)
+            active = NotificationManagerCompat.from(context).activeNotifications
+        }
+        return active
+    }
+
+    private fun awaitPosted(notificationId: String): StatusBarNotification? =
+        awaitNotifications { list -> list.any { it.id == notificationId.hashCode() } }
+            .firstOrNull { it.id == notificationId.hashCode() }
 
     private fun freshNotification(fireAt: Instant, status: NotificationStatus, precision: Precision) = PlannedNotification(
         id = "test-${UUID.randomUUID()}",
@@ -85,8 +119,7 @@ class AlarmFlowInstrumentedTest {
         // Simulate what NotificationAlarmReceiver does once AlarmManager fires it.
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        val active = NotificationManagerCompat.from(context).activeNotifications
-        assertTrue("expected notification ${n.id.hashCode()} to be posted", active.any { it.id == n.id.hashCode() })
+        assertTrue("expected notification ${n.id.hashCode()} to be posted", awaitPosted(n.id) != null)
         assertEquals(NotificationStatus.FIRED, container.notificationRepo.getById(n.id)?.status)
     }
 
@@ -103,8 +136,7 @@ class AlarmFlowInstrumentedTest {
 
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        val active = NotificationManagerCompat.from(context).activeNotifications
-        val posted = active.firstOrNull { it.id == n.id.hashCode() }
+        val posted = awaitPosted(n.id)
         assertTrue("expected approximate notification to be posted", posted != null)
         val text = posted!!.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
         assertTrue("expected hedged copy to mention 'around'", text.contains("around"))
@@ -141,5 +173,10 @@ class AlarmFlowInstrumentedTest {
         AlarmSyncer.sync(all, scheduler, container.notificationRepo, Clock.System.now())
 
         assertTrue("expected boot re-sync to re-register the row", scheduler.scheduled.any { it.id == n.id })
+    }
+
+    private companion object {
+        const val NOTIFICATION_TIMEOUT_MILLIS = 5_000L
+        const val NOTIFICATION_POLL_MILLIS = 50L
     }
 }
