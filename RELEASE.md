@@ -58,8 +58,10 @@ doesn't start is a day added to the critical path.
   pure function of the commit: working-tree dirtiness is not part of it.
 - **Release automation** (`.github/workflows/`) — `auto-tag-main.yml` pushes an
   incrementing patch tag on every push to `main` and calls
-  `release-on-tag.yml`, which builds the `fossRelease` APK for that tag and
-  publishes a GitHub Release with generated notes and the APK attached.
+  `release-on-tag.yml`, which builds the `fossRelease` APK and a Linux desktop
+  "flat pack" (the `createReleaseDistributable` jlinked tree, tarred up
+  as-is — no installer, unpack and run `bin/skyward`) for that tag and
+  publishes a GitHub Release with generated notes and both attached.
   Pushing a `v*` tag by hand does the same thing on its own.
 - **Release signing wiring** (`androidApp/build.gradle.kts`) — reads a
   keystore from `keystore.properties` (gitignored, see
