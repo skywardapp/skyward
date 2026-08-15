@@ -1,10 +1,16 @@
 name: Release on tag
 
-# Builds the fossRelease APK for a tag and publishes a GitHub Release with
-# auto-generated notes and the APK attached. RELEASE.md ties F-Droid's build
-# recipe to "the fossRelease build and this repo's tagged releases" — this is
-# that half. playRelease is Play Console's job, not GitHub's, so it isn't
-# built here.
+# Builds the fossRelease APK plus a Linux desktop "flat pack" for a tag and
+# publishes a GitHub Release with auto-generated notes and both attached.
+# RELEASE.md ties F-Droid's build recipe to "the fossRelease build and this
+# repo's tagged releases" — this is that half. playRelease is Play Console's
+# job, not GitHub's, so it isn't built here.
+#
+# The flat pack is `createReleaseDistributable`'s jlinked app tree — the same
+# one flatpak/build.sh repackages — tarred up as-is. No installer, no package
+# manager: unpack it and run bin/skyward. It's a Linux x64 build (the runner
+# this job builds on), same as the Deb/Rpm/Flatpak outputs already shipped
+# with M6.
 #
 # The APK's own versionCode/versionName come from the tag being built, derived
 # at build time by the version block in the root build.gradle.kts — which is
@@ -154,6 +160,27 @@ jobs:
           cp "$built" "$asset"
           echo "path=$asset" >> "$GITHUB_OUTPUT"
 
+      # Same tree flatpak/build.sh repackages (see comment at the top of this
+      # file); building it here doesn't need the Android signing key, so it
+      # can run any time after the JDK/Gradle setup above.
+      - name: Build desktop distributable
+        run: ./gradlew :desktopApp:createReleaseDistributable --stacktrace
+
+      # Tarred as-is, no jpackage installer wrapper — that's what makes it a
+      # "flat pack": unpack and run bin/skyward, no package manager involved.
+      - name: Stage the flat pack as a release asset
+        id: flatpack
+        run: |
+          set -euo pipefail
+          tree="desktopApp/build/compose/binaries/main-release/app/skyward"
+          if [ ! -d "$tree" ]; then
+            echo "expected the jlinked tree at $tree — did createReleaseDistributable change its output layout?" >&2
+            exit 1
+          fi
+          asset="${RUNNER_TEMP}/skyward-${TAG}-linux-x64.tar.gz"
+          tar -C "$(dirname "$tree")" -czf "$asset" "$(basename "$tree")"
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
+
       # gh (pre-installed on GitHub-hosted runners) rather than a third-party
       # release action — one less external action to trust/pin. --generate-notes
       # asks GitHub to build categorized notes from merged PRs since the
@@ -162,12 +189,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APK: ${{ steps.apk.outputs.path }}
+          FLATPACK: ${{ steps.flatpack.outputs.path }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "$APK" "$FLATPACK" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$APK" \
+            gh release create "$TAG" "$APK" "$FLATPACK" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
               --generate-notes
