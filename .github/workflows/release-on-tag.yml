@@ -75,10 +75,14 @@ jobs:
       # (RELEASE.md item 1) and added it as repo secrets. Absent, the build
       # below falls back to an unsigned APK — same as CI, see build.gradle.kts.
       - name: Decode release signing key
-        if: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 != '' }}
+        env:
+          SKYWARD_RELEASE_STORE_FILE_BASE64: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}
         run: |
-          echo "${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}" | base64 -d > "${RUNNER_TEMP}/skyward-release.jks"
-          echo "SKYWARD_RELEASE_STORE_FILE=${RUNNER_TEMP}/skyward-release.jks" >> "$GITHUB_ENV"
+          set -euo pipefail
+          if [ -n "$SKYWARD_RELEASE_STORE_FILE_BASE64" ]; then
+            printf '%s' "$SKYWARD_RELEASE_STORE_FILE_BASE64" | base64 -d > "${RUNNER_TEMP}/skyward-release.jks"
+            echo "SKYWARD_RELEASE_STORE_FILE=${RUNNER_TEMP}/skyward-release.jks" >> "$GITHUB_ENV"
+          fi
 
       - name: Assemble fossRelease APK
         env:

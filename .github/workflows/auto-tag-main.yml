@@ -5,18 +5,23 @@ name: Auto-tag main
 # built APK actually reports the tagged version, then runs release-on-tag.yml
 # against the new tag directly.
 #
-# Loop safety: the version-bump commit is pushed using the default GITHUB_TOKEN
-# (or RELEASE_BOT_TOKEN, see below). Pushes authored by GITHUB_TOKEN are exempt
-# from triggering further `on: push` workflow runs — GitHub's built-in guard
-# against exactly this kind of recursive trigger — so that push does not
-# re-invoke this workflow. The `github.actor` check below is a defensive
-# backstop in case that platform guard is ever bypassed (e.g. a future
-# repository setting), not the primary defense.
+# Loop safety, two different pushes with two different guards:
 #
-# Because GITHUB_TOKEN pushes don't fire `on: push` either, the tag this
-# workflow pushes would never reach release-on-tag.yml's own `push: tags`
-# trigger — so the `release` job below calls it directly as a reusable
-# workflow instead of relying on that event.
+#   - The version-bump commit push (to `main`) may use a `RELEASE_BOT_TOKEN`
+#     PAT (see below) to get past branch protection. A PAT-authored push is
+#     NOT exempt from triggering further `on: push` runs the way a
+#     GITHUB_TOKEN-authored one is, so it could re-invoke this very workflow.
+#     Guarded by tagging the commit message with `[auto-tag]` and skipping
+#     the job whenever the triggering commit carries that marker — this
+#     works regardless of which token/actor made the push.
+#   - The tag push is deliberately made with the built-in GITHUB_TOKEN even
+#     when a PAT is used for the branch push above, specifically so it STAYS
+#     exempt from triggering release-on-tag.yml's own `push: tags` trigger —
+#     otherwise that event firing *and* the direct `workflow_call` below
+#     would both build and publish the same release.
+#
+# Because the tag push never fires `push: tags`, the `release` job below
+# calls release-on-tag.yml directly as a reusable workflow instead.
 #
 # `main` is a protected branch (checked via the GitHub API when this workflow
 # was written). If the default GITHUB_TOKEN doesn't have push rights here
@@ -41,7 +46,7 @@ jobs:
   bump-and-tag:
     name: Bump version and tag
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ !contains(github.event.head_commit.message, '[auto-tag]') }}
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
@@ -59,7 +64,11 @@ jobs:
           current_version_name=$(grep -oP '(?<=versionName = ")[^"]+' androidApp/build.gradle.kts)
           current_version_code=$(grep -oP '(?<=versionCode = )\d+' androidApp/build.gradle.kts)
 
-          latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
+          # `git tag --list` uses glob, not regex, patterns: 'v[0-9]*.[0-9]*.[0-9]*'
+          # would also match a prerelease tag like v0.1.0-rc.1 (the `*`s absorb the
+          # extra text), which then breaks the arithmetic below. List broadly and
+          # filter with an anchored regex instead, so only exact vX.Y.Z tags count.
+          latest_tag=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
 
           if [ -z "$latest_tag" ]; then
             # No prior tag: mirror the current app version instead of bumping,
@@ -85,15 +94,27 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add androidApp/build.gradle.kts
-            git commit -m "chore: bump version to ${{ steps.tag.outputs.tag }}"
+            git commit -m "chore: bump version to ${{ steps.tag.outputs.tag }} [auto-tag]"
             git push origin HEAD:main
           fi
 
+      # Pushed with the built-in GITHUB_TOKEN specifically (not RELEASE_BOT_TOKEN),
+      # regardless of which token the branch push above used — see the loop-safety
+      # comment at the top of this file for why the tag push must stay
+      # GITHUB_TOKEN-authored.
       - name: Create and push tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git tag "${{ steps.tag.outputs.tag }}"
-          git push origin "${{ steps.tag.outputs.tag }}"
+          # -c http.https://github.com/.extraheader="" clears the auth header
+          # actions/checkout configured for `origin` (which may carry
+          # RELEASE_BOT_TOKEN) so this push authenticates with the
+          # URL-embedded GITHUB_TOKEN instead, not whatever origin is using.
+          git -c http.https://github.com/.extraheader="" push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            "${{ steps.tag.outputs.tag }}"
 
   release:
     name: Release ${{ needs.bump-and-tag.outputs.tag }}
