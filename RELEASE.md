@@ -67,6 +67,11 @@ doesn't start is a day added to the critical path.
   — an unsigned APK can't be installed on Android at all, so until the key
   exists this job fails loudly instead of publishing a broken download (this
   currently blocks the flat pack too, since it's built in the same job).
+  It also only ever *creates* a release: once a tag has one, the workflow
+  refuses to touch its assets rather than overwrite them, matching item 6
+  below (and, once that setting is on, required by it) — a tag whose release
+  never got created (missing secrets, a build failure) is the one case
+  `workflow_dispatch` can usefully re-run.
 - **Release signing wiring** (`androidApp/build.gradle.kts`) — reads a
   keystore from `keystore.properties` (gitignored, see
   `keystore.properties.example`) or `SKYWARD_RELEASE_STORE_FILE` /
@@ -214,6 +219,23 @@ Flathub maintainers. Verify locally first:
 flatpak/build.sh
 ```
 
+### 6. Enable Immutable Releases on the repo
+
+GitHub's [Immutable Releases](https://github.blog/changelog/2025-08-26-releases-now-support-immutability-in-public-preview/)
+(public preview) locks a release's tag and assets the moment it publishes —
+none of them can be added, replaced or deleted afterwards, including by an
+admin. There is no API for it yet, so this is a manual, one-time toggle:
+**repo Settings → General → "Releases"**. `release-on-tag.yml` (above) is
+already written to only ever create a release and never overwrite one, so
+turning this on changes nothing about how it runs — it just makes GitHub
+enforce, at the platform level, what the workflow already refuses to do
+itself.
+
+Independent of every other item here — no dependency either way — so do it
+whenever, ideally before the first tag ships: the setting only protects
+releases published *after* it's turned on, so anything already published
+when it's flipped stays exactly as mutable as before.
+
 ## Order of operations
 
 Item 0 (app id) blocks 1, 2, 3's RFP, 4, and 5. Item 1 (signing key) blocks
@@ -223,4 +245,6 @@ publishing the developer-signed APK needs the real key, so run 1 and 3 in
 parallel rather than sequencing them. Start item 2 as early as possible once
 0 is done — its 12×14-day tester gate is the longest pole regardless of
 what else is in flight. Item 4 needs 1 and should be scheduled well before
-2026-09-30. Item 5 is independent of the Android-side items entirely.
+2026-09-30. Item 5 is independent of the Android-side items entirely. So is
+item 6 — it has no dependency on anything above, and nothing above depends
+on it; flip it whenever, ideally before the first tag ships.
