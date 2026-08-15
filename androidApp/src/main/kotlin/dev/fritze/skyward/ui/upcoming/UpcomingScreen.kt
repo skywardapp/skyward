@@ -1,5 +1,10 @@
 package dev.fritze.skyward.ui.upcoming
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,16 +24,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
@@ -37,6 +51,7 @@ import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.phenomenonLabel
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -44,8 +59,23 @@ import kotlin.time.Instant
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
+    val context = LocalContext.current
     val viewModel: UpcomingViewModel = viewModel { UpcomingViewModel(container) }
     val state by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val versionCode = remember(context) { appVersionCode(context) }
+    var showExactAlarmCard by remember { mutableStateOf(false) }
+
+    fun refreshExactAlarmCard() {
+        scope.launch {
+            val dismissedVersion = container.settingsRepo.getExactAlarmCardDismissedVersion()
+            showExactAlarmCard = !container.alarmScheduler.canScheduleExact() && dismissedVersion != versionCode
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        refreshExactAlarmCard()
+    }
 
     Scaffold(
         topBar = {
@@ -60,6 +90,34 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (showExactAlarmCard) {
+                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Exact alarms are off", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Reminders still work, but they can arrive tens of minutes late. " +
+                                "Enable exact alarms for precise delivery.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }) { Text("Enable exact alarms") }
+                            TextButton(onClick = {
+                                scope.launch {
+                                    container.settingsRepo.setExactAlarmCardDismissedVersion(versionCode)
+                                    showExactAlarmCard = false
+                                }
+                            }) { Text("Dismiss") }
+                        }
+                    }
+                }
+            }
             FilterRow(
                 scope = state.filter.scope,
                 phenomena = state.filter.phenomena,
@@ -80,6 +138,16 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
         }
     }
 }
+
+private fun appVersionCode(context: Context): Long = runCatching {
+    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        packageInfo.longVersionCode
+    } else {
+        @Suppress("DEPRECATION")
+        packageInfo.versionCode.toLong()
+    }
+}.getOrDefault(0L)
 
 @Composable
 private fun FilterRow(
