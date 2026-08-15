@@ -1,0 +1,106 @@
+name: Auto-tag main
+
+# Tags every push to main with an incrementing patch version (vMAJOR.MINOR.PATCH),
+# bumping versionCode/versionName in androidApp/build.gradle.kts to match so the
+# built APK actually reports the tagged version, then runs release-on-tag.yml
+# against the new tag directly.
+#
+# Loop safety: the version-bump commit is pushed using the default GITHUB_TOKEN
+# (or RELEASE_BOT_TOKEN, see below). Pushes authored by GITHUB_TOKEN are exempt
+# from triggering further `on: push` workflow runs — GitHub's built-in guard
+# against exactly this kind of recursive trigger — so that push does not
+# re-invoke this workflow. The `github.actor` check below is a defensive
+# backstop in case that platform guard is ever bypassed (e.g. a future
+# repository setting), not the primary defense.
+#
+# Because GITHUB_TOKEN pushes don't fire `on: push` either, the tag this
+# workflow pushes would never reach release-on-tag.yml's own `push: tags`
+# trigger — so the `release` job below calls it directly as a reusable
+# workflow instead of relying on that event.
+#
+# `main` is a protected branch (checked via the GitHub API when this workflow
+# was written). If the default GITHUB_TOKEN doesn't have push rights here
+# (no bypass configured for github-actions[bot]/Actions in the branch
+# protection rule), the "Commit version bump" step below will fail with a
+# rejected push. Either add that bypass, or add a repo secret
+# `RELEASE_BOT_TOKEN` holding a PAT from an account that can push to main —
+# it's picked up automatically if present.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: auto-tag-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bump-and-tag:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Compute next version and bump build.gradle.kts
+        id: tag
+        run: |
+          set -euo pipefail
+
+          current_version_name=$(grep -oP '(?<=versionName = ")[^"]+' androidApp/build.gradle.kts)
+          current_version_code=$(grep -oP '(?<=versionCode = )\d+' androidApp/build.gradle.kts)
+
+          latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
+
+          if [ -z "$latest_tag" ]; then
+            # No prior tag: mirror the current app version instead of bumping,
+            # so the very first auto-tag doesn't skip ahead of build.gradle.kts.
+            new_version="$current_version_name"
+            new_code="$current_version_code"
+          else
+            IFS='.' read -r major minor patch <<< "${latest_tag#v}"
+            new_version="${major}.${minor}.$((patch + 1))"
+            new_code=$((current_version_code + 1))
+          fi
+          new_tag="v${new_version}"
+
+          sed -i "s/^\(\s*\)versionCode = [0-9]\+/\1versionCode = ${new_code}/" androidApp/build.gradle.kts
+          sed -i "s/^\(\s*\)versionName = \"[^\"]*\"/\1versionName = \"${new_version}\"/" androidApp/build.gradle.kts
+
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- androidApp/build.gradle.kts; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add androidApp/build.gradle.kts
+            git commit -m "chore: bump version to ${{ steps.tag.outputs.tag }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Create and push tag
+        run: |
+          set -euo pipefail
+          git tag "${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+  release:
+    name: Release ${{ needs.bump-and-tag.outputs.tag }}
+    needs: bump-and-tag
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-on-tag.yml
+    with:
+      tag: ${{ needs.bump-and-tag.outputs.tag }}
+    secrets: inherit
