@@ -166,19 +166,45 @@ jobs:
       - name: Build desktop distributable
         run: ./gradlew :desktopApp:createReleaseDistributable --stacktrace
 
+      # Same check ci.yml's `check` job runs on every push (see ADR 0007): a
+      # missing jlink module compiles fine and only breaks at first launch,
+      # so this is what actually catches a bad packaging config — worth
+      # repeating here since this binary is the one about to ship.
+      - name: Smoke-test the packaged binary
+        run: |
+          set -euo pipefail
+          desktopApp/build/compose/binaries/main-release/app/skyward/bin/skyward debug-matches \
+            | tee /tmp/debug-matches.txt
+          grep -q "occurrences in horizon" /tmp/debug-matches.txt
+
       # Tarred as-is, no jpackage installer wrapper — that's what makes it a
       # "flat pack": unpack and run bin/skyward, no package manager involved.
+      # Re-runs the same smoke test against the *extracted* archive, not just
+      # the source tree, so a tar/permissions mistake in this step itself
+      # (e.g. losing the executable bit) fails here instead of shipping.
       - name: Stage the flat pack as a release asset
         id: flatpack
         run: |
           set -euo pipefail
           tree="desktopApp/build/compose/binaries/main-release/app/skyward"
-          if [ ! -d "$tree" ]; then
-            echo "expected the jlinked tree at $tree — did createReleaseDistributable change its output layout?" >&2
+          if [ ! -x "$tree/bin/skyward" ]; then
+            echo "expected an executable launcher at $tree/bin/skyward — did createReleaseDistributable change its output layout?" >&2
             exit 1
           fi
           asset="${RUNNER_TEMP}/skyward-${TAG}-linux-x64.tar.gz"
           tar -C "$(dirname "$tree")" -czf "$asset" "$(basename "$tree")"
+
+          extract_dir="${RUNNER_TEMP}/flatpack-verify"
+          mkdir -p "$extract_dir"
+          tar -xzf "$asset" -C "$extract_dir"
+          extracted="$extract_dir/$(basename "$tree")/bin/skyward"
+          if [ ! -x "$extracted" ]; then
+            echo "extracted archive is missing an executable bin/skyward — refusing to publish" >&2
+            exit 1
+          fi
+          "$extracted" debug-matches | tee /tmp/debug-matches-extracted.txt
+          grep -q "occurrences in horizon" /tmp/debug-matches-extracted.txt
+
           echo "path=$asset" >> "$GITHUB_OUTPUT"
 
       # gh (pre-installed on GitHub-hosted runners) rather than a third-party
