@@ -2,10 +2,10 @@ package dev.fritze.skyward.ui.settings
 
 import androidx.lifecycle.ViewModel
 import dev.fritze.skyward.core.model.NotificationStatus
+import dev.fritze.skyward.core.persistence.SyncImportRepo
 import dev.fritze.skyward.core.sync.RuleImportWarning
 import dev.fritze.skyward.core.sync.SyncCodec
 import dev.fritze.skyward.core.sync.SyncFile
-import dev.fritze.skyward.core.sync.SyncMerge
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.flow.first
@@ -43,38 +43,14 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
      * "Replace everything" path: wipe local locations/rules first, so
      * everything from the file is then a "new id" and gets written). Throws
      * [dev.fritze.skyward.core.sync.SyncImportError] on a bad file.
+     *
+     * All location/rule/settings/notification-history mutations commit as one database
+     * transaction ([SyncImportRepo], issue #13): a failure or cancellation partway through
+     * leaves neither replace-mode deletions nor any import write persisted.
      */
     suspend fun applyImport(text: String, replaceEverything: Boolean): ImportSummary {
         val parsed = SyncCodec.parseForImport(text)
-
-        if (replaceEverything) {
-            for (location in container.locationRepo.getAll()) container.locationRepo.delete(location.id)
-            for (rule in container.ruleRepo.getAll()) container.ruleRepo.delete(rule.id)
-        }
-
-        val locationsToWrite = SyncMerge.newerOrMissing(container.locationRepo.getAll(), parsed.locations, { it.id }, { it.modifiedAt })
-        for (location in locationsToWrite) container.locationRepo.upsert(location)
-
-        val localRules = container.ruleRepo.getAll()
-        val localRuleIds = localRules.mapTo(mutableSetOf()) { it.id }
-        // A rule this app version couldn't fully decode was reconstructed with an inert placeholder
-        // condition but keeps the original `modifiedAt` (SyncCodec.ParsedSyncFile.degradedRuleIds) --
-        // without this filter, a newer `modifiedAt` alone would let it win the merge below and
-        // silently destroy an intact local rule sharing its id. Never import a degraded rule over
-        // one that already exists locally; still take it if there's no local copy at all.
-        val importableRules = parsed.rules.filterNot { it.id in parsed.degradedRuleIds && it.id in localRuleIds }
-        val rulesToWrite = SyncMerge.newerOrMissing(localRules, importableRules, { it.id }, { it.modifiedAt })
-        for (rule in rulesToWrite) container.ruleRepo.upsert(rule)
-
-        for ((key, value) in parsed.settings) container.settingsRepo.set(key, value)
-
-        var firedImported = 0
-        for (id in parsed.firedNotificationIds) {
-            if (container.notificationRepo.getById(id) == null) {
-                container.notificationRepo.upsert(SyncMerge.syntheticFiredHistoryEntry(id, parsed.exportedAt))
-                firedImported++
-            }
-        }
+        val result = container.syncImportRepo.applyImport(parsed, replaceEverything)
 
         // §12.3: "After import: full re-plan (§9.7)." The data above is already committed, so a
         // re-plan failure must not be reported as an import failure (that would route through the
@@ -82,10 +58,10 @@ class SyncViewModel(private val container: AppContainer) : ViewModel() {
         val replanFailed = runCatchingCancellable { container.replanAndSync() }.isFailure
 
         return ImportSummary(
-            locationsImported = locationsToWrite.size,
-            rulesImported = rulesToWrite.size,
-            settingsImported = parsed.settings.size,
-            firedIdsImported = firedImported,
+            locationsImported = result.locationsImported,
+            rulesImported = result.rulesImported,
+            settingsImported = result.settingsImported,
+            firedIdsImported = result.firedIdsImported,
             ruleWarnings = parsed.ruleWarnings,
             replanFailed = replanFailed,
         )

@@ -59,17 +59,18 @@ class RuleRepo(private val db: SkywardDatabase) {
     suspend fun delete(id: String) = withContext(Dispatchers.Default) {
         db.ruleQueries.deleteById(id)
     }
-
-    private fun Rule.toModel() = RuleModel(
-        id = id,
-        name = name,
-        enabled = enabled != 0L,
-        phenomena = persistenceJson.decodeFromString<Set<Phenomenon>>(phenomena_json),
-        locationIds = location_ids_json?.let { persistenceJson.decodeFromString<List<String>>(it) },
-        condition = persistenceJson.decodeFromString(Cond.serializer(), condition_json),
-        schedule = persistenceJson.decodeFromString(NotifySchedule.serializer(), schedule_json),
-        hidden = hidden != 0L,
-        createdAt = Instant.parse(created_at),
-        modifiedAt = Instant.parse(modified_at),
-    )
 }
+
+/** Also used by [SyncImportRepo], which reads/writes `rule` rows on its own transaction. */
+internal fun Rule.toModel() = RuleModel(
+    id = id,
+    name = name,
+    enabled = enabled != 0L,
+    phenomena = persistenceJson.decodeFromString<Set<Phenomenon>>(phenomena_json),
+    locationIds = location_ids_json?.let { persistenceJson.decodeFromString<List<String>>(it) },
+    condition = persistenceJson.decodeFromString(Cond.serializer(), condition_json),
+    schedule = persistenceJson.decodeFromString(NotifySchedule.serializer(), schedule_json),
+    hidden = hidden != 0L,
+    createdAt = Instant.parse(created_at),
+    modifiedAt = Instant.parse(modified_at),
+)
