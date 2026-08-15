@@ -106,7 +106,10 @@ compose.desktop {
             modules("java.sql", "java.naming", "jdk.crypto.ec", "jdk.unsupported")
 
             packageName = "skyward"
-            packageVersion = "0.1.0"
+            // Same git tag as the Android version (root build.gradle.kts), but
+            // the bare numeric MAJOR.MINOR.PATCH form: jpackage rejects a
+            // version carrying describe's "-3-gabc1234" suffix.
+            packageVersion = rootProject.extra["skywardPackageVersion"] as String
             description = "Location-based reminders for natural & sky events"
             vendor = "Skyward contributors"
 

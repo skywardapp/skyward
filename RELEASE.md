@@ -30,6 +30,37 @@ doesn't start is a day added to the critical path.
   tools/ci/check-reproducible-build.sh
   ```
   It works with or without a real signing key configured — see below.
+- **Versioning from git tags** (root `build.gradle.kts`) — `versionCode`,
+  `versionName` and the desktop `packageVersion` are all derived from the
+  latest `vMAJOR.MINOR.PATCH` tag reachable from the build's commit, so a
+  release is cut by pushing a tag and no build file has a version to bump.
+  `versionCode` is `MAJOR * 1000000 + MINOR * 1000 + PATCH` (`v0.1.0` → 1000),
+  which keeps it monotonic and decodable; an untagged build gets `0.0.0-dev`
+  and `versionCode` 1, deliberately below any real release so it is rejected as
+  a downgrade rather than published over one. `-PskywardVersionName` /
+  `-PskywardVersionCode` override the derivation where git history isn't
+  available (a source tarball, or a pinned F-Droid recipe).
+
+  **The encoding is positional, so components are bounded: minor and patch
+  ≤ 999, major ≤ 2100** (Android's `versionCode` ceiling is 2100000000), and
+  `v0.0.0` is invalid since Android requires `versionCode` ≥ 1. Out of range,
+  two releases collide on one `versionCode` — `v0.0.1000` and `v0.1.0` both
+  encode to 1000 — so the build and both workflows reject such a tag instead.
+  A version code is permanent once published (no store accepts a re-used or
+  lowered one), which is why this fails loudly rather than warning. Since
+  `auto-tag-main` bumps the patch on every push to `main`, the patch bound is
+  the one you'll actually meet: cut the next minor tag by hand
+  (`git tag v0.2.0 && git push origin --tags`) to reset the patch field.
+
+  Because the version is read from `git describe`, any build that needs the
+  real version needs the tags fetched — CI checkouts use `fetch-depth: 0` for
+  exactly this reason. It stays reproducible (§15.4/§17.5b) because it is a
+  pure function of the commit: working-tree dirtiness is not part of it.
+- **Release automation** (`.github/workflows/`) — `auto-tag-main.yml` pushes an
+  incrementing patch tag on every push to `main` and calls
+  `release-on-tag.yml`, which builds the `fossRelease` APK for that tag and
+  publishes a GitHub Release with generated notes and the APK attached.
+  Pushing a `v*` tag by hand does the same thing on its own.
 - **Release signing wiring** (`androidApp/build.gradle.kts`) — reads a
   keystore from `keystore.properties` (gitignored, see
   `keystore.properties.example`) or `SKYWARD_RELEASE_STORE_FILE` /
@@ -140,8 +171,9 @@ key, so get item 1 done before or during review rather than after.
    `fdroiddata`, not in this repo) pointing at the `fossRelease` build and
    this repo's tagged releases. `fastlane/metadata/android/en-US/` is already
    in place and is what F-Droid reads for the store listing (§15.4) —
-   nothing to prepare there beyond keeping `changelogs/<versionCode>.txt`
-   current per release (`fastlane/README.md`).
+   nothing to prepare there beyond adding a `changelogs/<versionCode>.txt`
+   per release, where the version code is derived from the tag
+   (`fastlane/README.md` has the arithmetic).
 3. Open the merge request. This is volunteer-reviewed — **budget weeks, not
    days** (§15.4). Once merged, publishing typically follows in 24–48h
    (F-Droid's own estimate; actual timing varies with their build queue —

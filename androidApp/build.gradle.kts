@@ -55,8 +55,12 @@ android {
         applicationId = "dev.fritze.skyward"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Derived from the latest vMAJOR.MINOR.PATCH git tag, not hardcoded —
+        // see the version block in the root build.gradle.kts for the scheme and
+        // for the -PskywardVersion* overrides. Releasing is "push a tag";
+        // nothing here needs editing to match it.
+        versionCode = rootProject.extra["skywardVersionCode"] as Int
+        versionName = rootProject.extra["skywardVersionName"] as String
         // §17.5: the instrumented smoke tests run against BOTH flavours, so the
         // runner is configured on defaultConfig rather than per-flavour.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

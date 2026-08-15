@@ -1,0 +1,125 @@
+name: Auto-tag main
+
+# Cuts a release on every push to main by pushing an incrementing patch tag
+# (vMAJOR.MINOR.PATCH) and invoking release-on-tag.yml for it.
+#
+# The tag is the ONLY place a version is recorded. androidApp and desktopApp
+# derive versionCode/versionName/packageVersion from it at build time — see the
+# version block in the root build.gradle.kts — so this workflow creates a tag
+# and nothing else. It never commits to main, which is why it needs neither
+# write access to a protected branch nor a PAT: pushing a tag is not a push to
+# the protected branch itself.
+#
+# Loop safety: the tag push uses the built-in GITHUB_TOKEN, whose pushes are
+# exempt from triggering further workflow runs. That keeps release-on-tag.yml's
+# own `push: tags` trigger from firing alongside the direct `workflow_call`
+# below and publishing the same release twice. (A tag push could not re-trigger
+# this workflow in any case — `on: push: branches` does not match tag refs.)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: auto-tag-main
+  cancel-in-progress: false
+
+# Least privilege by default; the two jobs below opt into write individually.
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Tag next patch version
+    runs-on: ubuntu-latest
+    # Write is for pushing the tag, and nothing else here needs it.
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needs the full history and every tag: the next version is computed
+          # from the highest existing release tag.
+          fetch-depth: 0
+          # Nothing here does an authenticated Git operation through `origin` —
+          # the tag push below authenticates explicitly with GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Compute next tag
+        id: tag
+        run: |
+          set -euo pipefail
+
+          # `git tag --list` takes a glob, which cannot express "digits only",
+          # so this anchored regex is what actually defines a release tag. It
+          # rejects prerelease/build suffixes (v0.2.0-rc.1) and leading-zero
+          # components (v0.1.08) alike — both would otherwise reach the
+          # arithmetic below, where bash reads "08" as an invalid octal literal.
+          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          latest_tag=$(git tag --list 'v*' | grep -E "$stable" | sort -V | tail -n1 || true)
+
+          if [ -z "$latest_tag" ]; then
+            # Seed for a repo with no release tag yet. Deliberately a constant:
+            # there is no longer a version in any build file to read it from.
+            new_tag="v0.1.0"
+          else
+            IFS='.' read -r major minor patch <<< "${latest_tag#v}"
+            # 10# forces base 10 for any leading zero that slipped past `stable`.
+            new_patch=$((10#$patch + 1))
+
+            # The versionCode encoding (MAJOR*1000000 + MINOR*1000 + PATCH, see
+            # the root build.gradle.kts) is positional, so a patch of 1000 would
+            # carry into the minor field and collide with the next minor release:
+            # v0.0.1000 and v0.1.0 both encode to 1000. Since this workflow bumps
+            # the patch on every push to main, that bound is reachable — stop
+            # here rather than mint a tag whose versionCode is already taken.
+            if [ "$new_patch" -gt 999 ]; then
+              echo "Next patch for ${latest_tag} would be ${new_patch}, above the 999 the" >&2
+              echo "versionCode encoding allows. Cut a minor release by hand to reset the" >&2
+              echo "patch field: git tag v${major}.$((10#$minor + 1)).0 && git push origin --tags" >&2
+              exit 1
+            fi
+
+            new_tag="v${major}.${minor}.${new_patch}"
+          fi
+
+          # Re-validate what is about to be created and pushed. Everything
+          # downstream consumes this value, so it must not be able to carry
+          # shell syntax even if the derivation above is changed later.
+          if ! printf '%s' "$new_tag" | grep -qE "$stable"; then
+            echo "Computed tag '$new_tag' is not a stable vMAJOR.MINOR.PATCH tag" >&2
+            exit 1
+          fi
+
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        env:
+          # Via env, not `${{ }}` inside the script: keeps the value data rather
+          # than something the shell parses.
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git tag "$TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${TAG}"
+
+  release:
+    name: Release ${{ needs.tag.outputs.tag }}
+    needs: tag
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-on-tag.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    # Explicitly mapped rather than `secrets: inherit`, so the release workflow
+    # receives only the signing key and nothing else this repo may hold.
+    secrets:
+      SKYWARD_RELEASE_STORE_FILE_BASE64: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}
+      SKYWARD_RELEASE_STORE_PASSWORD: ${{ secrets.SKYWARD_RELEASE_STORE_PASSWORD }}
+      SKYWARD_RELEASE_KEY_ALIAS: ${{ secrets.SKYWARD_RELEASE_KEY_ALIAS }}
+      SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}

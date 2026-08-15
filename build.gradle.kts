@@ -14,6 +14,125 @@ tasks.register("clean", Delete::class) {
     delete(rootProject.layout.buildDirectory)
 }
 
+// §15.4: the shipped version is derived from the latest vMAJOR.MINOR.PATCH git
+// tag rather than hardcoded in a module. A release is cut by pushing a tag
+// (.github/workflows/auto-tag-main.yml does that on every push to main), and
+// every build — CI's, F-Droid's rebuild, a local one — recovers the same
+// version from that same tag. There is no version field to bump in a commit,
+// so nothing can silently disagree with the tag it shipped under.
+//
+// Reproducibility (§15.4/§17.5b) requires this to be a pure function of the
+// checked-out commit, and it is: `git describe` reads committed refs only, and
+// working-tree dirtiness is deliberately NOT part of the version — otherwise
+// two builds of one commit could disagree.
+//
+// Escape hatch for build environments with no git history (a source tarball, a
+// pinned F-Droid recipe): -PskywardVersionName / -PskywardVersionCode override
+// the derivation entirely.
+//
+// The results are exposed as extra properties rather than a shared function
+// because each *.gradle.kts is its own compilation unit and cannot see this
+// file's top-level declarations (same reason as licenseCheckedConfigurations
+// below).
+run {
+    // --match takes a glob, which cannot express "digits only": 'v[0-9]*.[0-9]*.[0-9]*'
+    // also matches prerelease forms like v0.1.0-rc.1. --exclude '*-*' drops those,
+    // and this anchored regex is what actually decides what counts as a release
+    // tag. It matches the one in .github/workflows/auto-tag-main.yml, leading-zero
+    // rejection included, so both ends agree on which tags are releases.
+    val releaseTagGlob = "v[0-9]*.[0-9]*.[0-9]*"
+    val releaseTagPattern = Regex("""^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$""")
+
+    fun git(vararg args: String): String? = runCatching {
+        val output = providers.exec {
+            workingDir = rootDir
+            commandLine(*args)
+            isIgnoreExitValue = true
+        }
+        if (output.result.get().exitValue != 0) {
+            null
+        } else {
+            output.standardOutput.asText.get().trim().ifBlank { null }
+        }
+    }.getOrNull()
+
+    // Bare nearest reachable release tag ("v0.1.0"), for the version code.
+    val baseTag = git(
+        "git", "describe", "--tags", "--abbrev=0",
+        "--match", releaseTagGlob, "--exclude", "*-*",
+    )?.takeIf { releaseTagPattern.matches(it) }
+
+    // Same tag, but with "-<commits>-g<sha>" appended once HEAD has moved past
+    // it — which is exactly what marks a build as "not the release itself".
+    val describedVersion = if (baseTag == null) {
+        null
+    } else {
+        git("git", "describe", "--tags", "--match", releaseTagGlob, "--exclude", "*-*")
+    }
+
+    val (major, minor, patch) = baseTag
+        ?.let { releaseTagPattern.find(it) }
+        ?.destructured
+        ?.let { (a, b, c) -> Triple(a.toInt(), b.toInt(), c.toInt()) }
+        ?: Triple(0, 0, 0)
+
+    // Monotonic and human-decodable: 0.1.0 -> 1000, 1.2.3 -> 1002003.
+    //
+    // The encoding is positional, so each component has to stay inside its
+    // field or it carries into the next one and collides: v0.0.1000 and v0.1.0
+    // both encode to 1000. That is not a hypothetical here — auto-tag-main
+    // increments the patch on every push to main, so the patch component climbs
+    // steadily on its own. Major is bounded too, by Android's 2100000000 ceiling.
+    //
+    // Failing the build is the only safe response. A versionCode is permanent
+    // once published — a store will not accept a re-used or lowered one — so a
+    // collision discovered after the fact cannot be corrected, only worked
+    // around forever. The fix when this trips is to cut the next minor or major
+    // tag by hand, which resets the patch field.
+    val maxComponent = 999
+    val maxMajor = 2100
+    if (baseTag != null) {
+        val problems = buildList {
+            if (major > maxMajor) add("major $major exceeds $maxMajor (Android's versionCode ceiling)")
+            if (minor > maxComponent) add("minor $minor exceeds $maxComponent")
+            if (patch > maxComponent) add("patch $patch exceeds $maxComponent — cut a minor release to reset it")
+            if (major == 0 && minor == 0 && patch == 0) add("v0.0.0 encodes to 0, but Android requires versionCode >= 1")
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                "Release tag $baseTag cannot be encoded as an Android versionCode: " +
+                    problems.joinToString("; ") + ".\n" +
+                    "The MAJOR*1000000 + MINOR*1000 + PATCH encoding needs each component " +
+                    "in range or two different releases can encode to the same versionCode."
+            )
+        }
+    }
+
+    // An untagged build gets 1 — deliberately lower than any real release, so a
+    // version-less build that reaches a store is rejected as a downgrade rather
+    // than silently published over a real one.
+    val derivedVersionCode = if (baseTag != null) major * 1_000_000 + minor * 1_000 + patch else 1
+    val derivedVersionName = describedVersion?.removePrefix("v") ?: "0.0.0-dev"
+
+    val overrideVersionName = providers.gradleProperty("skywardVersionName").orNull
+    val overrideVersionCode = providers.gradleProperty("skywardVersionCode").orNull?.toInt()
+
+    extra["skywardVersionName"] = overrideVersionName ?: derivedVersionName
+    extra["skywardVersionCode"] = overrideVersionCode ?: derivedVersionCode
+    // jpackage rejects anything but numeric MAJOR.MINOR.PATCH, so the desktop
+    // packaging gets the bare tag numbers with no "-3-gabc1234" suffix. Untagged
+    // desktop builds keep 0.1.0 rather than 0.0.0, since some jpackage targets
+    // reject an all-zero version outright.
+    extra["skywardPackageVersion"] =
+        if (baseTag != null) "$major.$minor.$patch" else "0.1.0"
+
+    logger.lifecycle(
+        "Skyward version: ${extra["skywardVersionName"]} " +
+            "(versionCode ${extra["skywardVersionCode"]}" +
+            (if (baseTag == null) ", no release tag found — using untagged fallback" else "") + ")"
+    )
+}
+
 // §17.5b / P6 / §16: "A dependency-licence report fails the build on any
 // dependency whose licence is not on an allowlist." Best-effort: resolves
 // each shipped app's runtime classpath, fetches the POM for every external
