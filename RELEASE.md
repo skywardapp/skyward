@@ -21,10 +21,11 @@ doesn't start is a day added to the critical path.
 - **`tools/ci/check-reproducible-build.sh`** — builds `fossRelease` twice from
   a clean workspace and asserts the two APKs are reproducible (§15.4/§17.5b):
   byte-for-byte identical first, and only if that fails, identical *content*
-  once the signing block is stripped (weaker — logged as such, since it can
-  miss zip-level nondeterminism the byte comparison would have caught). Runs
-  in its own CI job (`.github/workflows/ci.yml`, `reproducible-build`) and
-  locally:
+  once the v1 jar-signing entries (`META-INF/MANIFEST.MF` and the
+  `*.RSA`/`*.DSA`/`*.EC`/`*.SF` certificate/signature files) are stripped —
+  weaker, and logged as such, since it can miss zip-level nondeterminism the
+  byte comparison would have caught. Runs in its own CI job
+  (`.github/workflows/ci.yml`, `reproducible-build`) and locally:
   ```sh
   tools/ci/check-reproducible-build.sh
   ```
