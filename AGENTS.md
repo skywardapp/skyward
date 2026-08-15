@@ -37,7 +37,7 @@ the device to NOAA SWPC, NASA EONET and NASA/JPL. GPL-3.0-or-later.
 
 ## Layout
 
-```
+```text
 core/         Kotlin Multiplatform domain logic — model, astro, sources,
               visibility, rules, planner, persistence, sync, net, format
 androidApp/   Jetpack Compose app; foss + play flavours
@@ -139,9 +139,12 @@ because that is the startup path a packaging mistake actually breaks (ADR
 - §17.6's determinism guard runs the whole pipeline twice and asserts
   identical planned notifications; the natural-key/dedup design (§6.4, §10.4)
   depends on it, so treat a failure there as a design bug, not a flaky test.
-- Android instrumented tests (§17.5) need an emulator and live in
-  `.github/workflows/android-ui-tests.yml`, not in `ci.yml`. They record the
-  screen — the video is as much the point as the pass/fail.
+- Android instrumented tests (§17.5) live in `androidApp/src/androidTest/` and
+  need an emulator, so they run from `.github/workflows/android-ui-tests.yml`
+  rather than `ci.yml` — `tools/ci/run-ui-tests.sh` drives them once per
+  flavour and records the screen. The video is as much the point as the
+  pass/fail: a stolen focus or an unsettled frame is near-undiagnosable from a
+  stack trace with no device left to look at.
 - New behaviour ships with the tests §17 names for it.
 
 ## Git and PRs
