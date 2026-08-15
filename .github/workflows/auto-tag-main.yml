@@ -1,39 +1,25 @@
 name: Auto-tag main
 
-# Tags every push to main with an incrementing patch version (vMAJOR.MINOR.PATCH),
-# bumping versionCode/versionName in androidApp/build.gradle.kts to match so the
-# built APK actually reports the tagged version, then runs release-on-tag.yml
-# against the new tag directly.
+# Cuts a release on every push to main by pushing an incrementing patch tag
+# (vMAJOR.MINOR.PATCH) and invoking release-on-tag.yml for it.
 #
-# Loop safety, two different pushes with two different guards:
+# The tag is the ONLY place a version is recorded. androidApp and desktopApp
+# derive versionCode/versionName/packageVersion from it at build time — see the
+# version block in the root build.gradle.kts — so this workflow creates a tag
+# and nothing else. It never commits to main, which is why it needs neither
+# write access to a protected branch nor a PAT: pushing a tag is not a push to
+# the protected branch itself.
 #
-#   - The version-bump commit push (to `main`) may use a `RELEASE_BOT_TOKEN`
-#     PAT (see below) to get past branch protection. A PAT-authored push is
-#     NOT exempt from triggering further `on: push` runs the way a
-#     GITHUB_TOKEN-authored one is, so it could re-invoke this very workflow.
-#     Guarded by tagging the commit message with `[auto-tag]` and skipping
-#     the job whenever the triggering commit carries that marker — this
-#     works regardless of which token/actor made the push.
-#   - The tag push is deliberately made with the built-in GITHUB_TOKEN even
-#     when a PAT is used for the branch push above, specifically so it STAYS
-#     exempt from triggering release-on-tag.yml's own `push: tags` trigger —
-#     otherwise that event firing *and* the direct `workflow_call` below
-#     would both build and publish the same release.
-#
-# Because the tag push never fires `push: tags`, the `release` job below
-# calls release-on-tag.yml directly as a reusable workflow instead.
-#
-# `main` is a protected branch (checked via the GitHub API when this workflow
-# was written). If the default GITHUB_TOKEN doesn't have push rights here
-# (no bypass configured for github-actions[bot]/Actions in the branch
-# protection rule), the "Commit version bump" step below will fail with a
-# rejected push. Either add that bypass, or add a repo secret
-# `RELEASE_BOT_TOKEN` holding a PAT from an account that can push to main —
-# it's picked up automatically if present.
+# Loop safety: the tag push uses the built-in GITHUB_TOKEN, whose pushes are
+# exempt from triggering further workflow runs. That keeps release-on-tag.yml's
+# own `push: tags` trigger from firing alongside the direct `workflow_call`
+# below and publishing the same release twice. (A tag push could not re-trigger
+# this workflow in any case — `on: push: branches` does not match tag refs.)
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: auto-tag-main
@@ -43,85 +29,78 @@ permissions:
   contents: write
 
 jobs:
-  bump-and-tag:
-    name: Bump version and tag
+  tag:
+    name: Tag next patch version
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, '[auto-tag]') }}
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          # Needs the full history and every tag: the next version is computed
+          # from the highest existing release tag.
           fetch-depth: 0
-          persist-credentials: true
+          # Nothing here does an authenticated Git operation through `origin` —
+          # the tag push below authenticates explicitly with GITHUB_TOKEN.
+          persist-credentials: false
 
-      - name: Compute next version and bump build.gradle.kts
+      - name: Compute next tag
         id: tag
         run: |
           set -euo pipefail
 
-          current_version_name=$(grep -oP '(?<=versionName = ")[^"]+' androidApp/build.gradle.kts)
-          current_version_code=$(grep -oP '(?<=versionCode = )\d+' androidApp/build.gradle.kts)
-
-          # `git tag --list` uses glob, not regex, patterns: 'v[0-9]*.[0-9]*.[0-9]*'
-          # would also match a prerelease tag like v0.1.0-rc.1 (the `*`s absorb the
-          # extra text), which then breaks the arithmetic below. List broadly and
-          # filter with an anchored regex instead, so only exact vX.Y.Z tags count.
-          latest_tag=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
+          # `git tag --list` takes a glob, which cannot express "digits only",
+          # so this anchored regex is what actually defines a release tag. It
+          # rejects prerelease/build suffixes (v0.2.0-rc.1) and leading-zero
+          # components (v0.1.08) alike — both would otherwise reach the
+          # arithmetic below, where bash reads "08" as an invalid octal literal.
+          stable='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          latest_tag=$(git tag --list 'v*' | grep -E "$stable" | sort -V | tail -n1 || true)
 
           if [ -z "$latest_tag" ]; then
-            # No prior tag: mirror the current app version instead of bumping,
-            # so the very first auto-tag doesn't skip ahead of build.gradle.kts.
-            new_version="$current_version_name"
-            new_code="$current_version_code"
+            # Seed for a repo with no release tag yet. Deliberately a constant:
+            # there is no longer a version in any build file to read it from.
+            new_tag="v0.1.0"
           else
             IFS='.' read -r major minor patch <<< "${latest_tag#v}"
-            new_version="${major}.${minor}.$((patch + 1))"
-            new_code=$((current_version_code + 1))
+            # 10# forces base 10 for any leading zero that slipped past `stable`.
+            new_tag="v${major}.${minor}.$((10#$patch + 1))"
           fi
-          new_tag="v${new_version}"
 
-          sed -i "s/^\(\s*\)versionCode = [0-9]\+/\1versionCode = ${new_code}/" androidApp/build.gradle.kts
-          sed -i "s/^\(\s*\)versionName = \"[^\"]*\"/\1versionName = \"${new_version}\"/" androidApp/build.gradle.kts
+          # Re-validate what is about to be created and pushed. Everything
+          # downstream consumes this value, so it must not be able to carry
+          # shell syntax even if the derivation above is changed later.
+          if ! printf '%s' "$new_tag" | grep -qE "$stable"; then
+            echo "Computed tag '$new_tag' is not a stable vMAJOR.MINOR.PATCH tag" >&2
+            exit 1
+          fi
 
           echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
 
-      - name: Commit version bump
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet -- androidApp/build.gradle.kts; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add androidApp/build.gradle.kts
-            git commit -m "chore: bump version to ${{ steps.tag.outputs.tag }} [auto-tag]"
-            git push origin HEAD:main
-          fi
-
-      # Pushed with the built-in GITHUB_TOKEN specifically (not RELEASE_BOT_TOKEN),
-      # regardless of which token the branch push above used — see the loop-safety
-      # comment at the top of this file for why the tag push must stay
-      # GITHUB_TOKEN-authored.
       - name: Create and push tag
         env:
+          # Via env, not `${{ }}` inside the script: keeps the value data rather
+          # than something the shell parses.
+          TAG: ${{ steps.tag.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git tag "${{ steps.tag.outputs.tag }}"
-          # -c http.https://github.com/.extraheader="" clears the auth header
-          # actions/checkout configured for `origin` (which may carry
-          # RELEASE_BOT_TOKEN) so this push authenticates with the
-          # URL-embedded GITHUB_TOKEN instead, not whatever origin is using.
-          git -c http.https://github.com/.extraheader="" push \
-            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
-            "${{ steps.tag.outputs.tag }}"
+          git tag "$TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${TAG}"
 
   release:
-    name: Release ${{ needs.bump-and-tag.outputs.tag }}
-    needs: bump-and-tag
+    name: Release ${{ needs.tag.outputs.tag }}
+    needs: tag
     permissions:
       contents: write
     uses: ./.github/workflows/release-on-tag.yml
     with:
-      tag: ${{ needs.bump-and-tag.outputs.tag }}
-    secrets: inherit
+      tag: ${{ needs.tag.outputs.tag }}
+    # Explicitly mapped rather than `secrets: inherit`, so the release workflow
+    # receives only the signing key and nothing else this repo may hold.
+    secrets:
+      SKYWARD_RELEASE_STORE_FILE_BASE64: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}
+      SKYWARD_RELEASE_STORE_PASSWORD: ${{ secrets.SKYWARD_RELEASE_STORE_PASSWORD }}
+      SKYWARD_RELEASE_KEY_ALIAS: ${{ secrets.SKYWARD_RELEASE_KEY_ALIAS }}
+      SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}

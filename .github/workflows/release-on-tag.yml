@@ -6,16 +6,20 @@ name: Release on tag
 # that half. playRelease is Play Console's job, not GitHub's, so it isn't
 # built here.
 #
-# Two ways in:
+# The APK's own versionCode/versionName come from the tag being built, derived
+# at build time by the version block in the root build.gradle.kts — which is
+# why the checkout below needs tags present, not just the commit.
+#
+# Three ways in:
 #   - `push: tags: v*` — push a tag yourself (`git tag vX.Y.Z && git push --tags`)
 #     and this runs standalone.
 #   - `workflow_call` — invoked directly as a job by auto-tag-main.yml, which
-#     pushes its own tag using the default GITHUB_TOKEN. GITHUB_TOKEN-authored
+#     pushes its tag with the built-in GITHUB_TOKEN. GITHUB_TOKEN-authored
 #     pushes are deliberately exempt from triggering further `on: push` runs
-#     (GitHub's built-in loop guard), so that tag push would never fire the
-#     trigger above — hence the direct call instead.
-# `workflow_dispatch` is for manually (re-)running a release against an
-# existing tag, e.g. after fixing a signing secret.
+#     (GitHub's built-in loop guard), so that tag push never fires the trigger
+#     above — hence the direct call, and hence no double publish.
+#   - `workflow_dispatch` — manually (re-)run a release against an existing
+#     tag, e.g. after adding the signing secrets.
 
 on:
   push:
@@ -27,6 +31,17 @@ on:
         description: "Tag to release (defaults to the triggering ref)"
         required: false
         type: string
+    # Declared so a caller can map just these rather than `secrets: inherit`.
+    # All optional: absent, the build below produces a valid unsigned APK.
+    secrets:
+      SKYWARD_RELEASE_STORE_FILE_BASE64:
+        required: false
+      SKYWARD_RELEASE_STORE_PASSWORD:
+        required: false
+      SKYWARD_RELEASE_KEY_ALIAS:
+        required: false
+      SKYWARD_RELEASE_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -45,14 +60,15 @@ jobs:
   release:
     name: Build & publish GitHub release
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - name: Resolve tag
-        id: resolve
-        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.resolve.outputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
+          # Full history and tags: the build derives its version via
+          # `git describe`, which needs the tag object, not just the commit.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up JDK 17
@@ -79,7 +95,7 @@ jobs:
           SKYWARD_RELEASE_STORE_FILE_BASE64: ${{ secrets.SKYWARD_RELEASE_STORE_FILE_BASE64 }}
         run: |
           set -euo pipefail
-          if [ -n "$SKYWARD_RELEASE_STORE_FILE_BASE64" ]; then
+          if [ -n "${SKYWARD_RELEASE_STORE_FILE_BASE64:-}" ]; then
             printf '%s' "$SKYWARD_RELEASE_STORE_FILE_BASE64" | base64 -d > "${RUNNER_TEMP}/skyward-release.jks"
             echo "SKYWARD_RELEASE_STORE_FILE=${RUNNER_TEMP}/skyward-release.jks" >> "$GITHUB_ENV"
           fi
@@ -91,16 +107,22 @@ jobs:
           SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :androidApp:assembleFossRelease --stacktrace
 
-      - name: Locate fossRelease APK
+      # Renamed on the way out so the release asset is self-describing —
+      # AGP's default output name (androidApp-foss-release.apk) carries no
+      # version. Only the uploaded copy is renamed; the built artifact the
+      # reproducibility check compares is untouched.
+      - name: Stage the APK as a release asset
         id: apk
         run: |
           set -euo pipefail
-          path=$(find androidApp/build/outputs/apk/foss/release -name '*.apk' -print -quit)
-          if [ -z "$path" ]; then
+          built=$(find androidApp/build/outputs/apk/foss/release -name '*.apk' -print -quit)
+          if [ -z "$built" ]; then
             echo "No APK found under androidApp/build/outputs/apk/foss/release" >&2
             exit 1
           fi
-          echo "path=$path" >> "$GITHUB_OUTPUT"
+          asset="${RUNNER_TEMP}/skyward-${TAG}-foss.apk"
+          cp "$built" "$asset"
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
 
       # gh (pre-installed on GitHub-hosted runners) rather than a third-party
       # release action — one less external action to trust/pin. --generate-notes
@@ -109,15 +131,14 @@ jobs:
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.apk.outputs.path }}
         run: |
           set -euo pipefail
-          tag="${{ steps.resolve.outputs.tag }}"
-          apk="${{ steps.apk.outputs.path }}"
-          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload "$tag" "$apk" --repo "${{ github.repository }}" --clobber
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$tag" "$apk" \
-              --repo "${{ github.repository }}" \
-              --title "$tag" \
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
               --generate-notes
           fi
