@@ -43,19 +43,6 @@ class MainActivityUiTest {
     // regardless of run order or what a previous method left behind.
     @Before
     fun startWithOnboardingIncomplete() {
-        // Upcoming shows an indeterminate CircularProgressIndicator while its
-        // first query result is pending (UpcomingScreen.kt); that animation
-        // schedules a new frame forever, which Espresso's Compose idling
-        // resource reads as "still busy" even once the real data has long
-        // since loaded -- any assertion or click made after landing on
-        // Upcoming then hangs until ComposeNotIdleException's global
-        // timeout. autoAdvance = false stops that animation-pending signal
-        // from counting as busy while leaving real (non-animation)
-        // recomposition -- driven by the device's actual Choreographer --
-        // untouched, which is the documented fix for indeterminate
-        // animations in Compose instrumented tests.
-        composeRule.mainClock.autoAdvance = false
-
         runBlocking {
             context.container.settingsRepo.setOnboardingDone(false)
             for (location in context.container.locationRepo.getAll()) {
