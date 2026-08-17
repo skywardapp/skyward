@@ -24,8 +24,12 @@ name: Release on tag
 #     pushes are deliberately exempt from triggering further `on: push` runs
 #     (GitHub's built-in loop guard), so that tag push never fires the trigger
 #     above — hence the direct call, and hence no double publish.
-#   - `workflow_dispatch` — manually (re-)run a release against an existing
-#     tag, e.g. after adding the signing secrets.
+#   - `workflow_dispatch` — manually run a release against an existing tag
+#     that was pushed without one, e.g. because signing secrets were missing
+#     at the time. GitHub's Immutable Releases (RELEASE.md) make a tag's
+#     release permanent once published — assets can't be added, replaced or
+#     removed afterwards — so this only helps a tag that never got a release
+#     out; see "Create GitHub release" below for what happens if it did.
 
 on:
   push:
@@ -254,7 +258,25 @@ jobs:
       # release action — one less external action to trust/pin. --generate-notes
       # asks GitHub to build categorized notes from merged PRs since the
       # previous release, same as the "Generate release notes" button in the UI.
-      - name: Create or update GitHub release
+      #
+      # This only ever creates. Once Immutable Releases is on for this repo
+      # (RELEASE.md), a published release's tag and assets are permanent —
+      # `gh release upload --clobber` against one fails outright, and even
+      # unenabled, silently overwriting a previously published release's
+      # assets is exactly the tampering surface that setting exists to close.
+      # So a tag that already has a release is refused here rather than
+      # patched: cut a new tag instead of re-running this workflow against
+      # one that already published. `gh release create` uploads every asset
+      # before the release goes live (a draft under the hood), which is the
+      # sequencing Immutable Releases requires — nothing extra to do for it.
+      #
+      # --verify-tag matters here specifically because the release becomes
+      # permanent the moment it publishes: without it, `gh release create`
+      # silently creates a *new* tag off the default branch if `$TAG` isn't
+      # found on the remote (e.g. deleted between the checkout above and this
+      # step), so the published release would point at the wrong commit —
+      # with no way to fix it afterwards. Fail instead of guessing.
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           APK: ${{ steps.apk.outputs.path }}
@@ -262,10 +284,14 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$FLATPACK" --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$TAG" "$APK" "$FLATPACK" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$TAG" \
-              --generate-notes
+            echo "Release '$TAG' already exists. Releases are immutable —" >&2
+            echo "refusing to add, replace or remove its assets. Cut a new" >&2
+            echo "tag instead of re-running this workflow against one that" >&2
+            echo "already published." >&2
+            exit 1
           fi
+          gh release create "$TAG" "$APK" "$FLATPACK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes
