@@ -30,11 +30,13 @@ class ExactAlarmDegradationCardTest {
     private lateinit var container: AppContainer
 
     @Before
-    fun setUp() = runBlocking {
-        val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
-        container = app.container
-        container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
-        container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
+    fun setUp() {
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
+            container = app.container
+            container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
+            container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
+        }
     }
 
     // Block bodies, not `= runBlocking { ... }`: an expression body's return
