@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
@@ -58,7 +59,12 @@ class ExactAlarmDegradationCardTest {
             composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
             composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
 
-            showUpcoming()
+            // A ComposeTestRule accepts exactly one setContent call per test, so
+            // "recomposition" here is a pause/resume cycle -- the same trigger
+            // UpcomingScreen's own LifecycleEventEffect(ON_RESUME) re-reads the
+            // dismissed version on -- not a second setContent.
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
             composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
             composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
         }
