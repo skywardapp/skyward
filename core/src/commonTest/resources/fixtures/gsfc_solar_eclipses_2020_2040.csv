@@ -1,6 +1,7 @@
 # NASA GSFC Five Millennium Canon of Solar Eclipses (Espenak & Meeus) — 2020-2040 extract
 # Eclipse predictions courtesy of Fred Espenak and Jean Meeus, NASA/GSFC.
 date,greatest_time_utc,canon_kind,expected_kind,lat_deg,lon_deg
+2020-06-21,2020-06-21T06:40:03Z,A,ANNULAR,30.5241,79.6734
 2020-12-14,2020-12-14T16:14:39Z,T,TOTAL,-40.3000,-67.9000
 2021-06-10,2021-06-10T10:43:07Z,A,ANNULAR,80.8000,-66.8000
 2021-12-04,2021-12-04T07:34:38Z,T,TOTAL,-76.8000,-46.2000
