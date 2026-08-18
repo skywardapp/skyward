@@ -3,7 +3,7 @@ package dev.fritze.skyward.ui.upcoming
 import android.content.Context
 import android.os.Build
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -47,11 +47,11 @@ class ExactAlarmDegradationCardTest {
         composeRule.onNodeWithText("Dismiss").assertIsDisplayed()
         composeRule.onNodeWithText("Dismiss").performClick()
         composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertDoesNotExist()
+        composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
 
         showUpcoming()
         composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertDoesNotExist()
+        composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
     }
 
     @Test
