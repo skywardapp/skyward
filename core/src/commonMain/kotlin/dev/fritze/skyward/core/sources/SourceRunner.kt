@@ -9,6 +9,8 @@ import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SourceStateRepo
 import dev.fritze.skyward.core.persistence.persistenceJson
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlin.time.Duration.Companion.days
@@ -32,6 +34,15 @@ class SourceRunner(
     private val locationRepo: LocationRepo,
     private val onOccurrencesChanged: suspend (now: Instant) -> Unit,
 ) {
+    // Guards against RefreshWorker's periodic pass and a caller-triggered
+    // force-refresh (onboarding's finish(), pull-to-refresh, §13.2)
+    // overlapping: both can force the same COMPUTED sources, and without
+    // this two concurrent runs redo each other's work against the same
+    // SQLite rows, which on a slow device turns a few seconds of local
+    // computation into minutes of lock contention rather than any actual
+    // correctness gain -- runDue is naturally idempotent, so serializing
+    // it costs nothing but a short wait for whichever call loses the race.
+    private val runMutex = Mutex()
 
     /**
      * Runs every enabled source whose `next_run_at` is due, plus every
@@ -41,7 +52,7 @@ class SourceRunner(
      * location, or settings change are expected to pass their ids in
      * [force] (a failed run still schedules its own backoff retry, though).
      */
-    suspend fun runDue(now: Instant, force: Set<String> = emptySet()) {
+    suspend fun runDue(now: Instant, force: Set<String> = emptySet()): Unit = runMutex.withLock {
         val horizon = TimeWindow(now, now + (settingsRepo.getHorizonYears() * 365).days)
         val locations = locationRepo.getAll()
         val thresholds = deriveThresholds(ruleRepo.getEnabled())
