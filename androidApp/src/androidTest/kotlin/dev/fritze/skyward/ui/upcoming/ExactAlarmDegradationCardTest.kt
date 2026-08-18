@@ -37,32 +37,42 @@ class ExactAlarmDegradationCardTest {
         container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
     }
 
+    // Block bodies, not `= runBlocking { ... }`: an expression body's return
+    // type is inferred from runBlocking's result, and these end on a
+    // Compose assertion call that returns a non-Unit SemanticsNodeInteraction
+    // (for chaining) -- which made the compiled test method non-void and
+    // failed JUnit4's "test methods must be void" class validation,
+    // aborting the whole class as an initializationError before any test ran.
     @Test
-    fun dismissingCardPersistsAcrossRecomposition() = runBlocking {
-        showUpcoming()
+    fun dismissingCardPersistsAcrossRecomposition() {
+        runBlocking {
+            showUpcoming()
 
-        composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+            composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
+            composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
 
-        composeRule.onNodeWithText("Dismiss").assertIsDisplayed()
-        composeRule.onNodeWithText("Dismiss").performClick()
-        composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
+            composeRule.onNodeWithText("Dismiss").assertIsDisplayed()
+            composeRule.onNodeWithText("Dismiss").performClick()
+            composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
+            composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
 
-        showUpcoming()
-        composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
+            showUpcoming()
+            composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
+            composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
+        }
     }
 
     @Test
-    fun olderDismissedVersionStillShowsCardAfterVersionBump() = runBlocking {
-        val currentVersionCode = appVersionCode(ApplicationProvider.getApplicationContext())
-        container.settingsRepo.setExactAlarmCardDismissedVersion(currentVersionCode - 1)
+    fun olderDismissedVersionStillShowsCardAfterVersionBump() {
+        runBlocking {
+            val currentVersionCode = appVersionCode(ApplicationProvider.getApplicationContext())
+            container.settingsRepo.setExactAlarmCardDismissedVersion(currentVersionCode - 1)
 
-        showUpcoming()
+            showUpcoming()
 
-        composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+            composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
+            composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+        }
     }
 
     private fun showUpcoming() {
