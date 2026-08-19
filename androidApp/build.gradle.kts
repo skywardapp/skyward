@@ -146,6 +146,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.sqldelight.android.driver)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.datetime)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
