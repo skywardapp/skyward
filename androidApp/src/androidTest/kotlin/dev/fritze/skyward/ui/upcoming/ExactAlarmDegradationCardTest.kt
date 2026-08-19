@@ -3,13 +3,14 @@ package dev.fritze.skyward.ui.upcoming
 import android.content.Context
 import android.os.Build
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
@@ -30,39 +31,56 @@ class ExactAlarmDegradationCardTest {
     private lateinit var container: AppContainer
 
     @Before
-    fun setUp() = runBlocking {
-        val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
-        container = app.container
-        container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
-        container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
+    fun setUp() {
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
+            container = app.container
+            container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
+            container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
+        }
+    }
+
+    // Block bodies, not `= runBlocking { ... }`: an expression body's return
+    // type is inferred from runBlocking's result, and these end on a
+    // Compose assertion call that returns a non-Unit SemanticsNodeInteraction
+    // (for chaining) -- which made the compiled test method non-void and
+    // failed JUnit4's "test methods must be void" class validation,
+    // aborting the whole class as an initializationError before any test ran.
+    @Test
+    fun dismissingCardPersistsAcrossRecomposition() {
+        runBlocking {
+            showUpcoming()
+
+            composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
+            composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+
+            composeRule.onNodeWithText("Dismiss").assertIsDisplayed()
+            composeRule.onNodeWithText("Dismiss").performClick()
+            composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
+            composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
+
+            // A ComposeTestRule accepts exactly one setContent call per test, so
+            // "recomposition" here is a pause/resume cycle -- the same trigger
+            // UpcomingScreen's own LifecycleEventEffect(ON_RESUME) re-reads the
+            // dismissed version on -- not a second setContent.
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+            composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
+            composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
+        }
     }
 
     @Test
-    fun dismissingCardPersistsAcrossRecomposition() = runBlocking {
-        showUpcoming()
+    fun olderDismissedVersionStillShowsCardAfterVersionBump() {
+        runBlocking {
+            val currentVersionCode = appVersionCode(ApplicationProvider.getApplicationContext())
+            container.settingsRepo.setExactAlarmCardDismissedVersion(currentVersionCode - 1)
 
-        composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+            showUpcoming()
 
-        composeRule.onNodeWithText("Dismiss").assertIsDisplayed()
-        composeRule.onNodeWithText("Dismiss").performClick()
-        composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertDoesNotExist()
-
-        showUpcoming()
-        composeRule.awaitTextGone(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertDoesNotExist()
-    }
-
-    @Test
-    fun olderDismissedVersionStillShowsCardAfterVersionBump() = runBlocking {
-        val currentVersionCode = appVersionCode(ApplicationProvider.getApplicationContext())
-        container.settingsRepo.setExactAlarmCardDismissedVersion(currentVersionCode - 1)
-
-        showUpcoming()
-
-        composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
-        composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+            composeRule.awaitText(EXACT_ALARM_CARD_TITLE)
+            composeRule.onNodeWithText(EXACT_ALARM_CARD_TITLE).assertIsDisplayed()
+        }
     }
 
     private fun showUpcoming() {
