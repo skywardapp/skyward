@@ -25,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.BuildConfig
+import dev.fritze.skyward.core.format.EONET_ATTRIBUTION_NOTE
+import dev.fritze.skyward.core.format.PRIVACY_POLICY_URL
+import dev.fritze.skyward.core.format.sourceRepositoryUrl
 
 private data class Attribution(val component: String, val license: String, val note: String)
 
@@ -34,7 +37,7 @@ private val ATTRIBUTIONS = listOf(
     Attribution("Stellarium meteor-shower catalog", "GPL-2.0-or-later", "Meteor shower data from the Stellarium project"),
     Attribution("Natural Earth 1:50m", "Public domain", "Made with Natural Earth"),
     Attribution("NOAA SWPC (Kp, OVATION)", "US Gov public domain", "Aurora forecast data"),
-    Attribution("NASA EONET", "US Gov / NASA open", "Event data: NASA EONET"),
+    Attribution("NASA EONET", "US Gov / NASA open", EONET_ATTRIBUTION_NOTE),
     Attribution("NASA/JPL Small-Body Database", "US Gov public domain", "Comet orbital data: NASA/JPL Small-Body Database"),
     Attribution("NASA GSFC eclipse canon (Espenak & Meeus)", "Free with acknowledgment", "Eclipse predictions courtesy of Fred Espenak and Jean Meeus, NASA/GSFC"),
 )
@@ -44,6 +47,7 @@ private val ATTRIBUTIONS = listOf(
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val packageInfo = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
+    val sourceUrl = sourceRepositoryUrl(BuildConfig.SKYWARD_RELEASE_TAG)
 
     Scaffold(
         topBar = {
@@ -68,7 +72,10 @@ fun AboutScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SOURCE_URL))) }) {
+            OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))) }) {
+                Text("Privacy policy")
+            }
+            OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl))) }) {
                 Text("Source code (GPL-3.0-or-later)")
             }
 
@@ -86,9 +93,3 @@ fun AboutScreen(onBack: () -> Unit) {
         }
     }
 }
-
-// §16/§13.1: GPL §6(d) requires Corresponding Source available from the same
-// place a released build is distributed from, tagged to match versionCode --
-// the actual tag-per-release wiring is R14/M7 release-engineering work; this
-// points at the repository itself in the meantime.
-private const val SOURCE_URL = "https://github.com/skywardapp/skyward"

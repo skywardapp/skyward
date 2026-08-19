@@ -6,6 +6,26 @@ plugins {
     alias(libs.plugins.kotlin.compose.compiler)
 }
 
+val bundleBuildInfo by tasks.registering {
+    description = "Packages the desktop build/version metadata needed by the About screen."
+    val outputDirectory = layout.buildDirectory.dir("generated/buildInfo")
+    val appVersion = rootProject.extra["skywardVersionName"] as String
+    val releaseTag = rootProject.extra["skywardReleaseTag"] as String
+    inputs.property("appVersion", appVersion)
+    inputs.property("releaseTag", releaseTag)
+    outputs.dir(outputDirectory)
+
+    doLast {
+        val target = outputDirectory.get().asFile.also { it.mkdirs() }.resolve("skyward-build.properties")
+        target.writeText(
+            buildString {
+                appendLine("appVersion=$appVersion")
+                appendLine("releaseTag=$releaseTag")
+            }
+        )
+    }
+}
+
 kotlin {
     jvmToolchain(17)
 }
@@ -41,6 +61,7 @@ val bundleNotice by tasks.registering(Copy::class) {
 }
 
 sourceSets.named("main") {
+    resources.srcDir(bundleBuildInfo)
     resources.srcDir(bundleNotice.map { it.destinationDir })
 }
 
