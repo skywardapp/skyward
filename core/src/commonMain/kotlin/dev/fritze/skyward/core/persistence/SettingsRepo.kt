@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
  * §11: `app_setting` — flat key/value store. Known keys: `horizon_years`,
  * `units`, `source.<id>.enabled`, `source.<id>.settings_json`,
  * `aurora_tier_state`, `onboarding_done`, `background_mode` (desktop),
- * `theme`, `schema_version`.
+ * `theme`, `schema_version`, `exact_alarm_card_dismissed_version`.
  */
 class SettingsRepo(private val db: SkywardDatabase) {
 
@@ -46,9 +46,15 @@ class SettingsRepo(private val db: SkywardDatabase) {
         get("source.$sourceId.enabled")?.let { it == "true" } ?: defaultValue
     suspend fun setSourceEnabled(sourceId: String, enabled: Boolean) = set("source.$sourceId.enabled", enabled.toString())
 
+    suspend fun getExactAlarmCardDismissedVersion(): Long? =
+        get(KEY_EXACT_ALARM_CARD_DISMISSED_VERSION)?.toLongOrNull()
+    suspend fun setExactAlarmCardDismissedVersion(versionCode: Long) =
+        set(KEY_EXACT_ALARM_CARD_DISMISSED_VERSION, versionCode.toString())
+
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_HORIZON_YEARS = "horizon_years"
+        const val KEY_EXACT_ALARM_CARD_DISMISSED_VERSION = "exact_alarm_card_dismissed_version"
         const val DEFAULT_HORIZON_YEARS = 3
     }
 }

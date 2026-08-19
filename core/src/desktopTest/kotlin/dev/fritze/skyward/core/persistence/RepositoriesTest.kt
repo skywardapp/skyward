@@ -206,8 +206,21 @@ class RepositoriesTest {
         repo.setSourceEnabled("swpc", false)
         assertEquals(false, repo.isSourceEnabled("swpc"))
 
+        assertEquals(null, repo.getExactAlarmCardDismissedVersion())
+        repo.setExactAlarmCardDismissedVersion(123L)
+        assertEquals(123L, repo.getExactAlarmCardDismissedVersion())
+
         repo.set("custom", "value")
         assertEquals("value", repo.get("custom"))
-        assertEquals(mapOf("horizon_years" to "5", "onboarding_done" to "true", "source.swpc.enabled" to "false", "custom" to "value"), repo.observeAll().first())
+        assertEquals(
+            mapOf(
+                "horizon_years" to "5",
+                "onboarding_done" to "true",
+                "source.swpc.enabled" to "false",
+                "exact_alarm_card_dismissed_version" to "123",
+                "custom" to "value",
+            ),
+            repo.observeAll().first(),
+        )
     }
 }
