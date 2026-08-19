@@ -12,6 +12,7 @@ import dev.fritze.skyward.core.planner.UpcomingFilter
 import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.core.planner.computeUpcomingItems
+import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.sources.AuroraSource
 import dev.fritze.skyward.core.sources.EventSource
 import dev.fritze.skyward.core.sources.KpEstimate
@@ -46,7 +47,10 @@ data class AuroraBannerUiState(
     val darknessStart: Instant?,
 )
 
-/** §13.2's core view-model — combines DB state reactively, delegates the actual selection logic to `core`'s pure `computeUpcomingItems`. */
+/**
+ * §13.2's core view-model — combines DB state reactively, delegates the
+ * actual selection logic to `core`'s pure `computeUpcomingItems`.
+ */
 class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
     private val filter = MutableStateFlow(UpcomingFilter())
     private val refreshing = MutableStateFlow(false)
@@ -58,22 +62,37 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Holds the pieces `combine` below has no typed overload for six flows of. */
+    private data class BaseState(
+        val occurrences: List<Occurrence>,
+        val locations: List<SavedLocation>,
+        val rules: List<Rule>,
+        val filter: UpcomingFilter,
+        val isRefreshing: Boolean,
+    )
+
     val uiState: StateFlow<UpcomingUiState> = combine(
-        container.occurrenceRepo.observeAll(),
-        container.locationRepo.observeAll(),
-        container.ruleRepo.observeAll(),
-        filter,
-        refreshing,
+        combine(
+            container.occurrenceRepo.observeAll(),
+            container.locationRepo.observeAll(),
+            container.ruleRepo.observeAll(),
+            filter,
+            refreshing,
+        ) { occurrences, locations, rules, currentFilter, isRefreshing ->
+            BaseState(occurrences, locations, rules, currentFilter, isRefreshing)
+        },
         liveKp,
-    ) { occurrences, locations, rules, currentFilter, isRefreshing, currentKp ->
+    ) { base, currentKp ->
         val ctx = VisibilityContext(
             now = Clock.System.now(),
             ovationGrid = AuroraSource.loadOvationGrid(container.sourceStateRepo),
         )
-        val items = computeUpcomingItems(occurrences, locations, rules, container.visibilityModels, ctx, currentFilter)
+        val items = computeUpcomingItems(
+            base.occurrences, base.locations, base.rules, container.visibilityModels, ctx, base.filter,
+        )
         val auroraBanner = activeAuroraBanner(
-            occurrences = occurrences,
-            locations = locations,
+            occurrences = base.occurrences,
+            locations = base.locations,
             visibilityModels = container.visibilityModels,
             ctx = ctx,
             currentKp = currentKp?.estimatedKp,
@@ -81,9 +100,9 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
         UpcomingUiState(
             items = items,
             auroraBanner = auroraBanner,
-            filter = currentFilter,
+            filter = base.filter,
             isLoading = false,
-            isRefreshing = isRefreshing,
+            isRefreshing = base.isRefreshing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpcomingUiState())
 
