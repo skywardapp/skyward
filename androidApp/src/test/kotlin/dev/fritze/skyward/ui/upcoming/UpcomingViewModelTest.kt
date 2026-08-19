@@ -69,6 +69,26 @@ class UpcomingViewModelTest {
         assertNull(banner)
     }
 
+    @Test
+    fun activeAuroraBannerIgnoresNowcastsThatHaveNotStartedYet() {
+        val future = occurrence(
+            id = "future",
+            issuedAt = now + 30.minutes,
+            expiresAt = now + 2.hours,
+            forecastKind = AuroraForecastKind.NOWCAST,
+        )
+
+        val banner = activeAuroraBanner(
+            occurrences = listOf(future),
+            locations = listOf(primary),
+            visibilityModels = visibilityModels,
+            ctx = VisibilityContext(now, grid(primary.point to 62)),
+            currentKp = null,
+        )
+
+        assertNull(banner)
+    }
+
     private fun location(id: String, name: String, point: GeoPoint, isPrimary: Boolean) = SavedLocation(
         id = id,
         name = name,

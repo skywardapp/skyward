@@ -20,6 +20,7 @@ import dev.fritze.skyward.core.sources.KpNowcast
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -136,7 +137,7 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
 
     private suspend fun refreshLiveKp() {
         liveKp.value = if (container.settingsRepo.isSourceEnabled(SWPC_SOURCE_ID)) {
-            runCatching { KpNowcast.fetchLatest() }.getOrNull()
+            runCatchingCancellable { KpNowcast.fetchLatest() }.getOrNull()
         } else {
             null
         }
@@ -166,6 +167,7 @@ internal fun activeAuroraBanner(
         .mapNotNull { occ ->
             val payload = occ.payload as? AuroraPayload ?: return@mapNotNull null
             if (payload.forecastKind != AuroraForecastKind.NOWCAST) return@mapNotNull null
+            if (occ.window.start > ctx.now) return@mapNotNull null
             val expiresAt = occ.expiresAt
             if ((expiresAt != null && expiresAt <= ctx.now) || (expiresAt == null && occ.window.end <= ctx.now)) {
                 return@mapNotNull null
