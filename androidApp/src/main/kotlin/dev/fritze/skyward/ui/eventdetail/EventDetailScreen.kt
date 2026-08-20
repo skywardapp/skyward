@@ -141,11 +141,15 @@ private fun EventDetailActions(
     }
 }
 
-/** §13.3: "add one-off extra reminder" -- a small preset set plus a custom hours field is enough. */
+/**
+ * §13.3: "add one-off extra reminder" -- a small preset set plus a custom
+ * hours field is enough.
+ */
 @Composable
 private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () -> Unit) {
     val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
     var customHours by remember { mutableStateOf("") }
+    val customLeadHours = customHours.toPositiveHoursOrNull()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -167,13 +171,16 @@ private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () 
         },
         confirmButton = {
             TextButton(
-                onClick = { customHours.toDoubleOrNull()?.let { onPick(it.hours) } },
-                enabled = customHours.toDoubleOrNull() != null,
+                onClick = { customLeadHours?.let { onPick(it.hours) } },
+                enabled = customLeadHours != null,
             ) { Text("Set") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** A lead must be a real, positive duration -- a zero or negative one before "PEAK" would fire at or after it. */
+private fun String.toPositiveHoursOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
 
 @Composable
 private fun Row2(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {

@@ -156,6 +156,7 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
 private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit) {
     val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
     var customHours by remember { mutableStateOf("") }
+    val customLeadHours = customHours.toPositiveHoursOrNull()
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -174,8 +175,8 @@ private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit
                 modifier = Modifier.width(120.dp),
             )
             TextButton(
-                onClick = { customHours.toDoubleOrNull()?.let { onPick(it.hours) } },
-                enabled = customHours.toDoubleOrNull() != null,
+                onClick = { customLeadHours?.let { onPick(it.hours) } },
+                enabled = customLeadHours != null,
             ) { Text("Set") }
             if (currentLead != null) {
                 TextButton(onClick = { onPick(null) }) { Text("Remove") }
@@ -183,6 +184,9 @@ private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit
         }
     }
 }
+
+/** A lead must be a real, positive duration -- a zero or negative one before "PEAK" would fire at or after it. */
+private fun String.toPositiveHoursOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
 
 @Composable
 private fun DetailHeader(state: DesktopAppState, occurrence: Occurrence, now: Instant, onClose: () -> Unit) {
@@ -354,7 +358,10 @@ private suspend fun toggleMute(state: DesktopAppState, occurrence: Occurrence, i
 
 internal fun extraReminderRuleId(occurrenceId: String) = "extra:$occurrenceId"
 
-/** §13.3's "add one-off extra reminder" -- hidden(condition=OccurrenceIdIs(id), leads=[lead]). */
+/**
+ * §13.3's "add one-off extra reminder" --
+ * hidden(condition=OccurrenceIdIs(id), leads=[lead]).
+ */
 private suspend fun setExtraReminder(state: DesktopAppState, occurrence: Occurrence, lead: Duration) {
     val now = Clock.System.now()
     state.container.ruleRepo.upsert(
