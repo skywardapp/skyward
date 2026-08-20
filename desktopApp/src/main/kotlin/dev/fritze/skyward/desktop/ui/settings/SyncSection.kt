@@ -136,6 +136,9 @@ private suspend fun runExport(state: DesktopAppState, target: File): String = tr
         locations = container.locationRepo.getAll(),
         rules = container.ruleRepo.getAll(), // §9.1: hidden rules are included in sync
         settings = container.settingsRepo.observeAll().first(),
+        // §10.4: FIRED rows older than 180 days are pruned by ReplanCoordinator.replan, so
+        // this list -- and the export file it lands in -- is bounded by the same window
+        // without needing its own cutoff here.
         firedNotificationIds = container.notificationRepo.getAll()
             .filter { it.status == NotificationStatus.FIRED }
             .map { it.id },
