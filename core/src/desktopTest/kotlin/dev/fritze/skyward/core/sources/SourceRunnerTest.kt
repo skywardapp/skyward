@@ -5,15 +5,20 @@ import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
+import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
+import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.core.persistence.LocationRepo
 import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
+import dev.fritze.skyward.core.visibility.VisibilityCacheEntry
+import dev.fritze.skyward.core.visibility.VisibilityCacheKey
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,6 +70,7 @@ class SourceRunnerTest {
         val settingsRepo: SettingsRepo
         val ruleRepo: RuleRepo
         val locationRepo: LocationRepo
+        val visibilityCacheRepo: VisibilityCacheRepo
         var replanCalls = 0
         var lastReplanNow: Instant? = null
 
@@ -77,10 +83,11 @@ class SourceRunnerTest {
             settingsRepo = SettingsRepo(db)
             ruleRepo = RuleRepo(db)
             locationRepo = LocationRepo(db)
+            visibilityCacheRepo = VisibilityCacheRepo(db)
         }
 
         fun runner(vararg sources: EventSource) = SourceRunner(
-            sources.toList(), occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo,
+            sources.toList(), occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo, visibilityCacheRepo,
             onOccurrencesChanged = { n -> replanCalls++; lastReplanNow = n },
         )
     }
@@ -175,6 +182,24 @@ class SourceRunnerTest {
 
         assertNull(fx.occurrenceRepo.getById("se:1"), "a withdrawn FORECAST occurrence must be deleted (§6.3)")
         assertEquals(2, fx.replanCalls)
+    }
+
+    @Test
+    fun withdrawingAnOccurrenceInvalidatesItsVisibilityCacheEntries() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now, force = setOf("test-source"))
+        val key = VisibilityCacheKey("se:1", "home")
+        fx.visibilityCacheRepo.upsertAll(
+            mapOf(key to VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now)),
+        )
+        assertTrue(fx.visibilityCacheRepo.getAll().containsKey(key))
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now + 1.hours, force = setOf("test-source"))
+
+        assertTrue(fx.visibilityCacheRepo.getAll().isEmpty(), "a dropped occurrence's cached verdicts must not survive it (§11)")
     }
 
     @Test

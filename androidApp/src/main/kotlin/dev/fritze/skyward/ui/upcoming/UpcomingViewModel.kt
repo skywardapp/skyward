@@ -18,6 +18,7 @@ import dev.fritze.skyward.core.sources.KpEstimate
 import dev.fritze.skyward.core.sources.KpNowcast
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
+import dev.fritze.skyward.core.visibility.VisibilityResultCache
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,9 +27,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -103,9 +106,16 @@ class UpcomingViewModel(
         // us as an occurrence emission anyway — so it is read once per input
         // change here rather than once per tick below.
         val ovationGrid = AuroraSource.loadOvationGrid(container.sourceStateRepo)
+        // §11/§9.2 step 1: same read-through visibility_cache the replan path
+        // uses, so ticking doesn't recompute every visibility model for every
+        // location on every wake (issue #18). Loaded/wrapped once per input
+        // change, alongside ovationGrid above, for the same reason.
+        val cache = VisibilityResultCache(container.visibilityCacheRepo.getAll(), TimeZone.currentSystemDefault())
+        val cachedModels = cache.wrap(container.visibilityModels)
         // Every emission above restarts the ticking, which is exactly what
         // `flatMapLatest` is for: fresh inputs mean fresh boundaries.
-        upcomingStatesOverTime(base, currentKp, ovationGrid, container.visibilityModels, clock)
+        upcomingStatesOverTime(base, currentKp, ovationGrid, cachedModels, clock)
+            .onEach { if (cache.dirty.isNotEmpty()) container.visibilityCacheRepo.upsertAll(cache.dirty) }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),

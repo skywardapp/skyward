@@ -19,6 +19,7 @@ import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
 import dev.fritze.skyward.core.persistence.SyncImportRepo
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
 import dev.fritze.skyward.core.sources.AuroraSource
@@ -67,6 +68,7 @@ class AppContainer(context: Context) {
     val sourceStateRepo = SourceStateRepo(database)
     val settingsRepo = SettingsRepo(database)
     val syncImportRepo = SyncImportRepo(database)
+    val visibilityCacheRepo = VisibilityCacheRepo(database)
 
     val visibilityModels: Map<Phenomenon, VisibilityModel> = mapOf(
         Phenomenon.SOLAR_ECLIPSE to SolarEclipseVisibilityModel(),
@@ -98,7 +100,7 @@ class AppContainer(context: Context) {
     var alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)
 
     val replanCoordinator = ReplanCoordinator(
-        occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityModels,
+        occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityCacheRepo, visibilityModels,
         ovationGridProvider = { AuroraSource.loadOvationGrid(sourceStateRepo) },
     )
 
@@ -106,7 +108,7 @@ class AppContainer(context: Context) {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val sourceRunner = SourceRunner(
-        computedSources + polledSources, occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo,
+        computedSources + polledSources, occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo, visibilityCacheRepo,
         onOccurrencesChanged = { now -> replanAndSync(now) },
     )
 
