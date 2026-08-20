@@ -6,8 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import dev.fritze.skyward.core.planner.UpcomingFilter
 import dev.fritze.skyward.core.planner.UpcomingItem
-import dev.fritze.skyward.core.planner.computeUpcomingItems
-import dev.fritze.skyward.core.visibility.VisibilityResultCache
+import dev.fritze.skyward.core.planner.cachedUpcomingItems
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,21 +45,10 @@ fun rememberUpcoming(state: DesktopAppState, filter: UpcomingFilter): UpcomingSt
     ) {
         value = value.copy(isLoading = true)
         val items = withContext(Dispatchers.Default) {
-            // §11/§9.2 step 1: read-through visibility_cache, same as the
-            // replan path -- a three-year horizon recomputed on every
-            // occurrence/location/rule/tick emission is not frame-budget
-            // work (issue #18).
-            val cache = VisibilityResultCache(state.container.visibilityCacheRepo.getAll(), state.zone)
-            val computed = computeUpcomingItems(
-                occurrences = occurrences,
-                locations = locations,
-                rules = rules,
-                visibilityModels = cache.wrap(state.container.visibilityModels),
-                ctx = state.visibilityContext(now),
-                filter = filter,
+            cachedUpcomingItems(
+                state.container.visibilityCacheRepo, occurrences, locations, rules,
+                state.container.visibilityModels, state.visibilityContext(now), filter, state.zone,
             )
-            state.container.visibilityCacheRepo.upsertAll(cache.dirty)
-            computed
         }
         value = UpcomingState(items, isLoading = false)
     }

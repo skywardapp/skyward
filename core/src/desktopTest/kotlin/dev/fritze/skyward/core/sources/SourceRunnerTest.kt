@@ -236,6 +236,23 @@ class SourceRunnerTest {
     }
 
     @Test
+    fun horizonPruningAlsoInvalidatesTheVisibilityCache() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        source.nextResult = RefreshResult(listOf(occ("se:1", now - 400.days, Certainty.CERTAIN)), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now - 400.days, force = setOf("test-source"))
+        val key = VisibilityCacheKey("se:1", "home")
+        fx.visibilityCacheRepo.upsertAll(
+            mapOf(key to VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now)),
+        )
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now, force = setOf("test-source"))
+
+        assertTrue(fx.visibilityCacheRepo.getAll().isEmpty(), "pruning a CERTAIN occurrence outside the horizon must also drop its cache entries")
+    }
+
+    @Test
     fun aPurelyCosmeticRefetchUpdatesTheRowButDoesNotTriggerReplan() = runTest {
         val fx = Fixture()
         val source = FakeSource("test-source")

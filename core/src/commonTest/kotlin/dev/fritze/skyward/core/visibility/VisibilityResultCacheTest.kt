@@ -178,6 +178,9 @@ class VisibilityResultCacheTest {
         assertEquals(freshResult, evaluated, "a data_version mismatch must force recomputation, not serve the stale entry")
         assertEquals(1, delegate.evaluations)
         assertEquals(1, cache.dirty.size, "the fresh result must be queued for persistence")
+
+        wrapped.evaluate(occ, loc, ctx)
+        assertEquals(1, delegate.evaluations, "a same-pass repeat must reuse the freshly computed entry, not recompute")
     }
 
     @Test

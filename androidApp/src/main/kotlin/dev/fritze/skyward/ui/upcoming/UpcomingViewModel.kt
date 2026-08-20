@@ -109,7 +109,8 @@ class UpcomingViewModel(
         // §11/§9.2 step 1: same read-through visibility_cache the replan path
         // uses, so ticking doesn't recompute every visibility model for every
         // location on every wake (issue #18). Loaded/wrapped once per input
-        // change, alongside ovationGrid above, for the same reason.
+        // change, alongside ovationGrid above, for the same reason -- a tick
+        // can fire far more often than the DB actually changes.
         val cache = VisibilityResultCache(container.visibilityCacheRepo.getAll(), TimeZone.currentSystemDefault())
         val cachedModels = cache.wrap(container.visibilityModels)
         // Every emission above restarts the ticking, which is exactly what
