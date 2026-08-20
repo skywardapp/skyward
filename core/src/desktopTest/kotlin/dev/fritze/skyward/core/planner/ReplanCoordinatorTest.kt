@@ -148,4 +148,25 @@ class ReplanCoordinatorTest {
         assertEquals(1, reconciled.size, "a hidden rule with a real lead must still produce a notification")
         assertEquals("se:1", reconciled.first().occurrenceId)
     }
+
+    @Test
+    fun aOneOffExtraReminderDoesNotCollideWithTheRuleGeneratedLeadsForTheSameOccurrence() = runTest {
+        val fx = Fixture()
+        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
+        fx.locationRepo.upsert(home)
+        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
+        // The ordinary rule plans a 1-day lead (visibleRule's default schedule);
+        // the one-off extra reminder picks a different lead, per §13.3.
+        fx.ruleRepo.upsert(visibleRule("normal-rule"))
+        fx.ruleRepo.upsert(
+            visibleRule("extra-se:1", hidden = true, condition = Cond.OccurrenceIdIs("se:1"))
+                .copy(schedule = NotifySchedule(listOf(3.days), Anchor.PEAK, notifyOnFirstSeen = false, quietHours = null)),
+        )
+
+        val reconciled = fx.coordinator.replan(now, utc)
+
+        assertEquals(2, reconciled.size, "the rule-generated lead and the one-off extra reminder must plan as separate notifications")
+        val ids = reconciled.map { it.id }.toSet()
+        assertEquals(2, ids.size, "dedup keys (§10.4) must not collide")
+    }
 }

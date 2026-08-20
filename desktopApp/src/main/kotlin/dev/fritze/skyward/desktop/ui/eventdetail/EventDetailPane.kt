@@ -8,18 +8,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +56,7 @@ import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.formatTime
 import dev.fritze.skyward.desktop.ui.common.openInBrowser
 import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
+import dev.fritze.skyward.desktop.ui.rules.describeLead
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import dev.fritze.skyward.desktop.ui.theme.qualityLabel
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +64,9 @@ import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 /**
@@ -95,6 +105,7 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
         }
     }
     val isMuted = rules.any { it.id == muteRuleId(occurrenceId) && it.enabled }
+    val extraReminderLead = rules.firstOrNull { it.id == extraReminderRuleId(occurrenceId) && it.enabled }?.schedule?.leads?.firstOrNull()
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -121,6 +132,54 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
         // whose only job is to suppress this one occurrence.
         OutlinedButton(onClick = { state.launch { toggleMute(state, occurrence, isMuted) } }) {
             Text(if (isMuted) "Unmute this event" else "Mute this event")
+        }
+
+        ExtraReminderRow(extraReminderLead) { lead ->
+            state.launch {
+                if (lead == null) {
+                    state.container.ruleRepo.delete(extraReminderRuleId(occurrenceId))
+                } else {
+                    setExtraReminder(state, occurrence, lead)
+                }
+                state.container.replan()
+            }
+        }
+    }
+}
+
+/**
+ * §13.3's "add one-off extra reminder": a small preset set (matching the
+ * issue's suggestion of 1 h/6 h/1 d/7 d) plus a custom-hours field, mirroring
+ * `RulesScreen`'s `LeadChips` styling for a lead the user already recognizes.
+ */
+@Composable
+private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit) {
+    val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
+    var customHours by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            if (currentLead == null) "Add one-off extra reminder" else "Extra reminder: ${describeLead(currentLead)} before",
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (preset in presets) {
+                FilterChip(selected = currentLead == preset, onClick = { onPick(preset) }, label = { Text(describeLead(preset)) })
+            }
+            OutlinedTextField(
+                value = customHours,
+                onValueChange = { customHours = it },
+                label = { Text("Custom (h)") },
+                singleLine = true,
+                modifier = Modifier.width(120.dp),
+            )
+            TextButton(
+                onClick = { customHours.toDoubleOrNull()?.let { onPick(it.hours) } },
+                enabled = customHours.toDoubleOrNull() != null,
+            ) { Text("Set") }
+            if (currentLead != null) {
+                TextButton(onClick = { onPick(null) }) { Text("Remove") }
+            }
         }
     }
 }
@@ -291,4 +350,25 @@ private suspend fun toggleMute(state: DesktopAppState, occurrence: Occurrence, i
         )
     }
     state.container.replan()
+}
+
+internal fun extraReminderRuleId(occurrenceId: String) = "extra:$occurrenceId"
+
+/** §13.3's "add one-off extra reminder" -- hidden(condition=OccurrenceIdIs(id), leads=[lead]). */
+private suspend fun setExtraReminder(state: DesktopAppState, occurrence: Occurrence, lead: Duration) {
+    val now = Clock.System.now()
+    state.container.ruleRepo.upsert(
+        Rule(
+            id = extraReminderRuleId(occurrence.id),
+            name = "Extra reminder: ${occurrence.title}",
+            enabled = true,
+            phenomena = setOf(occurrence.phenomenon),
+            locationIds = null,
+            condition = Cond.OccurrenceIdIs(occurrence.id),
+            schedule = NotifySchedule(listOf(lead), Anchor.PEAK, notifyOnFirstSeen = false, quietHours = null),
+            hidden = true,
+            createdAt = now,
+            modifiedAt = now,
+        ),
+    )
 }

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,14 +12,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +30,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,6 +45,10 @@ import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.rules.formatLead
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +76,16 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
                 LocationCard(location, visres)
             }
             item { PayloadExtras(occurrence.payload, state.perLocation.firstOrNull()?.second, context) }
-            item { EventDetailActions(state.isMuted, onToggleMute = viewModel::toggleMute, onShare = { shareOccurrence(context, occurrence.title, state.perLocation) }) }
+            item {
+                EventDetailActions(
+                    state.isMuted,
+                    onToggleMute = viewModel::toggleMute,
+                    onShare = { shareOccurrence(context, occurrence.title, state.perLocation) },
+                    extraReminderLead = state.extraReminderLead,
+                    onSetExtraReminder = viewModel::setExtraReminder,
+                    onRemoveExtraReminder = viewModel::removeExtraReminder,
+                )
+            }
         }
     }
 }
@@ -88,12 +109,70 @@ private fun PayloadExtras(payload: dev.fritze.skyward.core.model.OccurrencePaylo
 }
 
 @Composable
-private fun EventDetailActions(isMuted: Boolean, onToggleMute: () -> Unit, onShare: () -> Unit) {
+private fun EventDetailActions(
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
+    onShare: () -> Unit,
+    extraReminderLead: Duration?,
+    onSetExtraReminder: (Duration) -> Unit,
+    onRemoveExtraReminder: () -> Unit,
+) {
+    var showPicker by rememberSaveable { mutableStateOf(false) }
+
     HorizontalDivider()
     Row2 {
         Button(onClick = onToggleMute) { Text(if (isMuted) "Unmute this event" else "Mute this event") }
         TextButton(onClick = onShare) { Text("Share") }
     }
+    Row2 {
+        TextButton(onClick = { showPicker = true }) {
+            Text(if (extraReminderLead == null) "Add one-off extra reminder" else "Extra reminder: ${formatLead(extraReminderLead)}")
+        }
+        if (extraReminderLead != null) {
+            TextButton(onClick = onRemoveExtraReminder) { Text("Remove") }
+        }
+    }
+
+    if (showPicker) {
+        ExtraReminderPickerDialog(
+            onPick = { lead -> onSetExtraReminder(lead); showPicker = false },
+            onDismiss = { showPicker = false },
+        )
+    }
+}
+
+/** §13.3: "add one-off extra reminder" -- a small preset set plus a custom hours field is enough. */
+@Composable
+private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () -> Unit) {
+    val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
+    var customHours by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remind me before this event") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (preset in presets) {
+                        FilterChip(selected = false, onClick = { onPick(preset) }, label = { Text(formatLead(preset)) })
+                    }
+                }
+                OutlinedTextField(
+                    value = customHours,
+                    onValueChange = { customHours = it },
+                    label = { Text("Custom (hours before)") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { customHours.toDoubleOrNull()?.let { onPick(it.hours) } },
+                enabled = customHours.toDoubleOrNull() != null,
+            ) { Text("Set") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
