@@ -93,7 +93,7 @@ class EonetSourceTest {
 
         EonetSource(client).refresh(refreshRequest(locations = locations, maxTravelKm = 500.0))
 
-        val expected = assertNotNull(eonetBbox(locations, maxTravelKm = 500.0))
+        val expected = assertNotNull(eonetBbox(locations, boundedThresholds(500.0)))
         assertEquals(expected.toQueryValue(), assertNotNull(requestedUrl).parameters["bbox"])
     }
 
@@ -143,6 +143,17 @@ class EonetSourceTest {
         locations = locations,
         state = emptyMap(),
         settings = SourceSettings(),
-        derivedThresholds = DerivedThresholds(minKpOfInterest = null, maxCometMag = null, maxTravelKm = maxTravelKm),
+        derivedThresholds = if (maxTravelKm == null) {
+            DerivedThresholds(minKpOfInterest = null, maxCometMag = null, maxTravelKm = null)
+        } else {
+            boundedThresholds(maxTravelKm)
+        },
+    )
+
+    private fun boundedThresholds(maxTravelKm: Double) = DerivedThresholds(
+        minKpOfInterest = null,
+        maxCometMag = null,
+        maxTravelKm = maxTravelKm,
+        terrestrialRulesAreTravelBounded = true,
     )
 }

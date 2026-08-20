@@ -35,7 +35,7 @@ class EonetSource(private val httpClient: HttpClient = createHttpClient()) : Eve
 
     override suspend fun refresh(req: RefreshRequest): RefreshResult {
         val categories = req.settings.params["categories"]?.takeUnless { it.isBlank() } ?: DEFAULT_CATEGORIES
-        val bbox = eonetBbox(req.locations, req.derivedThresholds.maxTravelKm)
+        val bbox = eonetBbox(req.locations, req.derivedThresholds)
         val events = parseEonetEvents(httpClient.getText(eventsUrl(categories, bbox)))
         val occurrences = events.map { buildOccurrence(it, req.now) }
 

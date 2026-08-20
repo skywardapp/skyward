@@ -8,7 +8,9 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.Rule
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 class ThresholdDerivationTest {
@@ -21,12 +23,50 @@ class ThresholdDerivationTest {
         createdAt = now, modifiedAt = now,
     )
 
+    private fun terrestrialRuleWith(condition: Cond) =
+        ruleWith(condition).copy(phenomena = setOf(Phenomenon.TERRESTRIAL))
+
     @Test
     fun emptyRuleListYieldsNoThresholds() {
         val thresholds = deriveThresholds(emptyList())
         assertNull(thresholds.minKpOfInterest)
         assertNull(thresholds.maxCometMag)
         assertNull(thresholds.maxTravelKm)
+        assertFalse(thresholds.terrestrialRulesAreTravelBounded, "no terrestrial rule to bound")
+    }
+
+    @Test
+    fun terrestrialRulesAreBoundedOnlyWhenEveryOneOfThemBoundsTravel() {
+        val bounded = terrestrialRuleWith(
+            Cond.And(listOf(Cond.EonetCategoryIn(setOf("volcanoes")), Cond.ReachableWithin(300.0))),
+        )
+        val unbounded = terrestrialRuleWith(Cond.EonetCategoryIn(setOf("wildfires")))
+
+        assertTrue(deriveThresholds(listOf(bounded)).terrestrialRulesAreTravelBounded)
+        assertFalse(deriveThresholds(listOf(bounded, unbounded)).terrestrialRulesAreTravelBounded)
+        // A travel radius on some *other* phenomenon's rule bounds nothing
+        // terrestrial (ADR 0008) — the reason this flag exists at all.
+        val auroraWithRadius = ruleWith(Cond.ReachableWithin(500.0))
+        val thresholds = deriveThresholds(listOf(unbounded, auroraWithRadius))
+        assertEquals(500.0, thresholds.maxTravelKm)
+        assertFalse(thresholds.terrestrialRulesAreTravelBounded)
+    }
+
+    @Test
+    fun anOrBranchWithoutATravelBoundLeavesTheWholeRuleUnbounded() {
+        // Either branch can be the one that matches, so a rule is bounded
+        // only if every branch is; And needs just one bounded child.
+        val orRule = terrestrialRuleWith(
+            Cond.Or(listOf(Cond.ReachableWithin(300.0), Cond.EonetCategoryIn(setOf("volcanoes")))),
+        )
+        val andRule = terrestrialRuleWith(
+            Cond.And(listOf(Cond.ReachableWithin(300.0), Cond.EonetCategoryIn(setOf("volcanoes")))),
+        )
+        val negatedRule = terrestrialRuleWith(Cond.Not(Cond.ReachableWithin(300.0)))
+
+        assertFalse(deriveThresholds(listOf(orRule)).terrestrialRulesAreTravelBounded)
+        assertTrue(deriveThresholds(listOf(andRule)).terrestrialRulesAreTravelBounded)
+        assertFalse(deriveThresholds(listOf(negatedRule)).terrestrialRulesAreTravelBounded, "Not bounds nothing")
     }
 
     @Test

@@ -20,7 +20,7 @@ class EonetBboxTest {
     @Test
     fun axisOrderIsEonetsNonstandardMinLonMaxLatMaxLonMinLat() {
         // Berlin + Hamburg (~255 km apart), padded by a 500 km travel radius.
-        val bbox = assertNotNull(eonetBbox(locations(52.52 to 13.405, 53.55 to 9.99), maxTravelKm = 500.0))
+        val bbox = assertNotNull(eonetBbox(locations(52.52 to 13.405, 53.55 to 9.99), thresholds(500.0)))
 
         val parts = bbox.toQueryValue().split(",").map { it.toDouble() }
         assertEquals(4, parts.size)
@@ -37,7 +37,7 @@ class EonetBboxTest {
     fun theBoxCoversEveryPointWithinTheTravelRadiusOfASavedLocation() {
         val travelKm = 500.0
         val locations = locations(52.52 to 13.405, 53.55 to 9.99)
-        val bbox = assertNotNull(eonetBbox(locations, maxTravelKm = travelKm))
+        val bbox = assertNotNull(eonetBbox(locations, thresholds(travelKm)))
 
         // Sample the travel circle around each location in 10-degree steps:
         // every point a `ReachableWithin(500 km)` rule could match must be
@@ -55,14 +55,14 @@ class EonetBboxTest {
 
     @Test
     fun aSingleSavedLocationIsNotNarrowed() {
-        assertNull(eonetBbox(locations(52.52 to 13.405), maxTravelKm = 500.0))
-        assertNull(eonetBbox(emptyList(), maxTravelKm = 500.0))
+        assertNull(eonetBbox(locations(52.52 to 13.405), thresholds(500.0)))
+        assertNull(eonetBbox(emptyList(), thresholds(500.0)))
     }
 
     @Test
     fun locationsFurtherApartThanTheClusterLimitAreNotNarrowed() {
         // Berlin and Sydney: a box covering both is most of the planet.
-        assertNull(eonetBbox(locations(52.52 to 13.405, -33.87 to 151.21), maxTravelKm = 500.0))
+        assertNull(eonetBbox(locations(52.52 to 13.405, -33.87 to 151.21), thresholds(500.0)))
     }
 
     @Test
@@ -71,13 +71,40 @@ class EonetBboxTest {
         // ">= 2 within 2 000 km" holds, but the box would still have to
         // stretch to the outlier, so there is nothing to save.
         assertNull(
-            eonetBbox(locations(52.52 to 13.405, 53.55 to 9.99, 25.2 to 55.27), maxTravelKm = 500.0),
+            eonetBbox(locations(52.52 to 13.405, 53.55 to 9.99, 25.2 to 55.27), thresholds(500.0)),
         )
     }
 
     @Test
-    fun withoutATravelRadiusThereIsNoPaddingAndSoNoBox() {
-        assertNull(eonetBbox(locations(52.52 to 13.405, 53.55 to 9.99), maxTravelKm = null))
+    fun aRuleThatCanMatchAtAnyDistanceSuppressesNarrowing() {
+        // The one way a bbox can cost a match: another rule's travel radius
+        // is not a bound on a terrestrial rule that has none of its own
+        // (ADR 0008). Also covers "no rule sets a radius at all", which
+        // leaves nothing to pad with.
+        val locations = locations(52.52 to 13.405, 53.55 to 9.99)
+
+        assertNull(
+            eonetBbox(
+                locations,
+                DerivedThresholds(
+                    minKpOfInterest = null,
+                    maxCometMag = null,
+                    maxTravelKm = 500.0,
+                    terrestrialRulesAreTravelBounded = false,
+                ),
+            ),
+        )
+        assertNull(
+            eonetBbox(
+                locations,
+                DerivedThresholds(
+                    minKpOfInterest = null,
+                    maxCometMag = null,
+                    maxTravelKm = null,
+                    terrestrialRulesAreTravelBounded = true,
+                ),
+            ),
+        )
     }
 
     @Test
@@ -85,7 +112,7 @@ class EonetBboxTest {
         // Taveuni (Fiji) and a point just across 180: a two-corner bbox
         // cannot wrap, so longitude is given up and latitude kept.
         val bbox = assertNotNull(
-            eonetBbox(locations(-16.85 to 179.97, -16.6 to -179.8), maxTravelKm = 300.0),
+            eonetBbox(locations(-16.85 to 179.97, -16.6 to -179.8), thresholds(300.0)),
         )
 
         assertEquals(-180.0, bbox.minLon)
@@ -96,7 +123,7 @@ class EonetBboxTest {
     @Test
     fun aClusterWhosePaddingSwallowsAPoleTakesAllLongitudes() {
         // Longyearbyen and Ny-Alesund, padded past 90 deg N.
-        val bbox = assertNotNull(eonetBbox(locations(78.22 to 15.65, 78.92 to 11.93), maxTravelKm = 1500.0))
+        val bbox = assertNotNull(eonetBbox(locations(78.22 to 15.65, 78.92 to 11.93), thresholds(1500.0)))
 
         assertEquals(90.0, bbox.maxLat, "latitude clamps at the pole rather than overflowing")
         assertEquals(-180.0, bbox.minLon)
@@ -107,8 +134,8 @@ class EonetBboxTest {
     @Test
     fun coordinatesAreRoundedSoIdenticalInputsProduceIdenticalUrls() {
         val locations = locations(52.5 to 13.4, 53.5 to 10.0)
-        val first = assertNotNull(eonetBbox(locations, maxTravelKm = 500.0)).toQueryValue()
-        val second = assertNotNull(eonetBbox(locations, maxTravelKm = 500.0)).toQueryValue()
+        val first = assertNotNull(eonetBbox(locations, thresholds(500.0))).toQueryValue()
+        val second = assertNotNull(eonetBbox(locations, thresholds(500.0))).toQueryValue()
 
         assertEquals(first, second)
         for (part in first.split(",")) {
@@ -116,6 +143,14 @@ class EonetBboxTest {
             assertTrue(decimals <= 3, "$part in $first carries more precision than EONET positions have")
         }
     }
+
+    /** Thresholds a user whose terrestrial rules all bound travel would derive. */
+    private fun thresholds(maxTravelKm: Double) = DerivedThresholds(
+        minKpOfInterest = null,
+        maxCometMag = null,
+        maxTravelKm = maxTravelKm,
+        terrestrialRulesAreTravelBounded = true,
+    )
 
     private fun locations(vararg latLon: Pair<Double, Double>): List<SavedLocation> =
         latLon.mapIndexed { index, (lat, lon) ->

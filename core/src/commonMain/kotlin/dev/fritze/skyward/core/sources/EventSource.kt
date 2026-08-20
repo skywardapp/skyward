@@ -27,6 +27,17 @@ data class DerivedThresholds(
     val minKpOfInterest: Double?,
     val maxCometMag: Double?,
     val maxTravelKm: Double?,
+    /**
+     * True when at least one enabled rule sees `TERRESTRIAL` occurrences and
+     * every one that does can only match within a finite distance. Not a
+     * §6.1 threshold but the safety condition on using one: [maxTravelKm]
+     * bounds the EONET bbox (§7.7), and a rule that matches terrestrial
+     * events at any distance would lose them to that box. See
+     * docs/adr/0008-eonet-bbox-narrowing-conditions.md. Defaults to the
+     * conservative answer, so a caller that assembles a request by hand
+     * (a rule-editor preview, a test) fetches unnarrowed.
+     */
+    val terrestrialRulesAreTravelBounded: Boolean = false,
 )
 
 class RefreshRequest(

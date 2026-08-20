@@ -52,8 +52,8 @@ internal data class EonetBbox(
 }
 
 /**
- * The bbox for [locations] padded by [maxTravelKm], or `null` when the
- * request should go out unnarrowed.
+ * The bbox for [locations] padded by [thresholds]' travel radius, or `null`
+ * when the request should go out unnarrowed.
  *
  * Returns `null` when:
  * - there are fewer than two saved locations — §7.7 gates the optimization
@@ -63,13 +63,17 @@ internal data class EonetBbox(
  *   each other") would also be satisfied by one tight pair plus a distant
  *   outlier, but the box still has to cover the outlier, so narrowing then
  *   buys nothing while risking a lot (ADR 0008);
- * - [maxTravelKm] is `null`, i.e. no enabled rule uses `ReachableWithin`.
- *   Without a travel radius there is no principled padding, and a box drawn
- *   tightly around the saved locations would drop events a few km up the
- *   road (ADR 0008).
+ * - some enabled rule would match terrestrial occurrences at any distance,
+ *   so no box can be drawn without costing it matches — including the case
+ *   where no rule uses `ReachableWithin` at all, leaving nothing to pad
+ *   with (ADR 0008).
  */
-internal fun eonetBbox(locations: List<SavedLocation>, maxTravelKm: Double?): EonetBbox? {
-    if (locations.size < 2 || maxTravelKm == null) return null
+internal fun eonetBbox(locations: List<SavedLocation>, thresholds: DerivedThresholds): EonetBbox? {
+    if (locations.size < 2 || !thresholds.terrestrialRulesAreTravelBounded) return null
+    // Non-null whenever the flag is set (it takes a `ReachableWithin` to set
+    // it), but the padding is what makes the box safe, so it is checked
+    // rather than asserted.
+    val maxTravelKm = thresholds.maxTravelKm ?: return null
 
     val points = locations.map { it.point }
     for (i in points.indices) {

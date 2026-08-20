@@ -1,4 +1,4 @@
-# ADR 0008: The EONET bbox narrows only a fully clustered set of locations, and only with a travel radius
+# ADR 0008: The EONET bbox narrows only a fully clustered set of locations, and only when every terrestrial rule bounds travel
 
 **Status:** Accepted (tightens two conditions §7.7 states loosely)
 
@@ -21,20 +21,43 @@ nothing, sent for no gain. Worse, the closer the box gets to the whole globe
 the more the narrowing is pure risk: everything it can still do is drop
 events.
 
-**A bbox without a travel radius is not safe to draw.** `maxTravelKm` — the
-loosest `ReachableWithin` across enabled rules (§6.1) — is what makes the
-padded box a superset of everything a rule could match. It is `null` when no
-enabled rule uses `ReachableWithin` at all, and §7.7 doesn't say what to pad
-with then. Padding with nothing would draw the box through the saved
-locations themselves, so a wildfire 30 km up the road would never reach the
-database — and, unlike a slow request, that failure is silent.
+**"Max travel radius" is not a bound on the rules that matter.**
+`maxTravelKm` — the loosest `ReachableWithin` across enabled rules (§6.1) —
+is what §7.7 pads with, and it does make the box a superset of everything a
+*travel-bounded* rule could match. But it is derived from all enabled rules
+at once, so its being non-`null` says only that *some* rule sets a radius.
+Two cases slip through:
+
+- It is `null` when no enabled rule uses `ReachableWithin` at all, and §7.7
+  doesn't say what to pad with then. Padding with nothing would draw the box
+  through the saved locations themselves.
+- A rule that matches terrestrial events with no distance condition — "any
+  volcano, anywhere" — is bounded by nothing, yet an eclipse rule's 500 km
+  is enough to make `maxTravelKm` non-`null` and draw a box that excludes
+  the events that rule exists to catch.
+
+Both lose events, and unlike a slow request, they lose them silently: the
+bbox filters server-side, so the occurrence never reaches the database and
+nothing downstream can tell it was ever there.
 
 ## Decision
 
 Send a `bbox` only when **every** saved location is within 2 000 km of
-**every** other (and there are at least two), and only when `maxTravelKm` is
-non-`null`; otherwise fetch unnarrowed, as before this was implemented.
-`core/sources/EonetBbox.kt` owns both conditions and EONET's axis order.
+**every** other (and there are at least two), and only when **every enabled
+rule that sees `TERRESTRIAL` occurrences can only match within some finite
+distance** (and at least one such rule exists); otherwise fetch unnarrowed,
+as before this was implemented. `core/sources/EonetBbox.kt` owns both
+conditions and EONET's axis order.
+
+The second condition is a new `DerivedThresholds.terrestrialRulesAreTravelBounded`,
+computed alongside §6.1's thresholds: a rule is travel-bounded when its
+condition tree implies an upper bound on `travelDistanceKm` — `ReachableWithin`
+supplies one (`TerrestrialVisibilityModel` never reports local visibility,
+§8.8, so for these rules it is a pure distance test), `And` inherits the
+tightest of its children's, `Or` needs one on every branch, and `Not`
+supplies none. The padding stays `maxTravelKm` exactly as §7.7 specifies:
+being the max across all rules, it is never smaller than any terrestrial
+rule's own bound.
 
 Shapes the two-corner box cannot express are widened rather than
 approximated: a cluster whose padding wraps the antimeridian, or reaches far
@@ -57,12 +80,13 @@ declines to narrow.
 - Users with a distant outlier location keep the full-planet response. That
   is the status quo, and §7.7's own framing ("to cut payload") makes payload
   size the only thing at stake.
-- A rule that matches terrestrial events *without* a `ReachableWithin`
-  condition is still bounded by another rule's travel radius when one is
-  enabled. That is what §6.1 specifies (`maxTravelKm` is the single derived
-  padding), and it is only reachable for a user who has both kinds of rule
-  and a tight location cluster; if it ever bites, the fix is to derive the
-  padding per phenomenon rather than to loosen the box.
+- A single terrestrial rule with no distance condition turns narrowing off
+  for the whole app, however tight the location cluster is. That is the
+  intended trade: such a rule is a standing request to be told about events
+  anywhere, and a request the user can still make.
+- The boundedness test is deliberately conservative — `Not` yields no bound
+  even where a human could argue one, and a rule the engine could never
+  match still counts. Every inaccuracy costs at most a wider response.
 
 ## Alternatives considered
 
@@ -70,6 +94,11 @@ declines to narrow.
   `maxTravelKm` is `null`). Rejected: it sends globe-sized boxes for no
   saving, and the zero-padding case loses nearby events silently, which is a
   far worse failure than a slightly larger response.
+- **Redefine `maxTravelKm` itself to be `null` unless every terrestrial rule
+  is bounded.** Rejected: §6.1 defines that field as "max over
+  `ReachableWithin.km` across all enabled rules", and quietly giving it
+  different contents would deviate from the doc where an added field does
+  not.
 - **Cluster the nearby locations and narrow to that cluster only.**
   Rejected: it drops the outlier's events outright — the box must cover
   every saved location, which is what §7.7 says.

@@ -1,5 +1,6 @@
 package dev.fritze.skyward.core.sources
 
+import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.Rule
 
@@ -32,5 +33,39 @@ fun deriveThresholds(enabledRules: List<Rule>): DerivedThresholds {
         minKpOfInterest = kps.minOrNull(),
         maxCometMag = mags.maxOrNull(),
         maxTravelKm = kms.maxOrNull(),
+        terrestrialRulesAreTravelBounded = terrestrialRulesAreTravelBounded(enabledRules),
     )
+}
+
+/**
+ * Whether narrowing EONET's response to a padded box around the saved
+ * locations can cost a match (§7.7, ADR 0008): it can't if every enabled
+ * rule that sees terrestrial occurrences already refuses to match beyond
+ * some distance. A user with no terrestrial rules at all gets `false` —
+ * there is no rule-derived distance to trust, and the events would only be
+ * feeding the browsable list.
+ */
+private fun terrestrialRulesAreTravelBounded(enabledRules: List<Rule>): Boolean {
+    val terrestrialRules = enabledRules.filter { Phenomenon.TERRESTRIAL in it.phenomena }
+    return terrestrialRules.isNotEmpty() && terrestrialRules.all { travelBoundKm(it.condition) != null }
+}
+
+/**
+ * An upper bound on `travelDistanceKm` that [cond] being true implies, or
+ * `null` if it implies none.
+ *
+ * `ReachableWithin` is also satisfied by an occurrence visible at the
+ * location itself, but `TerrestrialVisibilityModel` never reports one
+ * (§8.8), so against terrestrial occurrences it is a pure distance bound.
+ * `And` takes the tightest of its children's bounds (all must hold), `Or`
+ * the loosest and only if every branch has one, and `Not` is treated as
+ * unbounded — negating a distance bound doesn't produce another one.
+ */
+private fun travelBoundKm(cond: Cond): Double? = when (cond) {
+    is Cond.ReachableWithin -> cond.km
+    is Cond.And -> cond.all.mapNotNull(::travelBoundKm).minOrNull()
+    is Cond.Or -> cond.any.map(::travelBoundKm).let { bounds ->
+        if (bounds.any { it == null }) null else bounds.filterNotNull().maxOrNull()
+    }
+    else -> null
 }
