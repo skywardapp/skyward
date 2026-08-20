@@ -176,6 +176,7 @@ class ReplanCoordinatorTest {
     fun replanPrunesFiredHistoryOlderThan180DaysButKeepsEverythingElse() = runTest {
         val fx = Fixture()
         fx.notificationRepo.upsert(fired("old-fired", firedAt = now - 181.days))
+        fx.notificationRepo.upsert(fired("boundary-fired", firedAt = now - 180.days))
         fx.notificationRepo.upsert(fired("recent-fired", firedAt = now - 179.days))
         fx.notificationRepo.upsert(pending("ancient-pending", fireAt = now - 400.days))
 
@@ -183,6 +184,7 @@ class ReplanCoordinatorTest {
 
         val remainingIds = fx.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
         assertTrue("old-fired" !in remainingIds, "a FIRED row older than 180 days must be pruned")
+        assertTrue("boundary-fired" in remainingIds, "a FIRED row exactly 180 days old is not yet older than the window")
         assertTrue("recent-fired" in remainingIds, "a FIRED row inside the 180-day window must be kept")
         assertTrue("ancient-pending" in remainingIds, "non-FIRED rows must be kept regardless of age")
     }

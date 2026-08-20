@@ -2,6 +2,7 @@ package dev.fritze.skyward.ui.settings
 
 import androidx.lifecycle.ViewModel
 import dev.fritze.skyward.core.model.NotificationStatus
+import dev.fritze.skyward.core.persistence.NotificationRepo
 import dev.fritze.skyward.core.persistence.SyncImportRepo
 import dev.fritze.skyward.core.sync.RuleImportWarning
 import dev.fritze.skyward.core.sync.SyncCodec
@@ -25,15 +26,17 @@ data class ImportSummary(
 class SyncViewModel(private val container: AppContainer) : ViewModel() {
 
     suspend fun buildExportText(appVersion: String): String {
+        val now = Clock.System.now()
+        // §10.4: prune here too, not just in ReplanCoordinator.replan -- an
+        // export must never carry FIRED history older than 180 days even if
+        // no replan has run yet this session.
+        container.notificationRepo.pruneFiredBefore(now - NotificationRepo.FIRED_RETENTION)
         val file = SyncFile(
-            exportedAt = Clock.System.now(),
+            exportedAt = now,
             appVersion = appVersion,
             locations = container.locationRepo.getAll(),
             rules = container.ruleRepo.getAll(), // includes hidden rules -- §9.1: "included in evaluation & sync"
             settings = container.settingsRepo.observeAll().first(),
-            // §10.4: FIRED rows older than 180 days are pruned by ReplanCoordinator.replan, so
-            // this list -- and the export file it lands in -- is bounded by the same window
-            // without needing its own cutoff here.
             firedNotificationIds = container.notificationRepo.getAll()
                 .filter { it.status == NotificationStatus.FIRED }
                 .map { it.id },

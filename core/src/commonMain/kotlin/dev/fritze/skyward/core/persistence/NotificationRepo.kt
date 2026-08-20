@@ -9,10 +9,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 /** §11/§10.4: `planned_notification`. */
 class NotificationRepo(private val db: SkywardDatabase) {
+
+    companion object {
+        /** §10.4: "FIRED rows are permanent history (auto-pruned after 180 days)." */
+        val FIRED_RETENTION = 180.days
+    }
 
     fun observeAll(): Flow<List<PlannedNotification>> =
         db.plannedNotificationQueries.selectAll().asFlow().mapToList(Dispatchers.Default).map { rows -> rows.map { it.toModel() } }
