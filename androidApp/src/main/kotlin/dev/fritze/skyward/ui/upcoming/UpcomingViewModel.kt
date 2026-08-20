@@ -11,7 +11,6 @@ import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.planner.UpcomingFilter
 import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
-import dev.fritze.skyward.core.planner.computeUpcomingItems
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.sources.AuroraSource
 import dev.fritze.skyward.core.sources.EventSource
@@ -21,10 +20,12 @@ import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.util.runCatchingCancellable
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,6 +38,12 @@ data class UpcomingUiState(
     val filter: UpcomingFilter = UpcomingFilter(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
+    /**
+     * The instant this state was computed for. Carried into the state rather
+     * than read at render time so that a card's countdown (§13.2) is part of
+     * what recomposition compares — see UpcomingTicker.kt.
+     */
+    val now: Instant,
 )
 
 data class AuroraBannerUiState(
@@ -48,11 +55,25 @@ data class AuroraBannerUiState(
     val darknessStart: Instant?,
 )
 
+/** Holds the pieces `combine` in the view-model has no typed overload for six flows of. */
+internal data class UpcomingBaseState(
+    val occurrences: List<Occurrence>,
+    val locations: List<SavedLocation>,
+    val rules: List<Rule>,
+    val filter: UpcomingFilter,
+    val isRefreshing: Boolean,
+)
+
 /**
  * §13.2's core view-model — combines DB state reactively, delegates the
  * actual selection logic to `core`'s pure `computeUpcomingItems`.
  */
-class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
+class UpcomingViewModel(
+    private val container: AppContainer,
+    // Injected so the time-boundary behaviour (UpcomingTicker.kt) can be
+    // tested against virtual time instead of the wall clock.
+    private val clock: Clock = Clock.System,
+) : ViewModel() {
     private val filter = MutableStateFlow(UpcomingFilter())
     private val refreshing = MutableStateFlow(false)
     private val liveKp = MutableStateFlow<KpEstimate?>(null)
@@ -63,15 +84,7 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Holds the pieces `combine` below has no typed overload for six flows of. */
-    private data class BaseState(
-        val occurrences: List<Occurrence>,
-        val locations: List<SavedLocation>,
-        val rules: List<Rule>,
-        val filter: UpcomingFilter,
-        val isRefreshing: Boolean,
-    )
-
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<UpcomingUiState> = combine(
         combine(
             container.occurrenceRepo.observeAll(),
@@ -80,32 +93,24 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
             filter,
             refreshing,
         ) { occurrences, locations, rules, currentFilter, isRefreshing ->
-            BaseState(occurrences, locations, rules, currentFilter, isRefreshing)
+            UpcomingBaseState(occurrences, locations, rules, currentFilter, isRefreshing)
         },
         liveKp,
     ) { base, currentKp ->
-        val ctx = VisibilityContext(
-            now = Clock.System.now(),
-            ovationGrid = AuroraSource.loadOvationGrid(container.sourceStateRepo),
-        )
-        val items = computeUpcomingItems(
-            base.occurrences, base.locations, base.rules, container.visibilityModels, ctx, base.filter,
-        )
-        val auroraBanner = activeAuroraBanner(
-            occurrences = base.occurrences,
-            locations = base.locations,
-            visibilityModels = container.visibilityModels,
-            ctx = ctx,
-            currentKp = currentKp?.estimatedKp,
-        )
-        UpcomingUiState(
-            items = items,
-            auroraBanner = auroraBanner,
-            filter = base.filter,
-            isLoading = false,
-            isRefreshing = base.isRefreshing,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpcomingUiState())
+        base to currentKp?.estimatedKp
+    }.flatMapLatest { (base, currentKp) ->
+        // §7.3.2 rewrites the grid only as part of a source run, which reaches
+        // us as an occurrence emission anyway — so it is read once per input
+        // change here rather than once per tick below.
+        val ovationGrid = AuroraSource.loadOvationGrid(container.sourceStateRepo)
+        // Every emission above restarts the ticking, which is exactly what
+        // `flatMapLatest` is for: fresh inputs mean fresh boundaries.
+        upcomingStatesOverTime(base, currentKp, ovationGrid, container.visibilityModels, clock)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        UpcomingUiState(now = clock.now()),
+    )
 
     fun setScope(scope: UpcomingScope) = filter.update { it.copy(scope = scope) }
 
@@ -118,7 +123,7 @@ class UpcomingViewModel(private val container: AppContainer) : ViewModel() {
             refreshing.value = true
             try {
                 container.sourceRunner.runDue(
-                    Clock.System.now(),
+                    clock.now(),
                     force = enabledPolledSourceIds(container.polledSources),
                 )
                 refreshLiveKp()

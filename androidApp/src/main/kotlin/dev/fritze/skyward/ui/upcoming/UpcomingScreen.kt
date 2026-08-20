@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.planner.UpcomingItem
@@ -54,8 +53,6 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
-import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,7 +142,7 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             items(state.items, key = { it.occurrence.id }) { item ->
-                                UpcomingCard(item, onClick = { onOpenEvent(item.occurrence.id) })
+                                UpcomingCard(item, state.now, onClick = { onOpenEvent(item.occurrence.id) })
                             }
                         }
                     }
@@ -235,20 +232,23 @@ private fun AuroraNowcastBanner(banner: AuroraBannerUiState, onClick: () -> Unit
     }
 }
 
+/**
+ * [now] comes from the state rather than the clock so that the countdown line
+ * is part of what recomposition compares — UpcomingTicker.kt re-emits the
+ * state when it is due to change.
+ */
 @Composable
-private fun UpcomingCard(item: UpcomingItem, onClick: () -> Unit) {
+private fun UpcomingCard(item: UpcomingItem, now: Instant, onClick: () -> Unit) {
     val occ = item.occurrence
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(occ.title, style = MaterialTheme.typography.titleMedium)
-            Text(countdownText(anchor(occ), Clock.System.now()), style = MaterialTheme.typography.bodySmall)
+            Text(countdownText(countdownAnchor(occ), now), style = MaterialTheme.typography.bodySmall)
             Text(locationLine(item), style = MaterialTheme.typography.bodyMedium)
             Text(qualityLabel(item.bestVisres.quality), color = qualityColor(item.bestVisres.quality), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
-
-private fun anchor(occ: Occurrence): Instant = occ.peakTime ?: occ.window.start
 
 private fun locationLine(item: UpcomingItem): String {
     val travelKm = item.bestVisres.travelDistanceKm
@@ -273,19 +273,6 @@ private fun qualityColor(quality: Quality) = when (quality) {
     Quality.GOOD -> MaterialTheme.colorScheme.tertiary
     Quality.MARGINAL -> MaterialTheme.colorScheme.secondary
     Quality.NONE -> MaterialTheme.colorScheme.onSurfaceVariant
-}
-
-private fun countdownText(target: Instant, now: Instant): String {
-    val delta = target - now
-    if (delta < Duration.ZERO) return "Past"
-    val days = delta.inWholeDays
-    return when {
-        days == 0L -> "Today"
-        days == 1L -> "Tomorrow"
-        days < 7 -> "In $days days"
-        days < 60 -> "In ${days / 7} week${if (days / 7 == 1L) "" else "s"}"
-        else -> "In ${days / 30} month${if (days / 30 == 1L) "" else "s"}"
-    }
 }
 
 private fun Double.oneDecimal(): String = ((this * 10).roundToInt() / 10.0).toString()
