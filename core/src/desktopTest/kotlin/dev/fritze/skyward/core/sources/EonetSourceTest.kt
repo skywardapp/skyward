@@ -112,6 +112,33 @@ class EonetSourceTest {
         assertEquals(null, assertNotNull(requestedUrl).parameters["bbox"], "a globe-spanning bbox saves nothing")
     }
 
+    @Test
+    fun aRuleThatCanMatchAtAnyDistanceLeavesTheRequestUnnarrowed() = runTest {
+        // The gate that EonetBboxTest pins in the helper, asserted at the
+        // boundary that actually builds the URL: a travel radius alone is
+        // not enough (ADR 0008).
+        var requestedUrl: Url? = null
+        val client = urlCapturingClient { requestedUrl = it }
+
+        EonetSource(client).refresh(
+            RefreshRequest(
+                now = now,
+                horizon = TimeWindow(now, now + 365.days),
+                locations = listOf(savedLocation(0, 52.52, 13.405), savedLocation(1, 53.55, 9.99)),
+                state = emptyMap(),
+                settings = SourceSettings(),
+                derivedThresholds = DerivedThresholds(
+                    minKpOfInterest = null,
+                    maxCometMag = null,
+                    maxTravelKm = 500.0,
+                    terrestrialRulesAreTravelBounded = false,
+                ),
+            ),
+        )
+
+        assertEquals(null, assertNotNull(requestedUrl).parameters["bbox"])
+    }
+
     private fun urlCapturingClient(record: (Url) -> Unit): HttpClient {
         val engine = MockEngine { request ->
             record(request.url)

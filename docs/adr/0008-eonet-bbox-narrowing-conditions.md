@@ -1,4 +1,4 @@
-# ADR 0008: The EONET bbox narrows only a fully clustered set of locations, and only when every terrestrial rule bounds travel
+# ADR 0008: The EONET bbox narrows only a clustered, travel-bounded setup
 
 **Status:** Accepted (tightens two conditions §7.7 states loosely)
 
