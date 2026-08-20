@@ -30,7 +30,10 @@ class VisibilityResultCache(
 ) {
     private val mutableDirty = mutableMapOf<VisibilityCacheKey, VisibilityCacheEntry>()
 
-    /** Entries computed fresh (cache miss or version mismatch) during this pass, ready to persist. */
+    /**
+     * Entries computed fresh (cache miss or version mismatch) during this
+     * pass, ready to persist.
+     */
     val dirty: Map<VisibilityCacheKey, VisibilityCacheEntry> get() = mutableDirty
 
     fun wrap(models: Map<Phenomenon, VisibilityModel>): Map<Phenomenon, VisibilityModel> =
@@ -43,8 +46,14 @@ class VisibilityResultCache(
             val key = VisibilityCacheKey(occ.id, loc.id)
             val version = computeDataVersion(occ, ctx, zone)
 
-            val cached = snapshot[key]
-            if (cached != null && cached.dataVersion == version) return cached.result
+            // Check mutableDirty first: computeUpcomingItems evaluates the
+            // same (occurrence, location) pair twice in one pass (once via
+            // Planner.computeMatches, once directly), and a same-pass repeat
+            // must reuse what this pass already computed rather than calling
+            // delegate.evaluate again.
+            val cached = mutableDirty[key]?.takeIf { it.dataVersion == version }
+                ?: snapshot[key]?.takeIf { it.dataVersion == version }
+            if (cached != null) return cached.result
 
             val result = delegate.evaluate(occ, loc, ctx)
             mutableDirty[key] = VisibilityCacheEntry(version, result, ctx.now)

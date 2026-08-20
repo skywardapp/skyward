@@ -11,7 +11,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
-/** §11: `visibility_cache` round-trips through [VisibilityCacheRepo] (issue #18). */
+/**
+ * §11: `visibility_cache` round-trips through [VisibilityCacheRepo]
+ * (issue #18).
+ */
 class VisibilityCacheRepoTest {
 
     private val now = Instant.parse("2026-01-01T00:00:00Z")

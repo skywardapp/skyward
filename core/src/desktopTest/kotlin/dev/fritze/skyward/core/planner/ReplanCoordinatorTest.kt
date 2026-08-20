@@ -87,13 +87,17 @@ class ReplanCoordinatorTest {
         hidden = hidden, createdAt = now, modifiedAt = now,
     )
 
+    /** The "one visible eclipse, one matching rule" setup shared by most replan tests below. */
+    private suspend fun Fixture.seedHomeWithVisibleEclipseRule(fetchedAt: Instant = now) {
+        locationRepo.upsert(SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now))
+        occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days, fetchedAt), firstSeenAt = now)
+        ruleRepo.upsert(visibleRule())
+    }
+
     @Test
     fun replanPersistsDesiredNotificationsFromDbState() = runTest {
         val fx = Fixture()
-        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
-        fx.locationRepo.upsert(home)
-        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
-        fx.ruleRepo.upsert(visibleRule())
+        fx.seedHomeWithVisibleEclipseRule()
 
         val reconciled = fx.coordinator.replan(now, utc)
 
@@ -106,10 +110,7 @@ class ReplanCoordinatorTest {
     @Test
     fun replanReadsAndWritesTheVisibilityCache() = runTest {
         val fx = Fixture()
-        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
-        fx.locationRepo.upsert(home)
-        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
-        fx.ruleRepo.upsert(visibleRule())
+        fx.seedHomeWithVisibleEclipseRule()
 
         fx.coordinator.replan(now, utc)
         assertEquals(1, fx.visibilityModel.evaluations, "the first replan is a cache miss and must compute")
@@ -126,10 +127,7 @@ class ReplanCoordinatorTest {
     @Test
     fun secondReplanCancelsNotificationsForADeletedOccurrence() = runTest {
         val fx = Fixture()
-        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
-        fx.locationRepo.upsert(home)
-        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
-        fx.ruleRepo.upsert(visibleRule())
+        fx.seedHomeWithVisibleEclipseRule()
         fx.coordinator.replan(now, utc)
 
         fx.occurrenceRepo.deleteById("se:1")

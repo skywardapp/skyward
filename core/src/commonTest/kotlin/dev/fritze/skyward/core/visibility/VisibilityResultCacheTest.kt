@@ -26,10 +26,11 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * §9.2 step 1/§11: [computeDataVersion] and the [VisibilityResultCache] read-through
- * decorator that sits in front of `VisibilityModel`s inside `Planner`/`computeUpcomingItems`
- * (issue #18 -- the `visibility_cache` table existed but nothing read or wrote it). Covers
- * the two regression cases the issue names: a stale-date comet entry must not be served, and
+ * §9.2 step 1/§11: [computeDataVersion] and the [VisibilityResultCache]
+ * read-through decorator that sits in front of `VisibilityModel`s inside
+ * `Planner`/`computeUpcomingItems` (issue #18 -- the `visibility_cache`
+ * table existed but nothing read or wrote it). Covers the two regression
+ * cases the issue names: a stale-date comet entry must not be served, and
  * any `data_version` mismatch must force recomputation.
  */
 class VisibilityResultCacheTest {
@@ -114,9 +115,11 @@ class VisibilityResultCacheTest {
 
     @Test
     fun threeDayAuroraIsDateIndependent() {
+        // Non-null, distinct grids on both sides: a version that (wrongly)
+        // picked up ctx.ovationGrid for THREE_DAY too would fail this.
         val occ = auroraOcc(AuroraForecastKind.THREE_DAY, fetchedAt = now)
-        val v1 = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = null), utc)
-        val v2 = computeDataVersion(occ, VisibilityContext(now = now + 1.days, ovationGrid = null), utc)
+        val v1 = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = grid(now)), utc)
+        val v2 = computeDataVersion(occ, VisibilityContext(now = now + 1.days, ovationGrid = grid(now + 30.minutes)), utc)
 
         assertEquals(v1, v2, "THREE_DAY aurora never reads ctx.ovationGrid, so it doesn't need a date component")
     }
@@ -190,7 +193,8 @@ class VisibilityResultCacheTest {
         val staleVersion = computeDataVersion(occ, today, utc)
         val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(staleVersion, staleResult, now))
 
-        val freshResult = result(Quality.NONE) // e.g. the comet has since dimmed below the magnitude gate
+        // e.g. the comet has since dimmed below the magnitude gate
+        val freshResult = result(Quality.NONE)
         val delegate = CountingModel(Phenomenon.COMET, freshResult)
         val cache = VisibilityResultCache(snapshot, utc)
         val wrapped = cache.wrap(mapOf(Phenomenon.COMET to delegate)).getValue(Phenomenon.COMET)

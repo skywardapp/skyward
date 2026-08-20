@@ -169,16 +169,20 @@ class SourceRunnerTest {
         assertEquals(0, fx.replanCalls)
     }
 
+    /** Seeds one FORECAST `se:1` via a forced run, then withdraws it via a second forced run with an empty result. */
+    private suspend fun Fixture.seedThenWithdrawForecastOccurrence(source: FakeSource) {
+        source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
+        runner(source).runDue(now, force = setOf("test-source"))
+        assertNotNull(occurrenceRepo.getById("se:1"))
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        runner(source).runDue(now + 1.hours, force = setOf("test-source"))
+    }
+
     @Test
     fun withdrawnForecastOccurrenceIsDeletedAndTriggersReplan() = runTest {
         val fx = Fixture()
-        val source = FakeSource("test-source")
-        source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
-        fx.runner(source).runDue(now, force = setOf("test-source"))
-        assertNotNull(fx.occurrenceRepo.getById("se:1"))
-
-        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
-        fx.runner(source).runDue(now + 1.hours, force = setOf("test-source"))
+        fx.seedThenWithdrawForecastOccurrence(FakeSource("test-source"))
 
         assertNull(fx.occurrenceRepo.getById("se:1"), "a withdrawn FORECAST occurrence must be deleted (§6.3)")
         assertEquals(2, fx.replanCalls)

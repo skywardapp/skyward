@@ -8,9 +8,10 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Instant
 
 /**
- * §11/§8.6: `visibility_cache` -- cached [dev.fritze.skyward.core.visibility.VisibilityModel.evaluate]
- * results, read/written through `VisibilityResultCache` (issue #18: the table existed but nothing
- * touched it).
+ * §11/§8.6: `visibility_cache` -- cached
+ * [dev.fritze.skyward.core.visibility.VisibilityModel.evaluate] results,
+ * read/written through `VisibilityResultCache` (issue #18: the table
+ * existed but nothing touched it).
  */
 class VisibilityCacheRepo(private val db: SkywardDatabase) {
 
