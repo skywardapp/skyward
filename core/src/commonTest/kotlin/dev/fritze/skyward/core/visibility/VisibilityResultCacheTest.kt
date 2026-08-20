@@ -1,5 +1,7 @@
 package dev.fritze.skyward.core.visibility
 
+import dev.fritze.skyward.core.model.AuroraForecastKind
+import dev.fritze.skyward.core.model.AuroraPayload
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.CometElements
 import dev.fritze.skyward.core.model.CometMagParams
@@ -16,18 +18,19 @@ import dev.fritze.skyward.core.model.VisibilityResult
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * §9.2 step 1/§11: [VisibilityResultCache] is the read-through cache that
- * sits in front of `VisibilityModel`s inside `Planner`/`computeUpcomingItems`
- * (issue #18 -- the `visibility_cache` table existed but nothing read or
- * wrote it). Covers the two regression cases the issue names: a stale-date
- * comet entry must not be served, and any `data_version` mismatch must force
- * recomputation.
+ * §9.2 step 1/§11: [computeDataVersion] and the [VisibilityResultCache] read-through
+ * decorator that sits in front of `VisibilityModel`s inside `Planner`/`computeUpcomingItems`
+ * (issue #18 -- the `visibility_cache` table existed but nothing read or wrote it). Covers
+ * the two regression cases the issue names: a stale-date comet entry must not be served, and
+ * any `data_version` mismatch must force recomputation.
  */
 class VisibilityResultCacheTest {
 
@@ -70,7 +73,69 @@ class VisibilityResultCacheTest {
         fetchedAt = fetchedAt, expiresAt = null,
     )
 
+    private fun auroraOcc(kind: AuroraForecastKind, fetchedAt: Instant) = Occurrence(
+        id = "au:1", phenomenon = Phenomenon.AURORA, sourceId = "swpc", title = "Aurora",
+        window = TimeWindow(now, now + 3.hours), peakTime = null, certainty = Certainty.FORECAST,
+        payload = AuroraPayload(kpForecast = 6.0, forecastKind = kind, issuedAt = fetchedAt),
+        fetchedAt = fetchedAt, expiresAt = null,
+    )
+
+    private fun grid(observationTime: Instant) =
+        OvationGrid(observationTime, observationTime + 30.minutes, ByteArray(360 * 181))
+
     private fun result(quality: Quality) = VisibilityResult(quality != Quality.NONE, quality, null, null, null, null, null)
+
+    // -- computeDataVersion --------------------------------------------------
+
+    @Test
+    fun dateIndependentModelsVersionOnFetchedAtAlone() {
+        val ctx = VisibilityContext(now = now, ovationGrid = null)
+        val v1 = computeDataVersion(eclipseOcc(fetchedAt = now), ctx, utc)
+        val v2 = computeDataVersion(eclipseOcc(fetchedAt = now), ctx, utc)
+        val v3 = computeDataVersion(eclipseOcc(fetchedAt = now + 1.hours), ctx, utc)
+
+        assertEquals(v1, v2, "same fetchedAt, same version")
+        assertNotEquals(v1, v3, "a re-fetch (new fetchedAt) must change the version")
+    }
+
+    @Test
+    fun cometVersionChangesAcrossLocalCalendarDates() {
+        val occ = cometOcc(fetchedAt = now)
+        val sameDay = VisibilityContext(now = now + 2.hours, ovationGrid = null)
+        val nextDay = VisibilityContext(now = now + 1.days, ovationGrid = null)
+
+        val v1 = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = null), utc)
+        val v2 = computeDataVersion(occ, sameDay, utc)
+        val v3 = computeDataVersion(occ, nextDay, utc)
+
+        assertEquals(v1, v2, "same fetchedAt and calendar date -- unchanged")
+        assertNotEquals(v1, v3, "§8.6: the night containing `now` moved to a new calendar date")
+    }
+
+    @Test
+    fun threeDayAuroraIsDateIndependent() {
+        val occ = auroraOcc(AuroraForecastKind.THREE_DAY, fetchedAt = now)
+        val v1 = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = null), utc)
+        val v2 = computeDataVersion(occ, VisibilityContext(now = now + 1.days, ovationGrid = null), utc)
+
+        assertEquals(v1, v2, "THREE_DAY aurora never reads ctx.ovationGrid, so it doesn't need a date component")
+    }
+
+    @Test
+    fun nowcastAuroraVersionTracksTheOvationGridObservationTime() {
+        val occ = auroraOcc(AuroraForecastKind.NOWCAST, fetchedAt = now)
+        val gridA = grid(now)
+        val gridB = grid(now + 30.minutes)
+
+        val vNoGrid = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = null), utc)
+        val vGridA = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = gridA), utc)
+        val vGridB = computeDataVersion(occ, VisibilityContext(now = now, ovationGrid = gridB), utc)
+
+        assertNotEquals(vNoGrid, vGridA, "a grid becoming available must change the version")
+        assertNotEquals(vGridA, vGridB, "a newer grid (independent of the occurrence's own fetchedAt) must change the version")
+    }
+
+    // -- VisibilityResultCache ------------------------------------------------
 
     @Test
     fun aMatchingDataVersionIsServedFromCacheWithoutRecomputing() {
