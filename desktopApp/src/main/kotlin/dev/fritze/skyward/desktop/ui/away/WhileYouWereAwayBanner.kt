@@ -47,6 +47,8 @@ fun WhileYouWereAwayBanner(state: DesktopAppState) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
+                    // Inline English plural, deliberately: see
+                    // docs/adr/0012-english-only-ui-strings.md.
                     "While you were away — ${missed.size} reminder${if (missed.size == 1) "" else "s"} came due",
                     style = MaterialTheme.typography.titleSmall,
                 )
