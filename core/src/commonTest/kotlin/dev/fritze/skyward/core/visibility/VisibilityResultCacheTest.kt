@@ -48,9 +48,9 @@ class VisibilityResultCacheTest {
     }
 
     private fun eclipseOcc(fetchedAt: Instant) = Occurrence(
-        id = "se:1", phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Eclipse",
-        window = TimeWindow(now, now + 3.hours), peakTime = now + 1.hours, certainty = Certainty.CERTAIN,
-        payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), now + 1.hours, emptyList(), 1.0),
+        id = "se:1", phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Test Eclipse",
+        window = TimeWindow(now, now + 4.hours), peakTime = now + 2.hours, certainty = Certainty.CERTAIN,
+        payload = SolarEclipsePayload(SolarEclipseKind.PARTIAL, GeoPoint(12.0, 34.0), now + 2.hours, emptyList(), 0.8),
         fetchedAt = fetchedAt, expiresAt = null,
     )
 
@@ -69,9 +69,9 @@ class VisibilityResultCacheTest {
     )
 
     private fun auroraOcc(kind: AuroraForecastKind, fetchedAt: Instant) = Occurrence(
-        id = "au:1", phenomenon = Phenomenon.AURORA, sourceId = "swpc", title = "Aurora",
-        window = TimeWindow(now, now + 3.hours), peakTime = null, certainty = Certainty.FORECAST,
-        payload = AuroraPayload(kpForecast = 6.0, forecastKind = kind, issuedAt = fetchedAt),
+        id = "au:1", phenomenon = Phenomenon.AURORA, sourceId = "swpc", title = "Test Aurora",
+        window = TimeWindow(now, now + 6.hours), peakTime = null, certainty = Certainty.FORECAST,
+        payload = AuroraPayload(kpForecast = 5.5, forecastKind = kind, issuedAt = fetchedAt),
         fetchedAt = fetchedAt, expiresAt = null,
     )
 
