@@ -62,7 +62,10 @@ class SyncImportTest {
         return file
     }
 
-    /** In-memory database plus the schema the JDBC driver does not create by itself (§11). */
+    /**
+     * In-memory database plus the schema the JDBC driver does not create by
+     * itself (§11).
+     */
     private fun newDriver(): SqlDriver =
         JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { SkywardDatabase.Schema.create(it) }
 
@@ -111,8 +114,8 @@ class SyncImportTest {
     @Test
     fun aFailureMidImportLeavesTheDatabaseExactlyAsItWas() = runBlocking {
         val realDriver = newDriver()
-        // Settings are written after the deletions and after locations/rules, so
-        // failing there covers everything earlier in the same transaction.
+        // Settings are written after the deletions and after locations/rules,
+        // so failing there covers everything earlier in the same transaction.
         val container = DesktopContainer(FailingDriver(realDriver) { "app_setting" in it })
         container.locationRepo.upsert(loc("old-loc"))
         container.ruleRepo.upsert(rule("old-rule"))
@@ -131,7 +134,10 @@ class SyncImportTest {
         container.close()
     }
 
-    /** Delegates every call except [execute], which throws once [failWhen] matches the SQL text. */
+    /**
+     * Delegates every call except [execute], which throws once [failWhen]
+     * matches the SQL text.
+     */
     private class FailingDriver(private val delegate: SqlDriver, private val failWhen: (String) -> Boolean) : SqlDriver by delegate {
         override fun execute(identifier: Int?, sql: String, parameters: Int, binders: (SqlPreparedStatement.() -> Unit)?): QueryResult<Long> {
             if (failWhen(sql)) throw RuntimeException("injected failure for test: $sql")
