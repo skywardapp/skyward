@@ -23,23 +23,12 @@ import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
 import dev.fritze.skyward.core.sources.AuroraSource
-import dev.fritze.skyward.core.sources.CometSource
-import dev.fritze.skyward.core.sources.ConjunctionSource
-import dev.fritze.skyward.core.sources.EclipseSource
-import dev.fritze.skyward.core.sources.EonetSource
 import dev.fritze.skyward.core.sources.EventSource
-import dev.fritze.skyward.core.sources.MeteorShowerSource
-import dev.fritze.skyward.core.sources.MoonEventSource
 import dev.fritze.skyward.core.sources.SourceRunner
-import dev.fritze.skyward.core.visibility.AuroraVisibilityModel
-import dev.fritze.skyward.core.visibility.CometVisibilityModel
-import dev.fritze.skyward.core.visibility.ConjunctionVisibilityModel
-import dev.fritze.skyward.core.visibility.LunarEclipseVisibilityModel
-import dev.fritze.skyward.core.visibility.MeteorShowerVisibilityModel
-import dev.fritze.skyward.core.visibility.MoonEventVisibilityModel
-import dev.fritze.skyward.core.visibility.SolarEclipseVisibilityModel
-import dev.fritze.skyward.core.visibility.TerrestrialVisibilityModel
+import dev.fritze.skyward.core.sources.defaultComputedSources
+import dev.fritze.skyward.core.sources.defaultPolledSources
 import dev.fritze.skyward.core.visibility.VisibilityModel
+import dev.fritze.skyward.core.visibility.defaultVisibilityModels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,22 +59,13 @@ class AppContainer(context: Context) {
     val syncImportRepo = SyncImportRepo(database)
     val visibilityCacheRepo = VisibilityCacheRepo(database)
 
-    val visibilityModels: Map<Phenomenon, VisibilityModel> = mapOf(
-        Phenomenon.SOLAR_ECLIPSE to SolarEclipseVisibilityModel(),
-        Phenomenon.LUNAR_ECLIPSE to LunarEclipseVisibilityModel(),
-        Phenomenon.AURORA to AuroraVisibilityModel(),
-        Phenomenon.METEOR_SHOWER to MeteorShowerVisibilityModel(),
-        Phenomenon.COMET to CometVisibilityModel(),
-        Phenomenon.MOON_EVENT to MoonEventVisibilityModel(),
-        Phenomenon.CONJUNCTION to ConjunctionVisibilityModel(),
-        Phenomenon.TERRESTRIAL to TerrestrialVisibilityModel(),
-    )
+    val visibilityModels: Map<Phenomenon, VisibilityModel> = defaultVisibilityModels
 
     // RefreshWorker force-runs exactly these every 15 min (§10.2) -- an
     // OnHorizonChange source never becomes due on its own, so the rolling
     // horizon window needs a periodic nudge. POLLED sources below are never
     // force-run; they rely entirely on SourceRunner.isDue (§6.2).
-    val computedSources: List<EventSource> = listOf(EclipseSource(), MeteorShowerSource(), MoonEventSource(), ConjunctionSource())
+    val computedSources: List<EventSource> = defaultComputedSources
 
     // §18/M4: AURORA/COMET/EONET. Each derives its own next-run time
     // (AuroraSource's tiered poll, §7.3.2) or uses a fixed Schedule.Periodic
@@ -94,7 +74,7 @@ class AppContainer(context: Context) {
     // isolation, so no network-specific WorkManager wiring is needed here:
     // a fetch failure while offline is just another refresh() failure,
     // already handled by SourceRunner's diagnose+backoff path (§6.2).
-    val polledSources: List<EventSource> = listOf(AuroraSource(), CometSource(), EonetSource())
+    val polledSources: List<EventSource> = defaultPolledSources
 
     /** Var (not val): instrumented tests substitute a fake per §17.5, since there's no DI framework. */
     var alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)

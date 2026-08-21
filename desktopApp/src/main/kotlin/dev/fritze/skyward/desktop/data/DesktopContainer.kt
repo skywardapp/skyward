@@ -15,23 +15,12 @@ import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
 import dev.fritze.skyward.core.sources.AuroraSource
-import dev.fritze.skyward.core.sources.CometSource
-import dev.fritze.skyward.core.sources.ConjunctionSource
-import dev.fritze.skyward.core.sources.EclipseSource
-import dev.fritze.skyward.core.sources.EonetSource
 import dev.fritze.skyward.core.sources.EventSource
-import dev.fritze.skyward.core.sources.MeteorShowerSource
-import dev.fritze.skyward.core.sources.MoonEventSource
-import dev.fritze.skyward.core.visibility.AuroraVisibilityModel
-import dev.fritze.skyward.core.visibility.CometVisibilityModel
-import dev.fritze.skyward.core.visibility.ConjunctionVisibilityModel
-import dev.fritze.skyward.core.visibility.LunarEclipseVisibilityModel
-import dev.fritze.skyward.core.visibility.MeteorShowerVisibilityModel
-import dev.fritze.skyward.core.visibility.MoonEventVisibilityModel
+import dev.fritze.skyward.core.sources.defaultComputedSources
+import dev.fritze.skyward.core.sources.defaultPolledSources
 import dev.fritze.skyward.core.visibility.OvationGrid
-import dev.fritze.skyward.core.visibility.SolarEclipseVisibilityModel
-import dev.fritze.skyward.core.visibility.TerrestrialVisibilityModel
 import dev.fritze.skyward.core.visibility.VisibilityModel
+import dev.fritze.skyward.core.visibility.defaultVisibilityModels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,9 +34,9 @@ import kotlin.time.Instant
  * `AppContainer` (§4.1: three modules, no DI framework). One instance for
  * the process lifetime, owned by `main`.
  *
- * The visibility-model map and source lists are deliberately identical to
- * Android's: the whole point of §4.1 is that only the UI differs between the
- * two frontends.
+ * The visibility-model map and source lists are the same shared `:core`
+ * definitions Android's `AppContainer` uses: the whole point of §4.1 is
+ * that only the UI differs between the two frontends.
  */
 class DesktopContainer(
     private val driver: SqlDriver,
@@ -64,19 +53,10 @@ class DesktopContainer(
     val settingsRepo = SettingsRepo(database)
     val visibilityCacheRepo = VisibilityCacheRepo(database)
 
-    val visibilityModels: Map<Phenomenon, VisibilityModel> = mapOf(
-        Phenomenon.SOLAR_ECLIPSE to SolarEclipseVisibilityModel(),
-        Phenomenon.LUNAR_ECLIPSE to LunarEclipseVisibilityModel(),
-        Phenomenon.AURORA to AuroraVisibilityModel(),
-        Phenomenon.METEOR_SHOWER to MeteorShowerVisibilityModel(),
-        Phenomenon.COMET to CometVisibilityModel(),
-        Phenomenon.MOON_EVENT to MoonEventVisibilityModel(),
-        Phenomenon.CONJUNCTION to ConjunctionVisibilityModel(),
-        Phenomenon.TERRESTRIAL to TerrestrialVisibilityModel(),
-    )
+    val visibilityModels: Map<Phenomenon, VisibilityModel> = defaultVisibilityModels
 
-    val computedSources: List<EventSource> = listOf(EclipseSource(), MeteorShowerSource(), MoonEventSource(), ConjunctionSource())
-    val polledSources: List<EventSource> = listOf(AuroraSource(), CometSource(), EonetSource())
+    val computedSources: List<EventSource> = defaultComputedSources
+    val polledSources: List<EventSource> = defaultPolledSources
     val allSources: List<EventSource> get() = computedSources + polledSources
 
     val replanCoordinator = ReplanCoordinator(
