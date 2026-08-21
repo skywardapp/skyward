@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
@@ -47,6 +51,7 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.RuleLimits
+import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.NumberField
@@ -157,8 +162,22 @@ private fun RuleRow(state: DesktopAppState, rule: Rule, isSelected: Boolean, onE
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(describeCondition(rule.condition), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // #73: a rule with no lead and no first-seen trigger plans
+                // nothing. The row is otherwise indistinguishable from one
+                // that reminds — including for rules §12.3's sync import
+                // brought in from another device.
+                if (rule.schedule.sendsNoReminders) {
+                    Text(
+                        "Sends no reminders",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
+            // The card itself opens the editor, so the switch keeps its own
+            // action and gains a name instead of the row becoming toggleable.
             Switch(
+                modifier = Modifier.semantics { contentDescription = "Enable ${rule.name}" },
                 checked = rule.enabled,
                 onCheckedChange = { enabled ->
                     state.launch {
@@ -211,6 +230,20 @@ private fun RuleEditorPane(
 
         if (violations.isNotEmpty()) {
             Text(violations.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+
+        // #73: with no leads and first-seen off, §9.2 plans nothing for this
+        // rule — it matches, shows in the overview, and is silent forever.
+        // A warning, not a blocked save: filter-only rules and §13.3's
+        // per-event mutes are legitimately silent. New drafts start at one
+        // day out, so this is only ever reachable deliberately.
+        if (draft.schedule.sendsNoReminders) {
+            Text(
+                "This rule sends no reminders: no lead time is chosen and \"notify as soon as it first " +
+                    "matches\" is off, so it will only ever show up in the overview.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         EditorActions(state, draft, existing, canSave = violations.isEmpty(), onClose = onClose)
@@ -311,8 +344,16 @@ private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) 
                 Dropdown(schedule.anchor, Anchor.entries, { it.describe() }) { onChange(schedule.copy(anchor = it)) }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(schedule.notifyOnFirstSeen, { onChange(schedule.copy(notifyOnFirstSeen = it)) })
+            Row(
+                Modifier.toggleable(
+                    value = schedule.notifyOnFirstSeen,
+                    onValueChange = { onChange(schedule.copy(notifyOnFirstSeen = it)) },
+                    role = Role.Switch,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(schedule.notifyOnFirstSeen, onCheckedChange = null)
                 Text("Notify as soon as it first matches")
             }
 
@@ -347,9 +388,12 @@ private fun LeadChips(schedule: NotifySchedule, onChange: (NotifySchedule) -> Un
 private fun QuietHoursRow(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {
     val quiet = schedule.quietHours
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Named rather than toggleable-as-a-row: the row continues into the
+        // from/to number fields, which must stay separately reachable.
         Switch(
             checked = quiet != null,
             onCheckedChange = { on -> onChange(schedule.copy(quietHours = if (on) DEFAULT_QUIET_HOURS else null)) },
+            modifier = Modifier.semantics { contentDescription = "Quiet hours" },
         )
         Text("Quiet hours")
         if (quiet != null) {

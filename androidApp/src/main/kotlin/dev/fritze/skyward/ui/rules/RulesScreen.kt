@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.format.phenomenonLabel
@@ -62,13 +64,31 @@ private fun RuleRow(rule: Rule, onToggle: (Boolean) -> Unit, onClick: () -> Unit
         Column(Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(rule.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Switch(checked = rule.enabled, onCheckedChange = onToggle)
+                // Not `toggleable` on the row: the row is already clickable,
+                // and it opens the editor. So the switch keeps its own action
+                // and gains the name it was missing instead (#79) — without
+                // it TalkBack announces "switch, on" with no idea which rule.
+                Switch(
+                    checked = rule.enabled,
+                    onCheckedChange = onToggle,
+                    modifier = Modifier.semantics { contentDescription = "Enable ${rule.name}" },
+                )
             }
             Text(rule.phenomena.joinToString(", ") { phenomenonLabel(it) }, style = MaterialTheme.typography.bodySmall)
             if (rule.schedule.leads.isNotEmpty()) {
                 Text("Reminds: " + rule.schedule.leads.joinToString(", ") { formatLead(it) }, style = MaterialTheme.typography.bodyMedium)
             } else if (rule.schedule.notifyOnFirstSeen) {
                 Text("Reminds: as soon as matched", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                // The row said nothing at all for a silent rule, which read as
+                // "reminders not shown here" rather than "there are none"
+                // (#73). Reachable for rules saved before the editor warned,
+                // and for anything §12.3's sync import brings in.
+                Text(
+                    "Sends no reminders",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -69,9 +71,17 @@ fun SourcesScreen(container: AppContainer, onBack: () -> Unit) {
 private fun SourceRowCard(row: SourceRow, zone: TimeZone, onToggle: (Boolean) -> Unit, onRefreshNow: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            // toggleable on the row, not onCheckedChange on the Switch: the
+            // label and the control are siblings, so TalkBack would otherwise
+            // announce "switch, on" with no idea which source it belongs to
+            // (#79). The row becomes one node named by its label, and the
+            // Switch stops being separately focusable.
+            Row(
+                Modifier.fillMaxWidth().toggleable(value = row.enabled, onValueChange = onToggle, role = Role.Switch),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(row.displayName, style = MaterialTheme.typography.titleMedium)
-                Switch(checked = row.enabled, onCheckedChange = onToggle)
+                Switch(checked = row.enabled, onCheckedChange = null)
             }
             Text(diagnosticsSummary(row.diagnostics, zone), style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
             if (row.polled && row.enabled) {

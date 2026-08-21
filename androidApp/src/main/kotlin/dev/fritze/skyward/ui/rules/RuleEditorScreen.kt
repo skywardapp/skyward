@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -36,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.format.phenomenonLabel
@@ -46,6 +49,7 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.RuleLimits
+import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.data.AppContainer
 import kotlin.time.Clock
 
@@ -68,6 +72,10 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
 
     val violations = ruleDraftViolations(state, existingRuleCount)
     val canSave = state.isSaveable(violations)
+    // Not a violation: a rule that only filters Upcoming (or mutes an event,
+    // §13.3) is a real thing to want. It just must not be reachable by
+    // accident, unsaid (#73).
+    val sendsNoReminders = state.loaded && state.toRule("preview").schedule.sendsNoReminders
 
     Scaffold(
         topBar = {
@@ -86,6 +94,7 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
                 state = state,
                 locations = locations,
                 violations = violations,
+                sendsNoReminders = sendsNoReminders,
                 canSave = canSave,
                 onSave = { viewModel.save(state.toRule(stableNewId), onDone) },
             )
@@ -112,7 +121,11 @@ private class RuleDraftState {
     var useAllLocations by mutableStateOf(true)
     var chosenLocationIds by mutableStateOf(emptySet<String>())
     var conditionRoot by mutableStateOf(ConditionNode.Group(GroupOp.AND, emptyList()))
-    var schedule by mutableStateOf(ScheduleDraft(emptySet(), Anchor.PEAK, false, false, 22, 7))
+    // A day ahead, matching the desktop editor's new-rule default and the
+    // shortest lead most of §9.3's shipped defaults carry. The editor used to
+    // open with no leads and first-seen off, which saves a rule that matches
+    // events and never notifies (#73) -- a trap in a reminders app.
+    var schedule by mutableStateOf(ScheduleDraft(setOf(DEFAULT_LEAD), Anchor.PEAK, false, false, 22, 7))
 
     val locationIds: List<String>? get() = if (useAllLocations) null else chosenLocationIds.toList()
 
@@ -212,6 +225,7 @@ private fun RuleEditorForm(
     state: RuleDraftState,
     locations: List<SavedLocation>,
     violations: List<String>,
+    sendsNoReminders: Boolean,
     canSave: Boolean,
     onSave: () -> Unit,
 ) {
@@ -235,16 +249,27 @@ private fun RuleEditorForm(
         item { ConditionsSection(state.phenomena, state.conditionRoot) { state.conditionRoot = it } }
         item { ScheduleSection(state.schedule) { state.schedule = it } }
         item { ViolationsCard(violations) }
+        item { SilentRuleWarning(sendsNoReminders) }
         item { LivePreviewPanel(viewModel = viewModel, phenomena = state.phenomena, locationIds = state.locationIds, conditionRoot = state.conditionRoot) }
         item { Button(onClick = onSave, enabled = canSave, modifier = Modifier.fillMaxWidth()) { Text("Save") } }
     }
 }
 
+/**
+ * §79's accessibility finding: with the label and the `Switch` as siblings,
+ * TalkBack announces an unnamed switch. `toggleable(role = Role.Switch)` on
+ * the row makes the two one node — named by the label, still reported as a
+ * switch — and the whole row becomes the (much larger) touch target.
+ */
 @Composable
 private fun EnabledRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = enabled, onValueChange = onChange, role = Role.Switch),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text("Enabled", style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = enabled, onCheckedChange = onChange)
+        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 
@@ -286,6 +311,31 @@ private fun ViolationsCard(violations: List<String>) {
     }
 }
 
+/**
+ * #73: with no lead times and "Notify as soon as matched" off, §9.2 plans
+ * nothing for this rule — it will show up in Upcoming and be silent forever.
+ * A warning rather than a blocked save: the editor also builds filter-only
+ * rules and §13.3's per-event mutes, which are legitimately silent. What was
+ * wrong was that nothing said so.
+ */
+@Composable
+private fun SilentRuleWarning(sendsNoReminders: Boolean) {
+    if (!sendsNoReminders) return
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("This rule sends no reminders", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "It will match events and show them in Upcoming, but with no lead time chosen and " +
+                    "\"Notify as soon as matched\" off there is nothing for it to notify you at.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
 @Composable
 private fun DeleteRuleDialog(ruleName: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
@@ -319,8 +369,11 @@ private fun LocationsSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Locations", style = MaterialTheme.typography.titleSmall)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = useAllLocations, onCheckedChange = onUseAllChange)
+        Row(
+            Modifier.toggleable(value = useAllLocations, onValueChange = onUseAllChange, role = Role.Switch),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(checked = useAllLocations, onCheckedChange = null)
             Text("All saved locations", modifier = Modifier.padding(start = 8.dp))
         }
         if (!useAllLocations) LocationChips(locations, chosenLocationIds, onToggleLocation)

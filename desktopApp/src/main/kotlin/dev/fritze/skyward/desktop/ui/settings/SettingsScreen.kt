@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -20,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.persistence.ThemeChoice
 import dev.fritze.skyward.desktop.autostart.AutostartResult
@@ -132,6 +134,10 @@ private fun TestNotificationRow(state: DesktopAppState) {
                         onActivated = {},
                     )
                 }
+                // Same channel the scheduler reports through, so a successful
+                // test retracts a standing "reminders can't be shown" banner
+                // and a failed one raises it.
+                state.recordDeliveryOutcome(delivered)
                 note = if (delivered) {
                     "Sent — if nothing appeared, check your desktop's notification settings."
                 } else {
@@ -145,8 +151,14 @@ private fun TestNotificationRow(state: DesktopAppState) {
 
 @Composable
 private fun SettingSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title: String, subtitle: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    // One toggleable node named by its title, rather than an unnamed switch
+    // beside two unrelated-looking labels (#79).
+    Row(
+        Modifier.toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Switch(checked = checked, onCheckedChange = null)
         Column {
             Text(title)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

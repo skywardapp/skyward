@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -146,7 +148,15 @@ fun SkyChartScreen(state: DesktopAppState) {
                 ) {
                     val currentScene = scene
                     Canvas(
-                        Modifier.fillMaxSize().pointerInput(currentScene) {
+                        Modifier
+                            .fillMaxSize()
+                            // One opaque node to a screen reader, so name it
+                            // (#79); the labels beside it are real composables
+                            // and stay individually readable.
+                            .semantics {
+                                contentDescription = "Sky chart with ${currentScene?.objects?.size ?: 0} objects above the horizon"
+                            }
+                            .pointerInput(currentScene) {
                             detectTapGestures { position ->
                                 val hit = currentScene?.let { hitTest(position, it, size.toSize()) }
                                 hit?.occurrenceId?.let(state::selectOccurrence)
