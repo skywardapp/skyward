@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.AuroraPayload
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SolarEclipsePayload
@@ -49,7 +50,6 @@ import dev.fritze.skyward.desktop.ui.common.formatDateTime
 import dev.fritze.skyward.desktop.ui.common.formatKp
 import dev.fritze.skyward.desktop.ui.common.formatPercent
 import dev.fritze.skyward.desktop.ui.common.formatRelative
-import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import dev.fritze.skyward.desktop.ui.common.rememberUpcoming
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import dev.fritze.skyward.desktop.ui.theme.kpColor

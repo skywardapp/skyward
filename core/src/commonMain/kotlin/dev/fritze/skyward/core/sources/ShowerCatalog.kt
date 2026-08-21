@@ -37,7 +37,8 @@ internal data class ShowerJson(
  * against `MeteorShower.cpp`'s `d.start = ...; // solar longitude at start`
  * and its `JDfromSolarLongitude` conversion) — this is R2 in §19
  * materializing exactly as anticipated ("verify against Stellarium plugin
- * source at implementation"). A year-specific entry (`year` != "generic")
+ * source at implementation"); docs/adr/0003-shower-solar-longitude.md
+ * carries the evidence. A year-specific entry (`year` != "generic")
  * that omits start/finish/peak/zhr inherits them from the generic (index 0)
  * entry — modeled here as nullable fields the caller merges explicitly,
  * which is more precise than the plugin's own `value == 0` sentinel check

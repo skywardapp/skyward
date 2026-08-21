@@ -21,9 +21,11 @@ plugins {
  * input and documents how to refresh it.
  *
  * The output is wired into the **desktop** target's resources only, not
- * commonMain's: the map is a desktop view (§14.1; Android's Map tab is
- * explicitly v1.1 backlog, §18), and half a megabyte of coastlines has no
- * business inside the APK.
+ * commonMain's as §15.1's layout shows: the map is a desktop view (§14.1;
+ * Android's Map tab is explicitly v1.1 backlog, §18), and half a megabyte of
+ * coastlines has no business inside the APK. See
+ * docs/adr/0009-natural-earth-binary-in-desktop-resources.md, which also says
+ * what to change when Android grows a map.
  *
  * Binary layout, big-endian:
  *   magic "SKNE" (4 bytes) · version u16 · ringCount i32
@@ -142,7 +144,9 @@ sqldelight {
             // §11 calls for verifyMigrations = true, but that verifies .sqm migration
             // files against snapshotted schema versions — meaningless before any
             // migration exists. Flip to true (and commit the initial schema snapshot)
-            // the first time this schema actually changes after release.
+            // the first time this schema actually changes after release; that
+            // trigger is the whole of
+            // docs/adr/0010-sqldelight-verify-migrations-off.md.
             verifyMigrations.set(false)
         }
     }

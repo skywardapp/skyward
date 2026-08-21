@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
@@ -56,7 +57,6 @@ import dev.fritze.skyward.desktop.ui.common.formatDate
 import dev.fritze.skyward.desktop.ui.common.formatDateTime
 import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.monthAbbreviation
-import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import dev.fritze.skyward.desktop.ui.common.rememberUpcoming
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import dev.fritze.skyward.desktop.ui.theme.phenomenonColor

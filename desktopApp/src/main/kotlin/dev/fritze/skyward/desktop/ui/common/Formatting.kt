@@ -1,6 +1,5 @@
 package dev.fritze.skyward.desktop.ui.common
 
-import dev.fritze.skyward.core.model.Phenomenon
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -13,20 +12,9 @@ import kotlin.time.Instant
 /**
  * Presentation-only string helpers. §5: "timezone conversion happens only at
  * the UI/notification edge" — this file is the desktop half of that edge
- * (`core/format/` owns the notification half).
+ * (`core/format/` owns the notification half, plus anything both frontends
+ * render — `phenomenonLabel` moved there, per §4.1).
  */
-
-/** Kept identical to the Android app's labels so the two frontends agree on names (§4.1). */
-fun phenomenonLabel(phenomenon: Phenomenon): String = when (phenomenon) {
-    Phenomenon.SOLAR_ECLIPSE -> "Solar eclipse"
-    Phenomenon.LUNAR_ECLIPSE -> "Lunar eclipse"
-    Phenomenon.AURORA -> "Aurora"
-    Phenomenon.METEOR_SHOWER -> "Meteor shower"
-    Phenomenon.COMET -> "Comet"
-    Phenomenon.MOON_EVENT -> "Supermoon"
-    Phenomenon.CONJUNCTION -> "Conjunction"
-    Phenomenon.TERRESTRIAL -> "Earth event"
-}
 
 private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 

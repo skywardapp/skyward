@@ -47,6 +47,17 @@ check(suppliedReleaseSigningInputs.isEmpty() || hasReleaseSigningConfig) {
         "keyAlias and keyPassword are required together, or none at all (§15.4)."
 }
 
+// §16: "`NOTICE` file enumerates the rows below; About screen renders them."
+// Packaging the repository's own NOTICE as an asset (rather than retyping a
+// condensed copy into Kotlin) is what keeps the About screen from drifting
+// away from the file the repository ships — there is exactly one copy of the
+// text, and the desktop app packages the same file the same way.
+val bundleNotice by tasks.registering(Copy::class) {
+    description = "Packages the repository NOTICE file as an Android asset for the About screen."
+    from(rootProject.layout.projectDirectory.file("NOTICE"))
+    into(layout.buildDirectory.dir("generated/notice"))
+}
+
 android {
     namespace = "dev.fritze.skyward"
     compileSdk = 36
@@ -65,6 +76,10 @@ android {
         // runner is configured on defaultConfig rather than per-flavour.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // Both flavours pick this up from `main`, so the About screen — and the
+    // §16 obligation behind it — is flavour-invariant, as D13 requires.
+    sourceSets.getByName("main").assets.srcDir(bundleNotice.map { it.destinationDir })
 
     // §15.1 / D13: the ONLY difference between the two flavours is the exact-alarm
     // permission (§10.2). No BuildConfig fields, no dependency differences, no

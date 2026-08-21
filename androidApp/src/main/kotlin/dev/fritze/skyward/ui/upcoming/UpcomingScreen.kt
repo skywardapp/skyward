@@ -43,13 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.openAppNotificationSettings
-import dev.fritze.skyward.ui.common.phenomenonLabel
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

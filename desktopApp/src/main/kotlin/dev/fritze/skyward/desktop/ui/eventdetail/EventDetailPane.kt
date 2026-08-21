@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import dev.fritze.skyward.core.format.compassOf
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.CometPayload
 import dev.fritze.skyward.core.model.LocalDetails
@@ -55,7 +56,6 @@ import dev.fritze.skyward.desktop.ui.common.formatPercent
 import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.formatTime
 import dev.fritze.skyward.desktop.ui.common.openInBrowser
-import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import dev.fritze.skyward.desktop.ui.rules.describeLead
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import dev.fritze.skyward.desktop.ui.theme.qualityLabel
