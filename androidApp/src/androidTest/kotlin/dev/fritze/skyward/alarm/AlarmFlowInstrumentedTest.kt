@@ -123,6 +123,31 @@ class AlarmFlowInstrumentedTest {
         assertEquals(NotificationStatus.FIRED, container.notificationRepo.getById(n.id)?.status)
     }
 
+    /**
+     * #51: a posted reminder has to name what a tap opens. Without a
+     * contentIntent the notification is inert -- it opens nothing, and
+     * `setAutoCancel(true)`, which only fires through a content intent,
+     * cannot even dismiss it. Where the intent then routes is
+     * [NotificationTapTest]'s job; this asserts the notification carries one
+     * at all, on the real Builder output the shade receives.
+     */
+    @Test
+    fun firedNotificationCarriesATapTarget() = runTest {
+        container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = true)
+        val n = freshNotification(Clock.System.now() + 5.minutes, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        val posted = awaitPosted(n.id)
+        assertTrue("expected notification to be posted", posted != null)
+        val contentIntent = posted!!.notification.contentIntent
+        assertTrue("expected a contentIntent so the tap opens the app", contentIntent != null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue("expected the tap to start an Activity", contentIntent!!.isActivity)
+        }
+    }
+
     @Test
     fun exactAlarmUnavailableFallsBackToApproximateWithHedgedCopy() = runTest {
         container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)

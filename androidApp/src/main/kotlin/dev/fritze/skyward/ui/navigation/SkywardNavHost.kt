@@ -12,6 +12,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -35,10 +36,27 @@ import dev.fritze.skyward.ui.upcoming.UpcomingScreen
 
 /** §13.1: BottomBar [Upcoming] [Rules] [Settings] -- Map is v1.1, hidden behind a flag (not built at all yet). */
 @Composable
-fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
+fun SkywardNavHost(
+    container: AppContainer,
+    onboardingDone: Boolean,
+    tappedOccurrenceId: String?,
+    onTapConsumed: () -> Unit,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // A tapped reminder (§10.2) lands here. Onboarding gates it: until it is
+    // done the graph starts at ONBOARDING, and pushing a detail screen on top
+    // of the welcome flow would strand a first-run user with a Back button
+    // that returns them to it — so a tap arriving mid-onboarding is held (the
+    // effect re-runs when the flag flips) rather than dropped.
+    LaunchedEffect(tappedOccurrenceId, onboardingDone) {
+        if (tappedOccurrenceId != null && onboardingDone) {
+            navController.navigate(Routes.eventDetail(tappedOccurrenceId)) { launchSingleTop = true }
+            onTapConsumed()
+        }
+    }
 
     Scaffold(
         bottomBar = {
