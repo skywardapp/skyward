@@ -20,6 +20,8 @@ import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
+import dev.fritze.skyward.core.visibility.VisibilityContext
+import dev.fritze.skyward.core.visibility.VisibilityModel
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,12 +57,25 @@ class PlannerTest {
         createdAt = now, modifiedAt = now,
     )
 
-    private fun occ(id: String = "se:test", peakTime: Instant = peak, windowEnd: Instant = peakTime + 3.hours, certainty: Certainty = Certainty.CERTAIN) = Occurrence(
+    private fun occ(
+        id: String = "se:test",
+        peakTime: Instant = peak,
+        windowEnd: Instant = peakTime + 3.hours,
+        certainty: Certainty = Certainty.CERTAIN,
+        expiresAt: Instant? = null,
+    ) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Eclipse",
         window = TimeWindow(peakTime - 3.hours, windowEnd), peakTime = peakTime, certainty = certainty,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = now, expiresAt = null,
+        fetchedAt = now, expiresAt = expiresAt,
     )
+
+    /** Stands in for a real visibility model in [Planner.computeMatches] tests. */
+    private class AlwaysVisibleModel : VisibilityModel {
+        override val phenomenon = Phenomenon.SOLAR_ECLIPSE
+        override fun evaluate(occ: Occurrence, loc: SavedLocation, ctx: VisibilityContext) =
+            VisibilityResult(true, Quality.EXCELLENT, null, null, null, null, null)
+    }
 
     private fun visres(quality: Quality) = VisibilityResult(
         visibleAtLocation = quality != Quality.NONE, quality = quality, localDetails = null,
@@ -112,6 +127,47 @@ class PlannerTest {
         val notification = desired.first()
         assertEquals(ruleA.id, notification.ruleId, "expected the first matching rule")
         assertEquals(cabin.id, notification.locationId, "expected the best-quality location")
+    }
+
+    @Test
+    fun anExpiredForecastOccurrenceMatchesNoRules() {
+        // §5: the last OVATION nowcast and its 3-hour slots stay in the DB
+        // while SWPC is unreachable -- SourceRunner only withdraws
+        // occurrences on a *successful* refresh (§6.2 backs off up to 24 h).
+        // Expiry is the only thing standing between hours-old forecast data
+        // and a notification presenting it as current.
+        val home = loc("home", "Home")
+        val fresh = occ(id = "se:fresh", certainty = Certainty.FORECAST, expiresAt = now + 2.hours)
+        val expired = occ(id = "se:expired", certainty = Certainty.FORECAST, expiresAt = now - 1.hours)
+        // Expiry is inclusive: at exactly `expiresAt` the row is no longer current.
+        val expiringExactlyNow = occ(id = "se:on-the-boundary", certainty = Certainty.FORECAST, expiresAt = now)
+
+        val matches = Planner.computeMatches(
+            listOf(fresh, expired, expiringExactlyNow),
+            listOf(home),
+            listOf(rule("r")),
+            mapOf(Phenomenon.SOLAR_ECLIPSE to AlwaysVisibleModel()),
+            VisibilityContext(now = now, ovationGrid = null),
+        )
+
+        assertEquals(listOf("se:fresh"), matches.map { it.occ.id })
+    }
+
+    @Test
+    fun anEphemerisOccurrenceWithNoExpiryNeverExpires() {
+        // §5: "null for ephemeris events, which never go stale" -- an
+        // eclipse decades out must not be filtered as expired.
+        val home = loc("home", "Home")
+
+        val matches = Planner.computeMatches(
+            listOf(occ(expiresAt = null)),
+            listOf(home),
+            listOf(rule("r")),
+            mapOf(Phenomenon.SOLAR_ECLIPSE to AlwaysVisibleModel()),
+            VisibilityContext(now = now, ovationGrid = null),
+        )
+
+        assertEquals(1, matches.size)
     }
 
     @Test

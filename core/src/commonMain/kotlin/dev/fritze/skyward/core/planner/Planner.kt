@@ -11,6 +11,7 @@ import dev.fritze.skyward.core.model.Precision
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.VisibilityResult
+import dev.fritze.skyward.core.model.hasExpiredAt
 import dev.fritze.skyward.core.rules.Anchor
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
@@ -39,7 +40,12 @@ data class Match(val rule: Rule, val occ: Occurrence, val loc: SavedLocation, va
  */
 object Planner {
 
-    /** §9.2: run every enabled rule against every (occurrence, location) it applies to. */
+    /**
+     * §9.2: run every enabled rule against every (occurrence, location) it
+     * applies to — skipping occurrences whose forecast has expired (§5), so
+     * a source that has been unreachable for hours can't keep matching
+     * rules with data it no longer stands behind.
+     */
     fun computeMatches(
         occurrences: List<Occurrence>,
         locations: List<SavedLocation>,
@@ -50,6 +56,7 @@ object Planner {
         val matches = mutableListOf<Match>()
         val visResCache = HashMap<Pair<String, String>, VisibilityResult>()
         for (occ in occurrences) {
+            if (occ.hasExpiredAt(ctx.now)) continue // §5: stale forecast data matches nothing
             val model = visibilityModels[occ.phenomenon] ?: continue
             val candidateRules = rules.filter { it.enabled && occ.phenomenon in it.phenomena }
             if (candidateRules.isEmpty()) continue

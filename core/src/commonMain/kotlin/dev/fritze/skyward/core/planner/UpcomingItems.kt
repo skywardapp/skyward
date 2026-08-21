@@ -5,6 +5,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.VisibilityResult
+import dev.fritze.skyward.core.model.hasExpiredAt
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
@@ -39,11 +40,17 @@ fun computeUpcomingItems(
 ): List<UpcomingItem> {
     if (locations.isEmpty()) return emptyList()
 
+    // §5: an expired forecast is last-known data, not something to present
+    // as upcoming -- in either scope. [UpcomingScope.ALL] drops the
+    // "matches a rule" restriction, not the "this data is still current"
+    // one.
+    val current = occurrences.filterNot { it.hasExpiredAt(ctx.now) }
+
     val visibleRules = rules.filter { it.enabled && !it.hidden }
-    val matches = Planner.computeMatches(occurrences, locations, visibleRules, visibilityModels, ctx)
+    val matches = Planner.computeMatches(current, locations, visibleRules, visibilityModels, ctx)
     val matchedRuleNamesByOccurrence = matches.groupBy({ it.occ.id }) { it.rule.name }.mapValues { it.value.distinct() }
 
-    val items = occurrences.mapNotNull { occ ->
+    val items = current.mapNotNull { occ ->
         val model = visibilityModels[occ.phenomenon] ?: return@mapNotNull null
         val results = locations.associateWith { loc -> model.evaluate(occ, loc, ctx) }
         val ruleNames = matchedRuleNamesByOccurrence[occ.id].orEmpty()
