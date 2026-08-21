@@ -45,11 +45,11 @@ import androidx.compose.ui.unit.toSize
 import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
+import dev.fritze.skyward.core.format.formatDateTime
+import dev.fritze.skyward.core.format.formatDegrees
+import dev.fritze.skyward.core.format.formatTime
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
-import dev.fritze.skyward.desktop.ui.common.formatDateTime
-import dev.fritze.skyward.desktop.ui.common.formatDegrees
-import dev.fritze.skyward.desktop.ui.common.formatTime
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import io.github.cosinekitty.astronomy.Observer
 import kotlinx.coroutines.Dispatchers

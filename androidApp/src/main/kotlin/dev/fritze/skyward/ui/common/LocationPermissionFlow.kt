@@ -31,10 +31,16 @@ sealed interface LocationFixOutcome {
     /** A cached coarse fix, recent enough to stand for "where the user is now". */
     data class Fixed(val point: GeoPoint) : LocationFixOutcome
 
-    /** The runtime prompt came back denied, or the permission was revoked between the check and the read. */
+    /**
+     * The runtime prompt came back denied, or the permission was revoked
+     * between the check and the read.
+     */
     data object PermissionDenied : LocationFixOutcome
 
-    /** Permission is granted, but no enabled provider holds a fix younger than [MAX_LOCATION_AGE_MILLIS]. */
+    /**
+     * Permission is granted, but no enabled provider holds a fix younger than
+     * [MAX_LOCATION_AGE_MILLIS].
+     */
     data object NoRecentFix : LocationFixOutcome
 }
 
@@ -128,5 +134,20 @@ private fun readLastKnownCoarseLocation(context: android.content.Context): Locat
         ?: return LocationFixOutcome.NoRecentFix
     val ageMillis = (SystemClock.elapsedRealtimeNanos() - newest.elapsedRealtimeNanos) / 1_000_000
     if (ageMillis > MAX_LOCATION_AGE_MILLIS) return LocationFixOutcome.NoRecentFix
-    return LocationFixOutcome.Fixed(GeoPoint(newest.latitude, newest.longitude))
+    return newest.toGeoPoint()?.let(LocationFixOutcome::Fixed) ?: LocationFixOutcome.NoRecentFix
+}
+
+/**
+ * A provider fix as a §5 [GeoPoint], or null if it isn't one.
+ *
+ * `Location` documents longitude as `[-180, 180]` inclusive while [GeoPoint]
+ * is `[-180, 180)`, so a fix on the antimeridian has to be folded onto the
+ * `-180` end rather than stored as the other number for the same meridian.
+ * Everything else out of range, or non-finite, is a fix the app cannot use --
+ * reported as "no fix" rather than saved, because it is not one.
+ */
+private fun Location.toGeoPoint(): GeoPoint? {
+    if (!latitude.isFinite() || !longitude.isFinite()) return null
+    if (latitude !in -90.0..90.0 || longitude < -180.0 || longitude > 180.0) return null
+    return GeoPoint(latitude, if (longitude == 180.0) -180.0 else longitude)
 }

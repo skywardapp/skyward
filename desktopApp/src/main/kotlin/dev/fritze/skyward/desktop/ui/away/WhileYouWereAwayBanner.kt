@@ -19,8 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.desktop.ui.DesktopAppState
-import dev.fritze.skyward.desktop.ui.common.formatDateTime
 
 /**
  * §10.3: "Missed-while-closed events: on startup, list matches whose anchor

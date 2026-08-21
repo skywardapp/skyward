@@ -18,7 +18,10 @@ enum class CoordinateAxis { LATITUDE, LONGITUDE }
  * had drifted apart on the exclusive upper bound already.
  */
 data class CoordinateEntry(val degrees: Double?, val error: String?) {
-    /** True once the field holds something that can't become a coordinate -- what a text field's `isError` wants. */
+    /**
+     * True once the field holds something that can't become a coordinate --
+     * what a text field's `isError` wants.
+     */
     val isError: Boolean get() = error != null
 }
 
@@ -49,7 +52,10 @@ fun parseCoordinate(text: String, axis: CoordinateAxis): CoordinateEntry {
     }
 }
 
-/** A plausible value to show in the "enter a number" message, so the expected format is visible rather than described. */
+/**
+ * A plausible value to show in the "enter a number" message, so the expected
+ * format is visible rather than described.
+ */
 private val CoordinateAxis.example: String
     get() = when (this) {
         CoordinateAxis.LATITUDE -> "52.52"

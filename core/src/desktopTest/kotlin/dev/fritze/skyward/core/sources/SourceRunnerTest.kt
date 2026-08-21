@@ -41,14 +41,16 @@ class SourceRunnerTest {
         override val id: String,
         override val phenomena: Set<Phenomenon> = setOf(Phenomenon.SOLAR_ECLIPSE),
         private val schedule: Schedule = Schedule.OnHorizonChange,
+        override val kind: SourceKind = SourceKind.COMPUTED,
+        private val onRefresh: (String) -> Unit = {},
     ) : EventSource {
-        override val kind = SourceKind.COMPUTED
         var nextResult: RefreshResult? = null
         var nextError: Exception? = null
         var callCount = 0
 
         override suspend fun refresh(req: RefreshRequest): RefreshResult {
             callCount++
+            onRefresh(id)
             nextError?.let { throw it }
             return nextResult ?: RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         }
@@ -56,11 +58,11 @@ class SourceRunnerTest {
         override fun schedule(settings: SourceSettings) = schedule
     }
 
-    private fun occ(id: String, peakTime: Instant, certainty: Certainty, title: String = "t") = Occurrence(
+    private fun occ(id: String, peakTime: Instant, certainty: Certainty, title: String = "t", fetchedAt: Instant = now) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "test-source", title = title,
         window = TimeWindow(peakTime - 1.hours, peakTime + 1.hours), peakTime = peakTime, certainty = certainty,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = now, expiresAt = null,
+        fetchedAt = fetchedAt, expiresAt = null,
     )
 
     private class Fixture {
@@ -121,15 +123,65 @@ class SourceRunnerTest {
         assertEquals(now, fx.occurrenceRepo.getFirstSeenAt("se:1"), "first_seen_at must survive re-fetches")
     }
 
+    /**
+     * ADR 0009: the periodic drivers force nothing, so a source that has never
+     * run has to become due by itself or a fresh install never populates.
+     */
     @Test
-    fun onHorizonChangeSourceIsNeverAutomaticallyDueAfterSuccess() = runTest {
+    fun aSourceThatHasNeverRunIsDueOnTheFirstUnforcedPass() = runTest {
+        val fx = Fixture()
+        val computed = FakeSource("computed", schedule = Schedule.OnHorizonChange)
+        val polled = FakeSource("polled", schedule = Schedule.Periodic(6.hours))
+
+        fx.runner(computed, polled).runDue(now) // no force at all
+
+        assertEquals(1, computed.callCount)
+        assertEquals(1, polled.callCount)
+    }
+
+    /**
+     * A pass is not unbounded — WorkManager stops a non-expedited worker at
+     * ~10 minutes — and `EclipseSource`'s first, uncached run is the one thing
+     * able to spend that whole budget (§7.1.3). Polling has to go first, or a
+     * fresh install starves exactly the sources issue #49 was about, cache or
+     * no cache. Registration order deliberately says otherwise here: §6.2
+     * calls it irrelevant, and the runner is what has to make that true.
+     */
+    @Test
+    fun aBootstrapPassRunsThePolledSourcesBeforeTheComputedOnes() = runTest {
+        val fx = Fixture()
+        val order = mutableListOf<String>()
+        val computed = FakeSource("computed", kind = SourceKind.COMPUTED, onRefresh = { order += it })
+        val polled = FakeSource(
+            "polled",
+            schedule = Schedule.Periodic(6.hours),
+            kind = SourceKind.POLLED,
+            onRefresh = { order += it },
+        )
+
+        fx.runner(computed, polled).runDue(now) // neither has ever run, so both are due
+
+        assertEquals(listOf("polled", "computed"), order)
+    }
+
+    /**
+     * ADR 0009: the horizon is `now .. now + horizonYears`, so its far edge
+     * moves a day per day and an `OnHorizonChange` source has something new to
+     * say once a day — and nothing in between, which is what stopped the
+     * 15-minute recompute that starved the POLLED sources behind it (issue #49).
+     */
+    @Test
+    fun onHorizonChangeSourceBecomesDueOnceADayAndNotSooner() = runTest {
         val fx = Fixture()
         val source = FakeSource("test-source", schedule = Schedule.OnHorizonChange)
         fx.runner(source).runDue(now, force = setOf("test-source"))
         assertEquals(1, source.callCount)
 
-        fx.runner(source).runDue(now + 365.days) // no force this time
-        assertEquals(1, source.callCount, "OnHorizonChange sources only re-run when forced")
+        fx.runner(source).runDue(now + 15.minutes) // the periodic driver's own cadence
+        assertEquals(1, source.callCount, "a horizon that moved 15 minutes is not worth recomputing")
+
+        fx.runner(source).runDue(now + 1.days)
+        assertEquals(2, source.callCount, "a horizon that moved a day is")
     }
 
     @Test
@@ -283,6 +335,53 @@ class SourceRunnerTest {
 
         assertEquals(1, fx.replanCalls, "no material change -- the runner must not re-plan")
         assertEquals("New title", fx.occurrenceRepo.getById("se:1")?.title, "but the stored row is still refreshed")
+    }
+
+    /**
+     * §11 keys `visibility_cache.data_version` on `fetched_at`, so a re-run
+     * that rewrites it throws away every cached verdict for the occurrence.
+     * COMPUTED sources return the same deterministic rows on every run, which
+     * made that cache a permanent miss for computed phenomena (issue #49).
+     */
+    @Test
+    fun aReRunThatReturnsTheSameOccurrenceLeavesItsFetchedAtAlone() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        source.nextResult = RefreshResult(listOf(occ("se:1", now + 400.days, Certainty.CERTAIN)), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now, force = setOf("test-source"))
+
+        val later = now + 1.days
+        source.nextResult = RefreshResult(
+            listOf(occ("se:1", now + 400.days, Certainty.CERTAIN, fetchedAt = later)),
+            emptyMap(), null, SourceDiagnostics(ok = true),
+        )
+        fx.runner(source).runDue(later, force = setOf("test-source"))
+
+        assertEquals(now, fx.occurrenceRepo.getById("se:1")?.fetchedAt, "an unchanged occurrence was not meaningfully re-fetched")
+    }
+
+    @Test
+    fun aReRunThatChangedTheOccurrenceDoesBumpFetchedAt() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        source.nextResult = RefreshResult(
+            listOf(occ("se:1", now + 400.days, Certainty.CERTAIN, title = "Old title")),
+            emptyMap(), null, SourceDiagnostics(ok = true),
+        )
+        fx.runner(source).runDue(now, force = setOf("test-source"))
+
+        val later = now + 1.days
+        source.nextResult = RefreshResult(
+            // Not material (§6.3) but genuinely different data -- the cached
+            // verdicts were computed against the old row and must not be kept.
+            listOf(occ("se:1", now + 400.days, Certainty.CERTAIN, title = "New title", fetchedAt = later)),
+            emptyMap(), null, SourceDiagnostics(ok = true),
+        )
+        fx.runner(source).runDue(later, force = setOf("test-source"))
+
+        val stored = fx.occurrenceRepo.getById("se:1")
+        assertEquals("New title", stored?.title)
+        assertEquals(later, stored?.fetchedAt, "a changed occurrence must invalidate its visibility-cache entries")
     }
 
     @Test

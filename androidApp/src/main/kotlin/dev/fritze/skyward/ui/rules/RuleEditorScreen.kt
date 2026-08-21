@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.format.deleteRuleConfirmation
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.rules.Anchor
@@ -48,7 +49,6 @@ import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.RuleLimits
 import dev.fritze.skyward.data.AppContainer
-import dev.fritze.skyward.ui.common.phenomenonLabel
 import kotlin.time.Clock
 import kotlin.time.Instant
 
