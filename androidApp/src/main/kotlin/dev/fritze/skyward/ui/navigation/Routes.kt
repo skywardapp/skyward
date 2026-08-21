@@ -18,13 +18,13 @@ object Routes {
     const val EVENT_DETAIL = "event/{$EVENT_DETAIL_ARG}"
 
     /**
-     * Occurrence ids are natural keys (§6.4), and some of them carry
-     * characters a single path segment cannot: `comet:C/2025 A6`'s slash
-     * would split the route into three segments that no destination matches,
-     * and `navigate` throws instead of opening anything. Encoding here keeps
-     * every phenomenon's detail screen reachable — Navigation decodes path
-     * arguments again on the way out, so [EVENT_DETAIL_ARG] still reads back
-     * as the id the source minted.
+     * Occurrence ids are natural keys (§6.4). None of the current formats
+     * contain a `/`, but nothing guarantees a future one won't -- a raw `/`
+     * would split the route into extra segments that no destination
+     * matches, and `navigate` throws instead of opening anything. Encoding
+     * here keeps every phenomenon's detail screen reachable regardless —
+     * Navigation decodes path arguments again on the way out, so
+     * [EVENT_DETAIL_ARG] still reads back as the id the source minted.
      */
     fun eventDetail(occurrenceId: String) = "event/" + Uri.encode(occurrenceId)
 

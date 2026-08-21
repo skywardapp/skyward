@@ -50,7 +50,7 @@ class EonetSource(private val httpClient: HttpClient = createHttpClient()) : Eve
     private fun buildOccurrence(event: EonetEvent, now: Instant): Occurrence {
         val windowEnd = maxOf(event.closed ?: (now + 7.days), event.firstGeometryDate)
         return Occurrence(
-            id = "eonet:${event.eonetId}",
+            id = "eo:${event.eonetId}", // §6.4
             phenomenon = Phenomenon.TERRESTRIAL,
             sourceId = id,
             title = event.categoryTitle,

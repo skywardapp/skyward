@@ -44,7 +44,7 @@ class EonetSourceTest {
 
         assertEquals(1, result.occurrences.size)
         val occ = result.occurrences.single()
-        assertEquals("eonet:EONET_4242", occ.id)
+        assertEquals("eo:EONET_4242", occ.id)
         assertEquals(Certainty.FORECAST, occ.certainty)
         assertEquals(null, occ.peakTime)
         assertEquals(now + 3.days, occ.expiresAt)

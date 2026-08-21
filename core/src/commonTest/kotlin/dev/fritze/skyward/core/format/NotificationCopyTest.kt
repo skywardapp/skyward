@@ -89,8 +89,43 @@ class NotificationCopyTest {
         val copy = renderNotificationCopy(occ, home, result, rule(Cond.ReachableWithin(500.0)), fireAt = now, leadUntilAnchor = 30.days)
 
         assertTrue(copy.title.startsWith("Total solar eclipse"), copy.title)
-        assertTrue(copy.body.contains("180 km SSE of Home"), copy.body)
+        assertTrue(copy.body.contains("Path of totality passes 180 km SSE of Home"), copy.body)
         assertTrue(copy.body.contains("92% partial at"), copy.body)
+    }
+
+    @Test
+    fun annularEclipseTravelCopySaysAnnularityNotTotality() {
+        val peak = Instant.parse("2027-08-02T10:48:00Z")
+        val occ = Occurrence(
+            id = "se:20270802", phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "t",
+            window = TimeWindow(peak - 2.hours, peak + 2.hours), peakTime = peak, certainty = Certainty.CERTAIN,
+            payload = SolarEclipsePayload(SolarEclipseKind.ANNULAR, GeoPoint(0.0, 0.0), peak, emptyList(), 1.0),
+            fetchedAt = now, expiresAt = null,
+        )
+        val result = visres(visible = false, quality = Quality.NONE, travelKm = 180.0, travelBearingDeg = 157.0)
+
+        val copy = renderNotificationCopy(occ, home, result, rule(Cond.ReachableWithin(500.0)), fireAt = now, leadUntilAnchor = 30.days)
+
+        assertTrue(copy.body.contains("Path of annularity passes 180 km SSE of Home"), copy.body)
+        assertTrue(!copy.body.contains("totality", ignoreCase = true), copy.body)
+    }
+
+    @Test
+    fun partialOnlyEclipseTravelCopyNamesTheObscurationPointNotTotality() {
+        val peak = Instant.parse("2027-08-02T10:48:00Z")
+        val occ = Occurrence(
+            id = "se:20270802", phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "t",
+            window = TimeWindow(peak - 2.hours, peak + 2.hours), peakTime = peak, certainty = Certainty.CERTAIN,
+            payload = SolarEclipsePayload(SolarEclipseKind.PARTIAL, GeoPoint(0.0, 0.0), peak, emptyList(), 0.85),
+            fetchedAt = now, expiresAt = null,
+        )
+        val result = visres(visible = false, quality = Quality.NONE, travelKm = 180.0, travelBearingDeg = 157.0)
+
+        val copy = renderNotificationCopy(occ, home, result, rule(Cond.ReachableWithin(500.0)), fireAt = now, leadUntilAnchor = 30.days)
+
+        assertTrue(copy.body.contains("80%-eclipse point passes 180 km SSE of Home"), copy.body)
+        assertTrue(!copy.body.contains("totality", ignoreCase = true), copy.body)
+        assertTrue(!copy.body.contains("annularity", ignoreCase = true), copy.body)
     }
 
     @Test
@@ -111,6 +146,7 @@ class NotificationCopyTest {
         assertEquals("Eclipse today", copy.title)
         assertTrue(copy.body.contains("First contact at Home 09:32"), copy.body)
         assertTrue(copy.body.contains("max 10:48 (92%)"), copy.body)
+        assertTrue(copy.body.contains("Totality 180 km SSE of Home"), copy.body)
         assertTrue(copy.body.contains("leave by 08:00 to be safe"), copy.body)
     }
 

@@ -10,8 +10,9 @@ import kotlin.test.assertNull
  *
  * The occurrence id rides in the action rather than an extra (see
  * [openEventPendingIntent] for why), so it has to survive a round trip
- * through the characters §6.4's natural keys actually contain -- colons
- * everywhere, and a slash and a space in comet designations.
+ * through the colons every §6.4 natural key contains -- plus a slash and a
+ * space, characters no current key uses but that a future one, or an
+ * un-sanitized designation, still could.
  */
 class NotificationContentIntentsTest {
 
@@ -21,8 +22,9 @@ class NotificationContentIntentsTest {
             "se:2026-08-12",              // solar eclipse
             "ms:PER:2026",                // meteor shower
             "au:3d:2026-08-12:18-21UT",   // aurora forecast slot
-            "comet:C/2025 A6",            // JPL designation: slash and space
-            "eonet:EONET_6789",
+            "cm:C2025A6",                 // stripped JPL designation
+            "eo:EONET_6789",
+            "raw/slash and space",        // defensive: not a real key shape, still must round-trip
         )
 
         for (id in ids) {

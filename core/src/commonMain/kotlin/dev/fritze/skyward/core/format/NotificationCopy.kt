@@ -77,11 +77,13 @@ private fun solarEclipseCopy(
     val travelKm = visres.travelDistanceKm
     val travelWorthMentioning = travelKm != null && (ruleTravelKm == null || travelKm <= ruleTravelKm)
 
+    val phrasing = eclipseTravelPhrasing(payload.kind)
+
     if (!isNear) {
         val title = "${solarEclipseKindName(payload.kind)} solar eclipse — ${formatMonthDayYear(payload.greatestEclipseTime, location)}"
         val parts = mutableListOf<String>()
         if (travelWorthMentioning) {
-            parts += "Path of totality passes ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
+            parts += "${phrasing.pathNoun} passes ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
         }
         if (details != null) {
             parts += "At ${location.name}: ${details.maxObscuration.toPercent()}% partial at ${hhmm(details.peak, location)}."
@@ -95,9 +97,25 @@ private fun solarEclipseCopy(
         parts += "First contact at ${location.name} ${hhmm(details.partialBegin, location)}, max ${hhmm(details.peak, location)} (${details.maxObscuration.toPercent()}%)."
     }
     if (travelWorthMentioning) {
-        parts += "Totality ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}— leave by ${hhmm(fireAt, location)} to be safe."
+        parts += "${phrasing.shortNoun} ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}— leave by ${hhmm(fireAt, location)} to be safe."
     }
     return NotificationCopy(title, parts.joinToString(" ").ifEmpty { "Today, from ${location.name}." })
+}
+
+/**
+ * P4 honesty: the travel target is only actually totality for TOTAL/HYBRID
+ * (§8.2's central-path target). ANNULAR's central path is the annularity
+ * track, not totality, and a PARTIAL-only eclipse has no central path at
+ * all — its target is merely the nearest ≥80%-obscuration point
+ * (`SolarEclipseVisibilityModel.PARTIAL_TRAVEL_TARGET_OBSCURATION`), a
+ * single point rather than a path.
+ */
+private data class EclipseTravelPhrasing(val pathNoun: String, val shortNoun: String)
+
+private fun eclipseTravelPhrasing(kind: SolarEclipseKind): EclipseTravelPhrasing = when (kind) {
+    SolarEclipseKind.PARTIAL -> EclipseTravelPhrasing("The 80%-eclipse point", "The 80%-eclipse point")
+    SolarEclipseKind.ANNULAR -> EclipseTravelPhrasing("Path of annularity", "Annularity")
+    SolarEclipseKind.TOTAL, SolarEclipseKind.HYBRID -> EclipseTravelPhrasing("Path of totality", "Totality")
 }
 
 private fun lunarEclipseCopy(payload: LunarEclipsePayload, visres: VisibilityResult, location: SavedLocation): NotificationCopy {

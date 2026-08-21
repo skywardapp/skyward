@@ -109,6 +109,9 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
             if (window.end <= now) return@mapNotNull null // already elapsed
             if (thresholdKp != null && slot.kp < thresholdKp) return@mapNotNull null // §7.3.3: below every threshold -> nothing
             Occurrence(
+                // Deviates from §6.4's literal `au:3d:<forecast-window-start
+                // yyyymmdd>:<slot 0-23>` -- keyed on the slot's own date +
+                // hour-of-day instead, deliberately: docs/adr/0015-aurora-3day-natural-key-per-slot-date.md.
                 id = "au:3d:${slot.time.toYearMonthDayKey()}:${slotLabel(slot.time)}",
                 phenomenon = Phenomenon.AURORA,
                 sourceId = id,
@@ -136,7 +139,7 @@ class AuroraSource(private val httpClient: HttpClient = createHttpClient()) : Ev
             // in source_state, outside this payload) always gets re-consulted
             // -- unlike THREE_DAY, materiality here can't be judged from the
             // payload's own fields alone.
-            id = "au:now:${parsed.forecastTime.toEpochMilliseconds()}",
+            id = "au:now:${parsed.forecastTime.toYearMonthDayHourMinuteKey()}", // §6.4
             phenomenon = Phenomenon.AURORA,
             sourceId = id,
             title = "Aurora nowcast",

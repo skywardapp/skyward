@@ -422,4 +422,31 @@ class SourceRunnerTest {
         assertTrue(delays.zipWithNext().all { (a, b) -> b >= a }, "backoff must never shrink: $delays")
         assertTrue(delays.last() <= 24.hours, "backoff must be capped at 24h: ${delays.last()}")
     }
+
+    /**
+     * A source that *returns* `ok = false` instead of throwing (e.g.
+     * AuroraSource's OVATION-failed-but-forecast-ok path) skips [onFailure]
+     * entirely, so nothing but [persistRunnerState] itself stands between a
+     * partial-failure run and clobbering the real previous success time.
+     */
+    @Test
+    fun aReturnedNotOkRefreshPreservesThePreviousLastSuccessAt() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        val runner = fx.runner(source)
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        runner.runDue(now, force = setOf("test-source"))
+        val afterSuccess = runner.getDiagnostics("test-source")
+        assertEquals(now, afterSuccess?.lastSuccessAt)
+
+        val later = now + 1.hours
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = false, message = "OVATION fetch failed", lastSuccessAt = null))
+        runner.runDue(later, force = setOf("test-source"))
+        val afterPartialFailure = runner.getDiagnostics("test-source")
+
+        assertNotNull(afterPartialFailure)
+        assertFalse(afterPartialFailure.ok)
+        assertEquals(now, afterPartialFailure.lastSuccessAt, "the earlier success timestamp must survive a returned-not-ok run")
+    }
 }

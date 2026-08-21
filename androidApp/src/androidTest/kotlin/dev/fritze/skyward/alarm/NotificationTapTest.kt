@@ -148,10 +148,11 @@ class NotificationTapTest {
     }
 
     /**
-     * §6.4's natural keys are not all URL-safe -- a JPL designation carries a
-     * slash and a space -- and an unencoded id would split the detail route
-     * into path segments no destination matches, so the tap would throw
-     * instead of opening anything.
+     * Defensive: no current §6.4 natural key contains a `/`, but nothing
+     * guarantees a future one won't (this fixture keeps the pre-cleanup
+     * unstripped-JPL-designation shape on purpose). An unencoded id with a
+     * slash would split the detail route into path segments no destination
+     * matches, so the tap would throw instead of opening anything.
      */
     @Test
     fun tappingAReminderForACometOpensItDespiteTheSlashInItsId() {
