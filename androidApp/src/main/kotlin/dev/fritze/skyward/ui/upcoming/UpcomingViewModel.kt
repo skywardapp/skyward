@@ -116,7 +116,17 @@ class UpcomingViewModel(
         // Every emission above restarts the ticking, which is exactly what
         // `flatMapLatest` is for: fresh inputs mean fresh boundaries.
         upcomingStatesOverTime(base, currentKp, ovationGrid, cachedModels, clock)
-            .onEach { if (cache.dirty.isNotEmpty()) container.visibilityCacheRepo.upsertAll(cache.dirty) }
+            .onEach {
+                // Snapshot before persisting and clear only what actually made
+                // it to the DB: `dirty` only grows otherwise, and this flow
+                // can tick many times per input change, which would re-upsert
+                // the same rows on every subsequent tick.
+                val toPersist = cache.dirty
+                if (toPersist.isNotEmpty()) {
+                    container.visibilityCacheRepo.upsertAll(toPersist)
+                    cache.markPersisted(toPersist.keys)
+                }
+            }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),

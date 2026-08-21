@@ -154,7 +154,7 @@ class VisibilityResultCacheTest {
     fun aMatchingDataVersionIsServedFromCacheWithoutRecomputing() {
         val occ = eclipseOcc(fetchedAt = now)
         val ctx = VisibilityContext(now = now, ovationGrid = null)
-        val version = computeDataVersion(occ, ctx, utc)
+        val version = cacheVersion(occ, loc, ctx, utc)
         val cachedResult = result(Quality.EXCELLENT)
         val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(version, cachedResult, now))
 
@@ -166,6 +166,29 @@ class VisibilityResultCacheTest {
         assertEquals(cachedResult, evaluated)
         assertEquals(0, delegate.evaluations, "a matching data_version must be served from cache, not recomputed")
         assertTrue(cache.dirty.isEmpty())
+    }
+
+    @Test
+    fun editingALocationsCoordinatesInvalidatesItsCacheEntries() {
+        // Every VisibilityModel takes `loc`, so a saved location's
+        // coordinates changing under the same id must bust the cache too --
+        // computeDataVersion alone only tracks the occurrence side of §8.6.
+        val occ = eclipseOcc(fetchedAt = now)
+        val ctx = VisibilityContext(now = now, ovationGrid = null)
+        val editedLoc = loc.copy(point = GeoPoint(49.0, 12.0), modifiedAt = now + 1.hours)
+
+        val staleResult = result(Quality.EXCELLENT)
+        val staleVersion = cacheVersion(occ, loc, ctx, utc)
+        val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(staleVersion, staleResult, now))
+
+        val freshResult = result(Quality.MARGINAL)
+        val delegate = CountingModel(Phenomenon.SOLAR_ECLIPSE, freshResult)
+        val (_, wrapped) = cacheWith(snapshot, Phenomenon.SOLAR_ECLIPSE, delegate)
+
+        val evaluated = wrapped.evaluate(occ, editedLoc, ctx)
+
+        assertEquals(freshResult, evaluated, "an edited location's coordinates must bust the cache entry for its id")
+        assertEquals(1, delegate.evaluations)
     }
 
     @Test
@@ -189,6 +212,28 @@ class VisibilityResultCacheTest {
 
         wrapped.evaluate(occ, loc, ctx)
         assertEquals(1, delegate.evaluations, "a same-pass repeat must reuse the freshly computed entry, not recompute")
+    }
+
+    @Test
+    fun markPersistedStopsOfferingAnEntryWithoutDroppingItFromThePass() {
+        // The Android Upcoming ticker reuses one VisibilityResultCache across
+        // many ticks (UpcomingViewModel.kt): markPersisted must shrink `dirty`
+        // so a tick with nothing new doesn't keep re-persisting the same rows,
+        // but a repeat evaluate() must still be served from the in-memory
+        // cache rather than recomputed.
+        val occ = eclipseOcc(fetchedAt = now)
+        val ctx = VisibilityContext(now = now, ovationGrid = null)
+        val delegate = CountingModel(Phenomenon.SOLAR_ECLIPSE, result(Quality.GOOD))
+        val (cache, wrapped) = cacheWith(emptyMap(), Phenomenon.SOLAR_ECLIPSE, delegate)
+
+        wrapped.evaluate(occ, loc, ctx)
+        assertEquals(1, cache.dirty.size, "the fresh result must be queued for persistence")
+
+        cache.markPersisted(cache.dirty.keys)
+        assertTrue(cache.dirty.isEmpty(), "a persisted entry must not be offered for persistence again")
+
+        wrapped.evaluate(occ, loc, ctx)
+        assertEquals(1, delegate.evaluations, "marking an entry persisted must not evict it from the pass's cache")
     }
 
     @Test
@@ -222,7 +267,7 @@ class VisibilityResultCacheTest {
         val ctxB = VisibilityContext(now = now + 2.hours, ovationGrid = null) // same UTC calendar date
 
         val cachedResult = result(Quality.GOOD)
-        val version = computeDataVersion(occ, ctxA, utc)
+        val version = cacheVersion(occ, loc, ctxA, utc)
         val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(version, cachedResult, now))
 
         val delegate = CountingModel(Phenomenon.COMET, result(Quality.NONE))
