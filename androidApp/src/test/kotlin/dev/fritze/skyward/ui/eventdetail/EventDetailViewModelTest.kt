@@ -65,7 +65,10 @@ class EventDetailViewModelTest {
         assertTrue(state.hasSavedLocations)
     }
 
-    /** Distinguished from "not evaluated yet" so the screen can say which one it is. */
+    /**
+     * Distinguished from "not evaluated yet" so the screen can say which one
+     * it is.
+     */
     @Test
     fun noSavedLocationsIsItsOwnState() {
         val state = eventDetailUiState("supermoon", listOf(occurrence()), emptyList(), emptyList(), models, ctx)

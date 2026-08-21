@@ -287,7 +287,10 @@ private fun Row2(content: @Composable androidx.compose.foundation.layout.RowScop
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
 
-/** §13.3's times table for one saved location — the same lines the desktop pane draws, from the same `core/format` helpers. */
+/**
+ * §13.3's times table for one saved location — the same lines the desktop
+ * pane draws, from the same `core/format` helpers.
+ */
 @Composable
 private fun LocationCard(location: SavedLocation, visres: VisibilityResult, zone: TimeZone) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -313,7 +316,10 @@ private fun LocationCard(location: SavedLocation, visres: VisibilityResult, zone
     }
 }
 
-/** §7.4.4: the deviation caveat is mandatory, not optional — the same block the desktop pane renders. */
+/**
+ * §7.4.4: the deviation caveat is mandatory, not optional — the same block
+ * the desktop pane renders.
+ */
 @Composable
 private fun CometComplianceBlock(payload: CometPayload, visres: VisibilityResult?, zone: TimeZone) {
     val details = visres?.localDetails as? LocalDetails.CometLocal
@@ -340,7 +346,10 @@ private fun CometComplianceBlock(payload: CometPayload, visres: VisibilityResult
     }
 }
 
-/** §13.3's "share as text": what someone would have to type out otherwise — when it is, and how it looks from where. */
+/**
+ * §13.3's "share as text": what someone would have to type out otherwise —
+ * when it is, and how it looks from where.
+ */
 private fun shareOccurrence(
     context: Context,
     occurrence: Occurrence,

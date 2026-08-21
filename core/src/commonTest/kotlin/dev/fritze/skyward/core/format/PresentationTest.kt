@@ -78,7 +78,10 @@ class PresentationTest {
         }
     }
 
-    /** The bound has to actually advance: a boundary that reports "no change ever" would freeze the label. */
+    /**
+     * The bound has to actually advance: a boundary that reports "no change
+     * ever" would freeze the label.
+     */
     @Test
     fun relativeLabelEventuallyChangesAtTheReportedBoundary() {
         val changing = listOf(30.seconds, 25.minutes, 4.hours, 23.hours, 3.days, (-30).seconds, (-90).minutes, (-5).hours)
@@ -132,7 +135,10 @@ class PresentationTest {
         )
     }
 
-    /** §7.4.4: the magnitude reads as predicted, the elements are dated, and the caveat is present. */
+    /**
+     * §7.4.4: the magnitude reads as predicted, the elements are dated, and
+     * the caveat is present.
+     */
     @Test
     fun cometBlockDatesItsElementsAndLabelsTheMagnitudeAsPredicted() {
         val payload = cometPayload()
@@ -148,7 +154,10 @@ class PresentationTest {
         assertTrue(COMET_DEVIATION_CAVEAT.contains("deviate"))
     }
 
-    /** With no per-location evaluation yet, the block still has to say something true. */
+    /**
+     * With no per-location evaluation yet, the block still has to say
+     * something true.
+     */
     @Test
     fun cometBlockFallsBackToThePayloadWhenThereIsNoLocalDetail() {
         assertEquals(

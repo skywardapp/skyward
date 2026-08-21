@@ -85,7 +85,10 @@ fun formatDateTime(instant: Instant, zone: TimeZone): String = "${formatDate(ins
 
 fun LocalDateTime.hhmm(): String = "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
 
-/** "in 3 days" / "in 4 h" / "in 25 min" / "now" / "3 days ago" — the countdown used on cards, the timeline and EventDetail. */
+/**
+ * "in 3 days" / "in 4 h" / "in 25 min" / "now" / "3 days ago" — the countdown
+ * used on cards, the timeline and EventDetail.
+ */
 fun formatRelative(from: Instant, to: Instant): String {
     val delta = to - from
     val magnitude = abs(delta.inWholeSeconds)

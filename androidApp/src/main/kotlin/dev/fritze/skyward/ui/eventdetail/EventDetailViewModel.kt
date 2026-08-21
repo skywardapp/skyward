@@ -36,7 +36,10 @@ data class EventDetailUiState(
      * forever (issue #53).
      */
     val isLoading: Boolean = true,
-    /** Distinguishes "no locations saved yet" from "visibility not evaluated yet" for the same reason. */
+    /**
+     * Distinguishes "no locations saved yet" from "visibility not evaluated
+     * yet" for the same reason.
+     */
     val hasSavedLocations: Boolean = false,
 )
 
