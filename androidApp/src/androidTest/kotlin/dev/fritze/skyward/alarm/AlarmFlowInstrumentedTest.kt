@@ -9,9 +9,14 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dev.fritze.skyward.SkywardApplication
+import dev.fritze.skyward.core.model.Certainty
+import dev.fritze.skyward.core.model.MeteorShowerPayload
 import dev.fritze.skyward.core.model.NotificationStatus
+import dev.fritze.skyward.core.model.Occurrence
+import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.PlannedNotification
 import dev.fritze.skyward.core.model.Precision
+import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -24,6 +29,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -74,8 +80,13 @@ class AlarmFlowInstrumentedTest {
     }
 
     @After
-    fun restoreNotificationGate() {
+    fun restoreTheSeamsThisSuitePins() {
         container.restoreRealNotificationGate(context)
+        // The scheduler is pinned per test above and owes the same restore for
+        // the same reason: AppContainer lives for the whole instrumentation
+        // process, so a FakeAlarmScheduler left behind would silently swallow
+        // the alarm registration of whichever suite the runner picks next.
+        container.alarmScheduler = AndroidAlarmScheduler(context)
     }
 
     /**
@@ -115,6 +126,29 @@ class AlarmFlowInstrumentedTest {
         firedAt = null,
     )
 
+    /** A shower whose observing window is still open, so §10.4's catch-up applies. */
+    private fun openWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 2.hours, now + 2.hours))
+
+    /** ...and one whose window closed an hour ago, so it is genuinely missed. */
+    private fun closedWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 4.hours, now - 1.hours))
+
+    private fun meteorOccurrence(id: String, window: TimeWindow) = Occurrence(
+        id = id,
+        phenomenon = Phenomenon.METEOR_SHOWER,
+        sourceId = "showers",
+        title = "Perseids",
+        window = window,
+        peakTime = window.start,
+        certainty = Certainty.CERTAIN,
+        payload = MeteorShowerPayload(
+            iauCode = "PER", name = "Perseids", zhr = 100, zhrNote = null,
+            radiantRaDeg = 46.2, radiantDecDeg = 57.4, speedKmS = 59.0, parentBody = "109P/Swift-Tuttle",
+            activityStart = window.start, activityEnd = window.end, moonIlluminationAtPeak = 0.1,
+        ),
+        fetchedAt = window.start,
+        expiresAt = null,
+    )
+
     @Test
     fun exactAlarmRegistersAndReceiverPostsNotification() = runTest {
         container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = true)
@@ -122,7 +156,7 @@ class AlarmFlowInstrumentedTest {
         container.notificationRepo.upsert(n)
 
         val scheduler = container.alarmScheduler as FakeAlarmScheduler
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(listOf(n.id), scheduler.scheduled.map { it.id })
         assertEquals(Precision.EXACT, container.notificationRepo.getById(n.id)?.precision)
         assertEquals(NotificationStatus.REGISTERED, container.notificationRepo.getById(n.id)?.status)
@@ -134,6 +168,31 @@ class AlarmFlowInstrumentedTest {
         assertEquals(NotificationStatus.FIRED, container.notificationRepo.getById(n.id)?.status)
     }
 
+    /**
+     * #51: a posted reminder has to name what a tap opens. Without a
+     * contentIntent the notification is inert -- it opens nothing, and
+     * `setAutoCancel(true)`, which only fires through a content intent,
+     * cannot even dismiss it. Where the intent then routes is
+     * [NotificationTapTest]'s job; this asserts the notification carries one
+     * at all, on the real Builder output the shade receives.
+     */
+    @Test
+    fun firedNotificationCarriesATapTarget() = runTest {
+        container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = true)
+        val n = freshNotification(Clock.System.now() + 5.minutes, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        val posted = awaitPosted(n.id)
+        assertTrue("expected notification to be posted", posted != null)
+        val contentIntent = posted!!.notification.contentIntent
+        assertTrue("expected a contentIntent so the tap opens the app", contentIntent != null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue("expected the tap to start an Activity", contentIntent!!.isActivity)
+        }
+    }
+
     @Test
     fun exactAlarmUnavailableFallsBackToApproximateWithHedgedCopy() = runTest {
         container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
@@ -141,7 +200,7 @@ class AlarmFlowInstrumentedTest {
         val n = freshNotification(Clock.System.now() + 5.minutes, NotificationStatus.PENDING, Precision.EXACT)
         container.notificationRepo.upsert(n)
 
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(listOf(n.id), scheduler.scheduled.map { it.id })
         assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
 
@@ -160,13 +219,13 @@ class AlarmFlowInstrumentedTest {
         val n = freshNotification(Clock.System.now() + 10.minutes, NotificationStatus.PENDING, Precision.EXACT)
         container.notificationRepo.upsert(n)
 
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
 
         // §10.2: ExactAlarmPermissionReceiver re-syncs once the permission flips.
         scheduler.setCanScheduleExact(true)
         val registered = container.notificationRepo.getById(n.id)!!
-        AlarmSyncer.sync(listOf(registered), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(registered), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
 
         assertEquals(Precision.EXACT, container.notificationRepo.getById(n.id)?.precision)
     }
@@ -181,9 +240,45 @@ class AlarmFlowInstrumentedTest {
         // Mirrors BootReceiver.onReceive: every REGISTERED row is idempotently
         // re-registered, since a reboot wipes AlarmManager's alarms but not the DB.
         val all = container.notificationRepo.getAll()
-        AlarmSyncer.sync(all, scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(all, scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
 
         assertTrue("expected boot re-sync to re-register the row", scheduler.scheduled.any { it.id == n.id })
+    }
+
+    @Test
+    fun bootReSyncStillFiresAReminderMissedWhileTheDeviceWasOff() = runTest {
+        // §10.4 on the path that actually loses reminders: the phone was off
+        // across the reminder's fire time, but the event is still under way.
+        // The row must reach AlarmManager (a past trigger time fires at once),
+        // not be written off as MISSED (issue #48).
+        val scheduler = FakeAlarmScheduler(canScheduleExact = true)
+        container.alarmScheduler = scheduler
+        val now = Clock.System.now()
+        val overdue = freshNotification(now - 30.minutes, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(overdue)
+        container.occurrenceRepo.upsert(openWindowOccurrence(overdue.occurrenceId, now), firstSeenAt = now - 1.hours)
+
+        AlarmSyncer.sync(listOf(overdue), scheduler, container.notificationRepo, container.occurrenceRepo, now)
+
+        assertTrue("expected the missed reminder to be registered", scheduler.scheduled.any { it.id == overdue.id })
+        assertEquals(NotificationStatus.REGISTERED, container.notificationRepo.getById(overdue.id)?.status)
+    }
+
+    @Test
+    fun bootReSyncWritesOffAReminderWhoseEventIsOver() = runTest {
+        // The other half of §10.4: once the occurrence's window has closed the
+        // reminder really is stale, and MISSED is where it belongs.
+        val scheduler = FakeAlarmScheduler(canScheduleExact = true)
+        container.alarmScheduler = scheduler
+        val now = Clock.System.now()
+        val stale = freshNotification(now - 3.hours, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(stale)
+        container.occurrenceRepo.upsert(closedWindowOccurrence(stale.occurrenceId, now), firstSeenAt = now - 4.hours)
+
+        AlarmSyncer.sync(listOf(stale), scheduler, container.notificationRepo, container.occurrenceRepo, now)
+
+        assertTrue("expected no alarm for a stale reminder", scheduler.scheduled.none { it.id == stale.id })
+        assertEquals(NotificationStatus.MISSED, container.notificationRepo.getById(stale.id)?.status)
     }
 
     /**

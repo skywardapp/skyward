@@ -12,6 +12,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -35,10 +36,39 @@ import dev.fritze.skyward.ui.upcoming.UpcomingScreen
 
 /** §13.1: BottomBar [Upcoming] [Rules] [Settings] -- Map is v1.1, hidden behind a flag (not built at all yet). */
 @Composable
-fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
+fun SkywardNavHost(
+    container: AppContainer,
+    onboardingDone: Boolean,
+    tappedOccurrenceId: String?,
+    onTapConsumed: () -> Unit,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // A tapped reminder (§10.2) lands here, and only routes once onboarding is
+    // behind the user. Holding it until the flag flips would be worse than
+    // ignoring it: OnboardingViewModel.finish() writes "done" and only then
+    // runs the sources and re-plans, navigating to Upcoming when that returns,
+    // so a detail screen opened in between would appear mid-setup and be
+    // buried by that navigation seconds later. A tap can barely reach an
+    // unfinished onboarding anyway — there are no reminders to fire before it
+    // — so it is consumed either way and simply opens the app.
+    //
+    // The occurrence is re-read rather than trusted: a notification outlives
+    // the row it was posted for, since §6.3 drops a withdrawn FORECAST
+    // occurrence at the next fetch while the reminder sits in the shade until
+    // someone swipes it. Routing on the id alone would then open a detail
+    // screen with nothing behind it, which can only ever say "Loading…" —
+    // the same dead end NotificationPoster already avoids when the row is
+    // gone by the time it posts.
+    LaunchedEffect(tappedOccurrenceId, onboardingDone) {
+        val occurrenceId = tappedOccurrenceId ?: return@LaunchedEffect
+        if (onboardingDone && container.occurrenceRepo.getById(occurrenceId) != null) {
+            navController.navigate(Routes.eventDetail(occurrenceId)) { launchSingleTop = true }
+        }
+        onTapConsumed()
+    }
 
     Scaffold(
         bottomBar = {
@@ -77,7 +107,14 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
                 }
             }
             composable(Routes.UPCOMING) {
-                UpcomingScreen(container, onOpenEvent = { navController.navigate(Routes.eventDetail(it)) })
+                UpcomingScreen(
+                    container,
+                    onOpenEvent = { navController.navigate(Routes.eventDetail(it)) },
+                    // Straight to Locations, not to Settings: the empty state's
+                    // whole point is that the screen the user needs is two
+                    // levels away from where they are looking (#71).
+                    onOpenLocations = { navController.navigate(Routes.LOCATIONS) },
+                )
             }
             composable(Routes.EVENT_DETAIL) { entry ->
                 val occurrenceId = entry.arguments?.getString(Routes.EVENT_DETAIL_ARG).orEmpty()
@@ -99,6 +136,7 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
+                    container,
                     onLocations = { navController.navigate(Routes.LOCATIONS) },
                     onNotifications = { navController.navigate(Routes.NOTIFICATIONS_SETTINGS) },
                     onSources = { navController.navigate(Routes.SOURCES) },

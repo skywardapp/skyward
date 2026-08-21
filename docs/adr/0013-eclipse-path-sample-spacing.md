@@ -1,4 +1,4 @@
-# 0009 — §17.2's 400 km sample-spacing bound is a typical case, not a ceiling
+# 0013 — §17.2's 400 km sample-spacing bound is a typical case, not a ceiling
 
 ## Context
 

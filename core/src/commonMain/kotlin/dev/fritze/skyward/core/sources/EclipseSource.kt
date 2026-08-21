@@ -13,6 +13,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
+import dev.fritze.skyward.core.persistence.persistenceJson
 import io.github.cosinekitty.astronomy.Body
 import io.github.cosinekitty.astronomy.EclipseKind
 import io.github.cosinekitty.astronomy.GlobalSolarEclipseInfo
@@ -23,6 +24,7 @@ import io.github.cosinekitty.astronomy.Time
 import io.github.cosinekitty.astronomy.globalSolarEclipsesAfter
 import io.github.cosinekitty.astronomy.lunarEclipsesAfter
 import io.github.cosinekitty.astronomy.searchLocalSolarEclipse
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -53,10 +55,11 @@ class EclipseSource : EventSource {
         val start = req.horizon.start.toAstroTime()
         val end = req.horizon.end.toAstroTime()
         val occurrences = mutableListOf<Occurrence>()
+        val pathCache = PathCache(req.state)
 
         for (eclipse in globalSolarEclipsesAfter(start)) {
             if (eclipse.peak.tt > end.tt) break
-            occurrences += buildSolarOccurrence(eclipse, req.now)
+            occurrences += buildSolarOccurrence(eclipse, req.now, pathCache)
         }
         for (eclipse in lunarEclipsesAfter(start)) {
             if (eclipse.peak.tt > end.tt) break
@@ -65,13 +68,62 @@ class EclipseSource : EventSource {
 
         return RefreshResult(
             occurrences = occurrences,
-            newState = req.state,
+            newState = pathCache.toState(),
             nextRefreshHint = null,
             diagnostics = SourceDiagnostics(ok = true, itemCount = occurrences.size, lastSuccessAt = req.now),
         )
     }
 
-    private fun buildSolarOccurrence(eclipse: GlobalSolarEclipseInfo, now: Instant): Occurrence {
+    /**
+     * §7.1.3's "run once per eclipse, cached", made real: the coarse scan is
+     * thousands of `searchLocalSolarEclipse` calls per central eclipse — the
+     * <60 s desktop / <3 min Android budget is *per eclipse*, and a default
+     * 3-year horizon holds several. Without a cache every refresh re-derives
+     * a path that is a pure function of the eclipse, which on Android was
+     * enough to have WorkManager kill the periodic worker before the polled
+     * sources after this one ever ran (issue #49).
+     *
+     * Keyed by the occurrence's natural key (§6.4), so the cache survives
+     * anything that does not change which eclipse a row describes. The
+     * sampling parameters are part of the stored fingerprint: tuning the grid
+     * or the hill-climb (§7.1.3 calls its numbers "starting values") must
+     * invalidate paths computed by the previous tuning rather than leave a
+     * user on whatever their first install happened to compute.
+     */
+    private class PathCache(state: Map<String, ByteArray>) {
+        private val stored: Map<String, List<PathSample>> = decode(state)
+
+        /**
+         * Only ids passed through here survive into [toState] — an eclipse
+         * that has dropped out of the horizon, or is no longer central, takes
+         * its cached path with it instead of accumulating forever (the runner
+         * upserts `newState` key by key and never deletes, §6.2).
+         */
+        private val kept = mutableMapOf<String, List<PathSample>>()
+
+        fun getOrCompute(occurrenceId: String, compute: () -> List<PathSample>): List<PathSample> =
+            (stored[occurrenceId] ?: compute()).also { kept[occurrenceId] = it }
+
+        fun toState(): Map<String, ByteArray> = mapOf(
+            STATE_KEY_PATHS to persistenceJson
+                .encodeToString(CachedPaths.serializer(), CachedPaths(ALGORITHM_FINGERPRINT, kept))
+                .encodeToByteArray(),
+        )
+
+        private companion object {
+            fun decode(state: Map<String, ByteArray>): Map<String, List<PathSample>> {
+                val raw = state[STATE_KEY_PATHS] ?: return emptyMap()
+                // A blob written by a future schema, or a truncated one, costs
+                // a recompute — never a failed refresh.
+                val cached = runCatching {
+                    persistenceJson.decodeFromString(CachedPaths.serializer(), raw.decodeToString())
+                }.getOrNull() ?: return emptyMap()
+                return if (cached.algorithm == ALGORITHM_FINGERPRINT) cached.paths else emptyMap()
+            }
+        }
+    }
+
+    private fun buildSolarOccurrence(eclipse: GlobalSolarEclipseInfo, now: Instant, pathCache: PathCache): Occurrence {
         val solarKind = when (eclipse.kind) {
             EclipseKind.Partial -> SolarEclipseKind.PARTIAL
             EclipseKind.Annular -> SolarEclipseKind.ANNULAR
@@ -79,15 +131,16 @@ class EclipseSource : EventSource {
             EclipseKind.Penumbral -> error("global solar eclipse search never returns Penumbral")
         }
         val peakInstant = eclipse.peak.toInstant()
+        val occurrenceId = "se:${peakInstant.toYearMonthDayKey()}"
         val centralPath = if (solarKind == SolarEclipseKind.TOTAL || solarKind == SolarEclipseKind.ANNULAR) {
-            samplePath(eclipse)
+            pathCache.getOrCompute(occurrenceId) { samplePath(eclipse) }
         } else {
             emptyList()
         }
         val greatest = greatestCircumstances(eclipse)
 
         return Occurrence(
-            id = "se:${peakInstant.toYearMonthDayKey()}",
+            id = occurrenceId,
             phenomenon = Phenomenon.SOLAR_ECLIPSE,
             sourceId = id,
             title = "${solarKind.name.lowercase().replaceFirstChar { it.uppercase() }} solar eclipse",
@@ -221,7 +274,7 @@ class EclipseSource : EventSource {
         // The +-85 clamp keeps the scan out of the grid's polar singularity,
         // at the cost of not tracing the polar cap of a path that reaches it
         // (2026-08-12 tops out at 89.1 N, so its track above 85 N is a hole).
-        // docs/adr/0009-eclipse-path-sample-spacing.md records the effect on
+        // docs/adr/0013-eclipse-path-sample-spacing.md records the effect on
         // sample spacing and why raising it is a deliberate §7.1.3 decision
         // rather than a tweak.
         val latMin = (eclipse.latitude - LAT_BAND_DEG).coerceAtLeast(-85.0)
@@ -359,5 +412,23 @@ class EclipseSource : EventSource {
         const val BUCKET_MINUTES = 2.0
         const val MINUTES_PER_DAY = 1440.0
         const val LAT_BAND_DEG = 60.0
+
+        /** `source_state` key (§11) holding every in-horizon central path. */
+        const val STATE_KEY_PATHS = "central_paths_json"
+
+        /**
+         * Every tuning knob [samplePath] reads, so that changing one
+         * invalidates the paths the previous tuning produced — see
+         * [PathCache]. The leading number covers a change to the sampling
+         * *algorithm* that leaves the knobs alone.
+         */
+        const val ALGORITHM_FINGERPRINT = "1:$COARSE_GRID_STEP_DEG:$HILL_CLIMB_ROUNDS:$BUCKET_MINUTES:$LAT_BAND_DEG"
     }
 }
+
+/** Persisted shape of [EclipseSource]'s central-path cache. */
+@Serializable
+private data class CachedPaths(
+    val algorithm: String,
+    val paths: Map<String, List<PathSample>>,
+)

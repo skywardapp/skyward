@@ -13,9 +13,12 @@ import dev.fritze.skyward.core.sources.RefreshRequest
 import dev.fritze.skyward.core.sources.SourceSettings
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.data.AppContainer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -81,18 +84,62 @@ class RuleEditorViewModel(private val container: AppContainer, private val ruleI
         matches.distinctBy { it.occ.id }.size
     }
 
+    private val _error = MutableStateFlow<String?>(null)
+
+    /**
+     * Why the last save or delete didn't happen, or null. Both used to launch
+     * and forget: a failed write left the editor sitting there looking like
+     * nothing had been asked of it, and `onDone()` was never reached, so the
+     * screen didn't close either -- the user saw a button that did nothing.
+     */
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     fun save(rule: Rule, onDone: () -> Unit) {
-        viewModelScope.launch {
-            container.ruleRepo.upsert(rule)
-            container.replanAndSync()
-            onDone()
-        }
+        writeThenReplan(
+            onDone,
+            whenWriteFails = "Couldn't save this rule to this device — try again.",
+            whenReplanFails = "The rule was saved, but its reminders couldn't be rescheduled — try again.",
+        ) { container.ruleRepo.upsert(rule) }
     }
 
     fun delete(rule: Rule, onDone: () -> Unit) {
+        writeThenReplan(
+            onDone,
+            whenWriteFails = "Couldn't delete this rule — try again.",
+            whenReplanFails = "The rule was deleted, but its reminders couldn't be cancelled — try again.",
+        ) { container.ruleRepo.delete(rule.id) }
+    }
+
+    /**
+     * Runs [write], then replans, and leaves the editor only once both have
+     * succeeded. The two failures are reported apart because they leave
+     * different states behind: a failed write changed nothing, while a failed
+     * replan means the rule store is right and the OS alarms are not.
+     */
+    private fun writeThenReplan(
+        onDone: () -> Unit,
+        whenWriteFails: String,
+        whenReplanFails: String,
+        write: suspend () -> Unit,
+    ) {
         viewModelScope.launch {
-            container.ruleRepo.delete(rule.id)
-            container.replanAndSync()
+            _error.value = null
+            try {
+                write()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = whenWriteFails
+                return@launch
+            }
+            try {
+                container.replanAndSync()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = whenReplanFails
+                return@launch
+            }
             onDone()
         }
     }

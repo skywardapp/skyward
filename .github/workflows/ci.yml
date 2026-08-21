@@ -69,7 +69,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y dbus-x11 libnotify-bin
-          python3 -m pip install --user jeepney
+          python3 -m pip install --user "jeepney==0.9.0"
 
       # commonTest on JVM (which since M6 includes the desktop app's own
       # tests, §17), both flavours assemble, manifest-diff and

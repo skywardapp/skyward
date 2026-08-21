@@ -54,10 +54,7 @@ fun main(args: Array<String>) {
             occurrenceId?.let(state::openOccurrence)
         },
     )
-    val refreshLoop = SourceRefreshLoop(
-        sourceRunner = container.sourceRunner,
-        forcedSourceIds = container.computedSources.mapTo(mutableSetOf()) { it.id },
-    )
+    val refreshLoop = SourceRefreshLoop(sourceRunner = container.sourceRunner)
 
     container.applicationScope.launch { startBackgroundWork(container, state, scheduler, refreshLoop) }
 
@@ -110,10 +107,16 @@ private const val FLAG_BACKGROUND = "--background"
 
 /**
  * The startup sequence, in the one order that works: seed defaults, load the
- * persisted OVATION grid, re-plan against the current DB, *then* decide what
- * was missed while the app was closed — and only after that let the scheduler
- * start firing. Reversing any two of these either fires a stale reminder
- * (§10.3 forbids exactly that) or hides a fresh one in the missed panel.
+ * persisted OVATION grid, snapshot the notification table, re-plan against the
+ * current DB, *then* collect what the re-plan judged missed while the app was
+ * closed — and only after that let the scheduler start firing. Reversing any
+ * two of these either fires a stale reminder (§10.3 forbids exactly that) or
+ * hides a fresh one in the missed panel.
+ *
+ * The snapshot has to be taken before the re-plan because the re-plan is what
+ * applies §10.4 (overdue but still inside the occurrence's window → fire now;
+ * window closed → MISSED); comparing against it is how a row the *user* missed
+ * is told apart from one this very startup created.
  *
  * The preparation is allowed to fail without taking the background services
  * with it. A planner that throws on one bad rule would otherwise leave the
@@ -130,10 +133,9 @@ private suspend fun startBackgroundWork(
         container.ensureDefaultRulesSeeded()
         state.reloadOvationGrid()
 
-        val now = Clock.System.now()
-        val preexistingIds = container.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
-        container.replan(now)
-        state.setMissedWhileAway(scheduler.collectMissedWhileAway(now, preexistingIds))
+        val beforeReplan = container.notificationRepo.getAll()
+        container.replan(Clock.System.now())
+        state.setMissedWhileAway(scheduler.collectMissedWhileAway(beforeReplan))
     }.onFailure { System.err.println("startup preparation failed: ${it.message ?: it::class.simpleName}") }
 
     container.applicationScope.launch { scheduler.run() }

@@ -60,6 +60,9 @@ object NotificationPoster {
             .setContentTitle(notification.title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            // Tapping opens this occurrence's detail screen; without it the
+            // notification is inert and setAutoCancel below never fires.
+            .setContentIntent(openEventPendingIntent(context, occurrence?.id))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
@@ -85,7 +88,10 @@ object NotificationPoster {
     private fun NotificationStatus.isTerminal() =
         this == NotificationStatus.CANCELLED || this == NotificationStatus.FIRED || this == NotificationStatus.MISSED
 
-    /** Internal, not private: §17.5's instrumented test asserts on this exact key, and a
-     *  duplicated literal there could drift from the one actually written. */
+    /**
+     * Internal, not private: §17.5's instrumented test asserts on this exact
+     * key, and a duplicated literal there could drift from the one actually
+     * written.
+     */
     internal const val KEY_APPROXIMATE_HEDGE_SHOWN = "approximate_hedge_shown"
 }

@@ -18,11 +18,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.formatDateTime
+import dev.fritze.skyward.core.format.sourceDisplayName
 import dev.fritze.skyward.core.sources.SourceDiagnostics
 import dev.fritze.skyward.core.sources.SourceKind
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.common.formatDateTime
 
 private data class SourceRow(
     val id: String,
@@ -107,14 +108,3 @@ private fun diagnosticsLine(row: SourceRow, state: DesktopAppState): String {
     return listOfNotNull("$kind · ${diagnostics.itemCount} events · $lastSuccess", problem).joinToString(" · ")
 }
 
-/** Kept identical to Android's `SourcesViewModel.displayName` so both frontends name a source the same way. */
-private fun sourceDisplayName(id: String): String = when (id) {
-    "swpc" -> "Aurora (NOAA SWPC)"
-    "jpl" -> "Comets (JPL)"
-    "eonet" -> "Terrestrial events (NASA EONET)"
-    "eclipse" -> "Eclipses"
-    "meteors" -> "Meteor showers"
-    "moon" -> "Moon events"
-    "conjunctions" -> "Conjunctions"
-    else -> id
-}

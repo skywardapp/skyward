@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -84,12 +85,12 @@ class MainActivityUiTest {
     @Test
     fun userCompletesOnboardingWithALocationAndReachesUpcoming() {
         composeRule.awaitText(WELCOME_HEADLINE)
-        composeRule.onNodeWithText("Get started").performClick()
+        composeRule.tapOnboardingAction("Get started")
 
         composeRule.awaitText(LOCATION_HEADLINE)
-        composeRule.onNodeWithText("Latitude").performTextInput("52.52")
-        composeRule.onNodeWithText("Longitude").performTextInput("13.405")
-        composeRule.onNodeWithText("Continue").performClick()
+        composeRule.onNodeWithText("Latitude").performScrollTo().performTextInput("52.52")
+        composeRule.onNodeWithText("Longitude").performScrollTo().performTextInput("13.405")
+        composeRule.tapOnboardingAction("Continue")
 
         composeRule.awaitText(NOTIFICATIONS_HEADLINE)
         composeRule.dismissOsPrompt()
@@ -98,8 +99,8 @@ class MainActivityUiTest {
         composeRule.dismissOsPrompt()
 
         composeRule.awaitText(RULES_PREVIEW_HEADLINE)
-        composeRule.onNodeWithText("• Supermoon").assertIsDisplayed()
-        composeRule.onNodeWithText("Start using Skyward").performClick()
+        composeRule.onNodeWithText("• Supermoon").performScrollTo().assertIsDisplayed()
+        composeRule.tapOnboardingAction("Start using Skyward")
 
         composeRule.assertOnUpcoming()
 
@@ -120,10 +121,10 @@ class MainActivityUiTest {
     @Test
     fun userCanSkipEveryOptionalStepAndStillReachUpcoming() {
         composeRule.awaitText(WELCOME_HEADLINE)
-        composeRule.onNodeWithText("Get started").performClick()
+        composeRule.tapOnboardingAction("Get started")
 
         composeRule.awaitText(LOCATION_HEADLINE)
-        composeRule.onNodeWithText("Skip for now").performClick()
+        composeRule.tapOnboardingAction("Skip for now")
 
         composeRule.awaitText(NOTIFICATIONS_HEADLINE)
         composeRule.dismissOsPrompt()
@@ -132,7 +133,7 @@ class MainActivityUiTest {
         composeRule.dismissOsPrompt()
 
         composeRule.awaitText(RULES_PREVIEW_HEADLINE)
-        composeRule.onNodeWithText("Start using Skyward").performClick()
+        composeRule.tapOnboardingAction("Start using Skyward")
 
         composeRule.assertOnUpcoming()
 
@@ -172,10 +173,25 @@ private fun androidx.compose.ui.test.junit4.ComposeTestRule.awaitText(text: Stri
  */
 private fun androidx.compose.ui.test.junit4.ComposeTestRule.dismissOsPrompt() {
     if (onAllNodesWithText("Not now").fetchSemanticsNodes().isNotEmpty()) {
-        onNodeWithText("Not now").performClick()
+        tapOnboardingAction("Not now")
     } else {
-        onNodeWithText("Continue").performClick()
+        tapOnboardingAction("Continue")
     }
+}
+
+/**
+ * Clicks an onboarding button after scrolling it into view.
+ *
+ * §13.1's steps live in a scrolling column, and the location step is taller
+ * than a small screen once both coordinate fields carry their format hints --
+ * so its last control, "Skip for now", sits below the fold on the emulator
+ * this suite runs on. `performClick` does not scroll: it dispatches at the
+ * node's position whether or not that position is on screen, so the tap
+ * silently lands nowhere and the *next* wait is what fails, several lines
+ * from the actual cause. Scrolling first is also what a user does.
+ */
+private fun androidx.compose.ui.test.junit4.ComposeTestRule.tapOnboardingAction(text: String) {
+    onNodeWithText(text).performScrollTo().performClick()
 }
 
 /**

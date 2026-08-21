@@ -1,6 +1,5 @@
 package dev.fritze.skyward.desktop.notify
 
-import com.sshtools.twoslices.ToasterFactory
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
@@ -39,8 +38,8 @@ class DesktopNotifierBackendTest {
         occurrenceId = "moon:2026-08",
     )
 
-    /** Kept in step with `TwoSlicesNotifier.CONSOLE_ONLY_TOASTERS`, which is private to it. */
-    private val consoleOnlyToasters = setOf("com.sshtools.twoslices.impl.SysOutToaster")
+    /** The one class name [TwoSlicesNotifier] treats as console-only. */
+    private val consoleOnlyToaster = TwoSlicesNotifier.CONSOLE_ONLY_TOASTERS.single()
 
     /**
      * A stand-in `notify-send` that records its argument vector and exits
@@ -121,17 +120,16 @@ class DesktopNotifierBackendTest {
         // and stop trying notify-send, and the scheduler would record every
         // reminder FIRED while the user saw nothing.
         //
-        // A headless CI runner is exactly where that happens, so this is the
-        // case the assertion is for. Where a real backend is present the test
-        // stops rather than posting: a `./gradlew check` on a developer's
-        // machine has no business popping a desktop notification, and the
-        // delivery path itself is covered above and by the daemon leg below.
-        val chosen = ToasterFactory.getFactory().toaster()::class.java.name
-        if (chosen !in consoleOnlyToasters) return
+        // Forced via the injected resolver rather than relying on this
+        // machine actually having no real backend: CI installs notify-send
+        // and a daemon (for the end-to-end leg below), so two-slices there
+        // picks a real backend and a test gated on "is this machine
+        // console-only" would never exercise the rejection at all.
+        val notifier = TwoSlicesNotifier(chosenToasterClassName = { consoleOnlyToaster })
 
         assertFalse(
-            TwoSlicesNotifier().post(reminder, onActivated = {}),
-            "a reminder printed to stdout by $chosen is a lost reminder, not a delivered one",
+            notifier.post(reminder, onActivated = {}),
+            "a reminder printed to stdout by $consoleOnlyToaster is a lost reminder, not a delivered one",
         )
     }
 

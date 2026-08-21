@@ -1,7 +1,10 @@
 # NASA GSFC umbral-path tables for the §17.1/§17.2 named eclipses,
 # central line only, at the published 120-second interval.
 # Eclipse predictions courtesy of Fred Espenak and Jean Meeus, NASA/GSFC.
-# Regenerate with tools/fetch-gsfc-eclipse-paths.py — do not edit by hand.
+# Source: https://eclipse.gsfc.nasa.gov/SEpath/SEpath2001/ (per-eclipse path
+# pages), transcribed 2026-08-21. Transcribed by hand, not fetched — see
+# core/src/commonTest/resources/fixtures/README.md for why. Never edit by
+# hand; re-transcribe from the source pages instead.
 eclipse_date,time_utc,centre_lat_deg,centre_lon_deg,path_width_km,central_duration_sec
 2026-08-12,2026-08-12T17:02:00Z,82.2750,112.4867,273,105.8
 2026-08-12,2026-08-12T17:04:00Z,85.2950,104.2150,274,110.8

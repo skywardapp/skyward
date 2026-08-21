@@ -16,8 +16,16 @@ import com.sshtools.twoslices.ToasterFactory
  * *optional* dependency and this app therefore does not resolve — so in the
  * shipped build two-slices reaches the desktop by spawning `notify-send`,
  * the same mechanism [NotifySendNotifier] uses, rather than over DBus.
+ *
+ * @param chosenToasterClassName Which backend two-slices picks, by class
+ * name. Defaults to the real lookup; a test overrides it to force the
+ * console-only rejection path deterministically, since which backend the
+ * *real* factory picks depends on what happens to be installed on the
+ * machine running the test.
  */
-class TwoSlicesNotifier : DesktopNotifier {
+class TwoSlicesNotifier(
+    private val chosenToasterClassName: () -> String = { ToasterFactory.getFactory().toaster()::class.java.name },
+) : DesktopNotifier {
 
     override fun post(notification: DesktopNotification, onActivated: (String?) -> Unit): Boolean = try {
         if (!reachesTheDesktop()) {
@@ -61,9 +69,9 @@ class TwoSlicesNotifier : DesktopNotifier {
      * is the right direction for a guard like this to fail in.
      */
     private fun reachesTheDesktop(): Boolean =
-        ToasterFactory.getFactory().toaster()::class.java.name !in CONSOLE_ONLY_TOASTERS
+        chosenToasterClassName() !in CONSOLE_ONLY_TOASTERS
 
-    private companion object {
+    companion object {
         val CONSOLE_ONLY_TOASTERS = setOf("com.sshtools.twoslices.impl.SysOutToaster")
     }
 }

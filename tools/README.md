@@ -7,24 +7,13 @@ Not part of the app; scripts that run at build/dev time, not on-device.
   Runs as part of the Gradle build, not at runtime. Lands with the desktop
   event map (M6).
 - **Fixture fetchers** (§17.1–17.3b) — capture real HTTP responses (SWPC,
-  EONET, JPL SBDB/Horizons) and GSFC eclipse canon rows into
-  `core/src/commonTest/resources/fixtures/` for the golden tests. Lands with
-  M1 (astronomy golden tests) and M4 (polled-source parser tests).
-  - **`fetch-gsfc-eclipse-paths.py`** — §17.2's centreline fixture. Downloads
-    Espenak's umbral-path tables for the three §17.1 named eclipses and writes
-    their central-line rows (time, latitude, longitude, path width, central
-    duration, at the published 120-second interval) to
-    `gsfc_central_paths_named_eclipses.csv`. That table is what
-    `EclipsePathCanonTest` measures the sampled path against, and its central
-    durations are the published totality figures §17.1 spot-checks.
-
-    ```sh
-    python3 tools/fetch-gsfc-eclipse-paths.py
-    ```
-
-    Rewrites the file in place; review the diff before committing it.
-
-Both land with the milestones above, not M0.
+  EONET, JPL SBDB/Horizons) into `core/src/commonTest/resources/fixtures/`
+  for the golden tests. See [`fixtures/README.md`](fixtures/README.md). The
+  GSFC eclipse canon rows — including the §17.2 centreline table,
+  `gsfc_central_paths_named_eclipses.csv` — are the exception: they are
+  transcribed from published HTML canon tables rather than fetched, and
+  `core/src/commonTest/resources/fixtures/README.md` records where each came
+  from.
 
 ## `ci/` — scripts the GitHub Actions workflows call
 
@@ -51,8 +40,9 @@ Both land with the milestones above, not M0.
     'python3 tools/ci/mock-notification-daemon.py & ./gradlew :desktopApp:test'
   ```
 
-  Without it that one test skips itself rather than failing, per §17.5's own
-  "or skip-if-no-dbus guard".
+  Locally, without it that one test skips itself rather than failing, per
+  §17.5's own "or skip-if-no-dbus guard". In CI, the test requires the
+  harness and fails when it is unavailable.
 - **`check-reproducible-build.sh`** — §15.4/§17.5b's reproducibility check:
   builds `fossRelease` twice in a clean workspace and asserts the two APKs
   are reproducible — byte-for-byte identical, or (weaker, logged as such)
