@@ -174,11 +174,20 @@ class SourceRunner(
     private suspend fun persistRunnerState(sourceId: String, now: Instant, nextRunAt: Instant, backoffCount: Int, diagnostics: SourceDiagnostics) {
         sourceStateRepo.upsert(sourceId, RUNNER_KEY_NEXT_RUN_AT, nextRunAt.toString().encodeToByteArray(), now)
         sourceStateRepo.upsert(sourceId, RUNNER_KEY_BACKOFF_COUNT, backoffCount.toString().encodeToByteArray(), now)
-        val diagnosticsWithSuccess = if (diagnostics.ok) diagnostics.copy(lastSuccessAt = now) else diagnostics
+        // A source that *returns* `ok = false` (e.g. AuroraSource's
+        // OVATION-failed-but-forecast-ok path) rather than throwing skips
+        // `onFailure`, so nothing else preserves the previously stored
+        // success timestamp -- without this it reads back null and Settings
+        // > Sources loses a real, still-accurate "last succeeded at".
+        val diagnosticsToStore = when {
+            diagnostics.ok -> diagnostics.copy(lastSuccessAt = now)
+            diagnostics.lastSuccessAt == null -> diagnostics.copy(lastSuccessAt = getDiagnostics(sourceId)?.lastSuccessAt)
+            else -> diagnostics
+        }
         sourceStateRepo.upsert(
             sourceId,
             RUNNER_KEY_DIAGNOSTICS,
-            persistenceJson.encodeToString(SourceDiagnostics.serializer(), diagnosticsWithSuccess).encodeToByteArray(),
+            persistenceJson.encodeToString(SourceDiagnostics.serializer(), diagnosticsToStore).encodeToByteArray(),
             now,
         )
     }

@@ -36,7 +36,7 @@ class CometSourceTest {
         assertEquals(1, result.occurrences.size)
         val occ = result.occurrences.single()
         val payload = occ.payload as CometPayload
-        assertEquals("comet:C/2026 T1", occ.id)
+        assertEquals("cm:C2026T1", occ.id)
         assertEquals(Certainty.FORECAST, occ.certainty)
         assertEquals(now + 45.days, payload.perihelionDate)
         assertTrue(payload.peakMag <= 6.0, "must have cleared the ingest floor to have been emitted at all: ${payload.peakMag}")

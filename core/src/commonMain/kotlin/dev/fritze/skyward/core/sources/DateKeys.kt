@@ -17,3 +17,11 @@ internal fun Instant.toYearMonthDayKey(): String {
     val dd = dt.dayOfMonth.toString().padStart(2, '0')
     return "${dt.year}$mm$dd"
 }
+
+/** UTC-calendar `yyyymmddhhmm` of this instant — §6.4's aurora nowcast key format. */
+internal fun Instant.toYearMonthDayHourMinuteKey(): String {
+    val dt = toLocalDateTime(TimeZone.UTC)
+    val hh = dt.hour.toString().padStart(2, '0')
+    val min = dt.minute.toString().padStart(2, '0')
+    return "${toYearMonthDayKey()}$hh$min"
+}

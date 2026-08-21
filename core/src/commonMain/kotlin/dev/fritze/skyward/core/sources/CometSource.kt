@@ -124,7 +124,8 @@ class CometSource(private val httpClient: HttpClient = createHttpClient()) : Eve
 
         return CometBuildResult.Emitted(
             Occurrence(
-                id = "comet:${candidate.designation}",
+                // §6.4: `cm:<designation with all non-alphanumeric chars removed>`.
+                id = "cm:${candidate.designation.filter(Char::isLetterOrDigit)}",
                 phenomenon = Phenomenon.COMET,
                 sourceId = id,
                 title = "Comet ${candidate.name ?: candidate.designation}",
