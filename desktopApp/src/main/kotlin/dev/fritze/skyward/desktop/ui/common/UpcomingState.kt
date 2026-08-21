@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import dev.fritze.skyward.core.planner.UpcomingFilter
 import dev.fritze.skyward.core.planner.UpcomingItem
-import dev.fritze.skyward.core.planner.computeUpcomingItems
+import dev.fritze.skyward.core.planner.cachedUpcomingItems
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,13 +45,9 @@ fun rememberUpcoming(state: DesktopAppState, filter: UpcomingFilter): UpcomingSt
     ) {
         value = value.copy(isLoading = true)
         val items = withContext(Dispatchers.Default) {
-            computeUpcomingItems(
-                occurrences = occurrences,
-                locations = locations,
-                rules = rules,
-                visibilityModels = state.container.visibilityModels,
-                ctx = state.visibilityContext(now),
-                filter = filter,
+            cachedUpcomingItems(
+                state.container.visibilityCacheRepo, occurrences, locations, rules,
+                state.container.visibilityModels, state.visibilityContext(now), filter, state.zone,
             )
         }
         value = UpcomingState(items, isLoading = false)

@@ -18,6 +18,7 @@ import dev.fritze.skyward.core.persistence.NotificationRepo
 import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.rules.Anchor
 import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.NotifySchedule
@@ -41,8 +42,12 @@ class ReplanCoordinatorTest {
 
     private class AlwaysGoodVisibilityModel : VisibilityModel {
         override val phenomenon = Phenomenon.SOLAR_ECLIPSE
-        override fun evaluate(occ: Occurrence, loc: SavedLocation, ctx: VisibilityContext) =
-            dev.fritze.skyward.core.model.VisibilityResult(true, Quality.GOOD, null, null, null, null, null)
+        var evaluations = 0
+
+        override fun evaluate(occ: Occurrence, loc: SavedLocation, ctx: VisibilityContext): dev.fritze.skyward.core.model.VisibilityResult {
+            evaluations++
+            return dev.fritze.skyward.core.model.VisibilityResult(true, Quality.GOOD, null, null, null, null, null)
+        }
     }
 
     private class Fixture {
@@ -51,6 +56,8 @@ class ReplanCoordinatorTest {
         val locationRepo: LocationRepo
         val ruleRepo: RuleRepo
         val notificationRepo: NotificationRepo
+        val visibilityCacheRepo: VisibilityCacheRepo
+        val visibilityModel = AlwaysGoodVisibilityModel()
         val coordinator: ReplanCoordinator
 
         init {
@@ -61,18 +68,19 @@ class ReplanCoordinatorTest {
             locationRepo = LocationRepo(db)
             ruleRepo = RuleRepo(db)
             notificationRepo = NotificationRepo(db)
+            visibilityCacheRepo = VisibilityCacheRepo(db)
             coordinator = ReplanCoordinator(
-                occurrenceRepo, locationRepo, ruleRepo, notificationRepo,
-                mapOf(Phenomenon.SOLAR_ECLIPSE to AlwaysGoodVisibilityModel()),
+                occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityCacheRepo,
+                mapOf(Phenomenon.SOLAR_ECLIPSE to visibilityModel),
             )
         }
     }
 
-    private fun eclipseOcc(id: String, peakTime: Instant) = Occurrence(
+    private fun eclipseOcc(id: String, peakTime: Instant, fetchedAt: Instant = now) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Eclipse",
         window = TimeWindow(peakTime - 3.hours, peakTime + 3.hours), peakTime = peakTime, certainty = Certainty.CERTAIN,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = now, expiresAt = null,
+        fetchedAt = fetchedAt, expiresAt = null,
     )
 
     private fun visibleRule(id: String = "r", hidden: Boolean = false, condition: Cond = Cond.VisibleAtLocation(Quality.MARGINAL)) = Rule(
@@ -81,13 +89,17 @@ class ReplanCoordinatorTest {
         hidden = hidden, createdAt = now, modifiedAt = now,
     )
 
+    /** The "one visible eclipse, one matching rule" setup shared by most replan tests below. */
+    private suspend fun Fixture.seedHomeWithVisibleEclipseRule(fetchedAt: Instant = now) {
+        locationRepo.upsert(SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now))
+        occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days, fetchedAt), firstSeenAt = now)
+        ruleRepo.upsert(visibleRule())
+    }
+
     @Test
     fun replanPersistsDesiredNotificationsFromDbState() = runTest {
         val fx = Fixture()
-        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
-        fx.locationRepo.upsert(home)
-        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
-        fx.ruleRepo.upsert(visibleRule())
+        fx.seedHomeWithVisibleEclipseRule()
 
         val reconciled = fx.coordinator.replan(now, utc)
 
@@ -98,12 +110,26 @@ class ReplanCoordinatorTest {
     }
 
     @Test
+    fun replanReadsAndWritesTheVisibilityCache() = runTest {
+        val fx = Fixture()
+        fx.seedHomeWithVisibleEclipseRule()
+
+        fx.coordinator.replan(now, utc)
+        assertEquals(1, fx.visibilityModel.evaluations, "the first replan is a cache miss and must compute")
+        assertEquals(1, fx.visibilityCacheRepo.getAll().size, "the computed result must be persisted (§11)")
+
+        fx.coordinator.replan(now + 1.hours, utc)
+        assertEquals(1, fx.visibilityModel.evaluations, "an unchanged occurrence must be served from cache, not recomputed")
+
+        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days, fetchedAt = now + 1.hours), firstSeenAt = now)
+        fx.coordinator.replan(now + 2.hours, utc)
+        assertEquals(2, fx.visibilityModel.evaluations, "a data_version mismatch (re-fetch) must force recomputation")
+    }
+
+    @Test
     fun secondReplanCancelsNotificationsForADeletedOccurrence() = runTest {
         val fx = Fixture()
-        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
-        fx.locationRepo.upsert(home)
-        fx.occurrenceRepo.upsert(eclipseOcc("se:1", now + 30.days), firstSeenAt = now)
-        fx.ruleRepo.upsert(visibleRule())
+        fx.seedHomeWithVisibleEclipseRule()
         fx.coordinator.replan(now, utc)
 
         fx.occurrenceRepo.deleteById("se:1")

@@ -5,15 +5,20 @@ import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
+import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
+import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.core.persistence.LocationRepo
 import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
+import dev.fritze.skyward.core.visibility.VisibilityCacheEntry
+import dev.fritze.skyward.core.visibility.VisibilityCacheKey
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,6 +70,7 @@ class SourceRunnerTest {
         val settingsRepo: SettingsRepo
         val ruleRepo: RuleRepo
         val locationRepo: LocationRepo
+        val visibilityCacheRepo: VisibilityCacheRepo
         var replanCalls = 0
         var lastReplanNow: Instant? = null
 
@@ -77,10 +83,11 @@ class SourceRunnerTest {
             settingsRepo = SettingsRepo(db)
             ruleRepo = RuleRepo(db)
             locationRepo = LocationRepo(db)
+            visibilityCacheRepo = VisibilityCacheRepo(db)
         }
 
         fun runner(vararg sources: EventSource) = SourceRunner(
-            sources.toList(), occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo,
+            sources.toList(), occurrenceRepo, sourceStateRepo, settingsRepo, ruleRepo, locationRepo, visibilityCacheRepo,
             onOccurrencesChanged = { n -> replanCalls++; lastReplanNow = n },
         )
     }
@@ -162,19 +169,55 @@ class SourceRunnerTest {
         assertEquals(0, fx.replanCalls)
     }
 
+    private suspend fun Fixture.seedVisibilityCacheEntry(occurrenceId: String, locationId: String = "home") {
+        visibilityCacheRepo.upsertAll(
+            mapOf(
+                VisibilityCacheKey(occurrenceId, locationId) to
+                    VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now),
+            ),
+        )
+    }
+
+    /** Seeds one FORECAST `se:1` via a forced run, then withdraws it via a second forced run with an empty result. */
+    private suspend fun Fixture.seedThenWithdrawForecastOccurrence(source: FakeSource) {
+        source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
+        runner(source).runDue(now, force = setOf("test-source"))
+        assertNotNull(occurrenceRepo.getById("se:1"))
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        runner(source).runDue(now + 1.hours, force = setOf("test-source"))
+    }
+
     @Test
     fun withdrawnForecastOccurrenceIsDeletedAndTriggersReplan() = runTest {
+        val fx = Fixture()
+        fx.seedThenWithdrawForecastOccurrence(FakeSource("test-source"))
+
+        assertNull(fx.occurrenceRepo.getById("se:1"), "a withdrawn FORECAST occurrence must be deleted (§6.3)")
+        assertEquals(2, fx.replanCalls)
+    }
+
+    @Test
+    fun withdrawingAnOccurrenceInvalidatesItsVisibilityCacheEntries() = runTest {
         val fx = Fixture()
         val source = FakeSource("test-source")
         source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now, force = setOf("test-source"))
-        assertNotNull(fx.occurrenceRepo.getById("se:1"))
+        // Two locations for the withdrawn occurrence, plus an unrelated one --
+        // a delete-all implementation would also pass an assertTrue(isEmpty()).
+        fx.seedVisibilityCacheEntry("se:1", "home")
+        fx.seedVisibilityCacheEntry("se:1", "work")
+        fx.seedVisibilityCacheEntry("se:other")
+        assertTrue(fx.visibilityCacheRepo.getAll().containsKey(VisibilityCacheKey("se:1", "home")))
 
         source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now + 1.hours, force = setOf("test-source"))
 
-        assertNull(fx.occurrenceRepo.getById("se:1"), "a withdrawn FORECAST occurrence must be deleted (§6.3)")
-        assertEquals(2, fx.replanCalls)
+        assertEquals(
+            setOf(VisibilityCacheKey("se:other", "home")),
+            fx.visibilityCacheRepo.getAll().keys,
+            "only the withdrawn occurrence's cache entries must be dropped, not the unrelated one's (§11)",
+        )
     }
 
     @Test
@@ -204,6 +247,26 @@ class SourceRunnerTest {
         fx.runner(source).runDue(now, force = setOf("test-source"))
 
         assertNull(fx.occurrenceRepo.getById("se:1"), "a CERTAIN occurrence now outside the horizon may be pruned")
+    }
+
+    @Test
+    fun horizonPruningAlsoInvalidatesTheVisibilityCache() = runTest {
+        val fx = Fixture()
+        val source = FakeSource("test-source")
+        source.nextResult = RefreshResult(listOf(occ("se:1", now - 400.days, Certainty.CERTAIN)), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now - 400.days, force = setOf("test-source"))
+        fx.seedVisibilityCacheEntry("se:1", "home")
+        fx.seedVisibilityCacheEntry("se:1", "work")
+        fx.seedVisibilityCacheEntry("se:other")
+
+        source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
+        fx.runner(source).runDue(now, force = setOf("test-source"))
+
+        assertEquals(
+            setOf(VisibilityCacheKey("se:other", "home")),
+            fx.visibilityCacheRepo.getAll().keys,
+            "pruning a CERTAIN occurrence outside the horizon must drop only its own cache entries",
+        )
     }
 
     @Test

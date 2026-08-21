@@ -6,10 +6,12 @@ import dev.fritze.skyward.core.persistence.LocationRepo
 import dev.fritze.skyward.core.persistence.NotificationRepo
 import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.RuleRepo
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
+import dev.fritze.skyward.core.visibility.VisibilityResultCache
 import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 
@@ -36,6 +38,7 @@ class ReplanCoordinator(
     private val locationRepo: LocationRepo,
     private val ruleRepo: RuleRepo,
     private val notificationRepo: NotificationRepo,
+    private val visibilityCacheRepo: VisibilityCacheRepo,
     private val visibilityModels: Map<Phenomenon, VisibilityModel>,
     private val ovationGridProvider: suspend () -> OvationGrid? = { null },
 ) {
@@ -47,7 +50,11 @@ class ReplanCoordinator(
         val rules = ruleRepo.getEnabled() // includes hidden rules -- mutes/one-off reminders must still evaluate (§13.3)
 
         val ctx = VisibilityContext(now = now, ovationGrid = ovationGridProvider())
-        val matches = Planner.computeMatches(occurrences, locations, rules, visibilityModels, ctx)
+        // §9.2 step 1/§11: read-through visibility_cache in front of the real
+        // models -- Planner itself stays pure (§4.2); the I/O lives here.
+        val cache = VisibilityResultCache(visibilityCacheRepo.getAll(), deviceZone)
+        val matches = Planner.computeMatches(occurrences, locations, rules, cache.wrap(visibilityModels), ctx)
+        visibilityCacheRepo.upsertAll(cache.dirty)
 
         val suppressedOccurrenceIds = matches
             .filter { it.rule.hidden && isMuteSuppressor(it.rule) }

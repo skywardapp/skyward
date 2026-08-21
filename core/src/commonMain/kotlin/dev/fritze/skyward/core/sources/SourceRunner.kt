@@ -8,6 +8,7 @@ import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SourceStateRepo
+import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.persistence.persistenceJson
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,6 +33,7 @@ class SourceRunner(
     private val settingsRepo: SettingsRepo,
     private val ruleRepo: RuleRepo,
     private val locationRepo: LocationRepo,
+    private val visibilityCacheRepo: VisibilityCacheRepo,
     private val onOccurrencesChanged: suspend (now: Instant) -> Unit,
 ) {
     // Guards against RefreshWorker's periodic pass and a caller-triggered
@@ -125,6 +127,7 @@ class SourceRunner(
             val shouldDelete = existing.certainty == Certainty.FORECAST || outOfHorizon
             if (shouldDelete) {
                 occurrenceRepo.deleteById(id)
+                visibilityCacheRepo.deleteByOccurrence(id) // §11: cached verdicts for a dropped occurrence are meaningless
                 anyMaterial = true
             }
         }

@@ -11,6 +11,9 @@ CREATE TABLE visibility_cache (
 select_:
 SELECT * FROM visibility_cache WHERE occurrence_id = ? AND location_id = ?;
 
+selectAll:
+SELECT * FROM visibility_cache;
+
 upsert:
 INSERT OR REPLACE INTO visibility_cache(occurrence_id, location_id, data_version, result_json, computed_at)
 VALUES (?, ?, ?, ?, ?);
