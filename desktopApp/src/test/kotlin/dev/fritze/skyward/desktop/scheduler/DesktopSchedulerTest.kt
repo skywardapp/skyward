@@ -173,22 +173,21 @@ class DesktopSchedulerTest {
      * the window — stderr is not a notification surface.
      */
     @Test
-    fun aDeliveryFailureIsReportedToTheWindow() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun aDeliveryFailureIsReportedToTheWindow() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val outcomes = mutableListOf<Boolean>()
         notificationRepo.upsert(notification("undeliverable", now))
 
         val scheduler = DesktopScheduler(
             notificationRepo,
-            OccurrenceRepo(database),
+            occurrenceRepo,
             RecordingNotifier(succeed = false),
             onActivated = {},
             onDeliveryOutcome = { outcomes += it },
             clock = FixedClock(now),
         )
         val job = launch { scheduler.run() }
-        awaitCondition { outcomes.isNotEmpty() }
+        advanceUntilIdle()
         job.cancel()
 
         assertEquals(listOf(false), outcomes)
@@ -196,22 +195,21 @@ class DesktopSchedulerTest {
 
     /** The success half: a delivery that worked retracts a standing warning. */
     @Test
-    fun aSuccessfulDeliveryIsReportedTooSoTheWarningCanBeRetracted() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun aSuccessfulDeliveryIsReportedTooSoTheWarningCanBeRetracted() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val outcomes = mutableListOf<Boolean>()
         notificationRepo.upsert(notification("deliverable", now))
 
         val scheduler = DesktopScheduler(
             notificationRepo,
-            OccurrenceRepo(database),
+            occurrenceRepo,
             RecordingNotifier(),
             onActivated = {},
             onDeliveryOutcome = { outcomes += it },
             clock = FixedClock(now),
         )
         val job = launch { scheduler.run() }
-        awaitCondition { outcomes.isNotEmpty() }
+        advanceUntilIdle()
         job.cancel()
 
         assertEquals(listOf(true), outcomes)
