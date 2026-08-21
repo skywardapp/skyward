@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.alarm.FakeAlarmScheduler
 import dev.fritze.skyward.ui.awaitText
@@ -64,5 +65,33 @@ class ExactAlarmStepTest {
         composeRule.onNodeWithText("Enable exact alarms").assertIsDisplayed()
         composeRule.onNodeWithText("Not now").assertIsDisplayed()
         composeRule.onAllNodesWithText("Continue").assertCountEquals(0)
+    }
+
+    /**
+     * The point of asking on resume rather than once at composition: the user
+     * leaves for the system settings Activity, grants it there, and comes
+     * back. A ComposeTestRule takes exactly one setContent call, so a
+     * pause/resume cycle stands in for that return -- the same trick
+     * ExactAlarmDegradationCardTest uses for UpcomingScreen's own
+     * ON_RESUME-driven card.
+     */
+    @Test
+    fun grantOnReturnFromSettingsIsPickedUpOnResume() {
+        val scheduler = FakeAlarmScheduler(canScheduleExact = false)
+        composeRule.setContent {
+            Column {
+                ExactAlarmStep(alarmScheduler = scheduler, onNext = {})
+            }
+        }
+        composeRule.awaitText("Enable exact alarms")
+
+        scheduler.setCanScheduleExact(true)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+
+        composeRule.awaitText("Continue")
+        composeRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Enable exact alarms").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Not now").assertCountEquals(0)
     }
 }

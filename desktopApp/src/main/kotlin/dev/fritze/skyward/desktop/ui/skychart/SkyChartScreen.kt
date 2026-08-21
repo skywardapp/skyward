@@ -152,9 +152,15 @@ fun SkyChartScreen(state: DesktopAppState) {
                             .fillMaxSize()
                             // One opaque node to a screen reader, so name it
                             // (#79); the labels beside it are real composables
-                            // and stay individually readable.
+                            // and stay individually readable. Counted the same
+                            // way drawSky decides what to draw -- altitudeDeg
+                            // >= 0, matching SkyProjection.project's own
+                            // horizon cutoff -- so the count doesn't claim
+                            // objects that are actually below the horizon and
+                            // silently skipped.
                             .semantics {
-                                contentDescription = "Sky chart with ${currentScene?.objects?.size ?: 0} objects above the horizon"
+                                val aboveHorizon = currentScene?.objects?.count { it.altitudeDeg >= 0.0 } ?: 0
+                                contentDescription = "Sky chart with $aboveHorizon objects above the horizon"
                             }
                             .pointerInput(currentScene) {
                             detectTapGestures { position ->
