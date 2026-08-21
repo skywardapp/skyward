@@ -86,6 +86,16 @@ class VisibilityResultCacheTest {
 
     private fun result(quality: Quality) = VisibilityResult(quality != Quality.NONE, quality, null, null, null, null, null)
 
+    /** A cache over [snapshot], and the single [phenomenon] model it wraps [delegate] as. */
+    private fun cacheWith(
+        snapshot: Map<VisibilityCacheKey, VisibilityCacheEntry>,
+        phenomenon: Phenomenon,
+        delegate: VisibilityModel,
+    ): Pair<VisibilityResultCache, VisibilityModel> {
+        val cache = VisibilityResultCache(snapshot, utc)
+        return cache to cache.wrap(mapOf(phenomenon to delegate)).getValue(phenomenon)
+    }
+
     // -- computeDataVersion --------------------------------------------------
 
     @Test
@@ -149,8 +159,7 @@ class VisibilityResultCacheTest {
         val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(version, cachedResult, now))
 
         val delegate = CountingModel(Phenomenon.SOLAR_ECLIPSE, result(Quality.NONE))
-        val cache = VisibilityResultCache(snapshot, utc)
-        val wrapped = cache.wrap(mapOf(Phenomenon.SOLAR_ECLIPSE to delegate)).getValue(Phenomenon.SOLAR_ECLIPSE)
+        val (cache, wrapped) = cacheWith(snapshot, Phenomenon.SOLAR_ECLIPSE, delegate)
 
         val evaluated = wrapped.evaluate(occ, loc, ctx)
 
@@ -170,8 +179,7 @@ class VisibilityResultCacheTest {
 
         val freshResult = result(Quality.GOOD)
         val delegate = CountingModel(Phenomenon.SOLAR_ECLIPSE, freshResult)
-        val cache = VisibilityResultCache(snapshot, utc)
-        val wrapped = cache.wrap(mapOf(Phenomenon.SOLAR_ECLIPSE to delegate)).getValue(Phenomenon.SOLAR_ECLIPSE)
+        val (cache, wrapped) = cacheWith(snapshot, Phenomenon.SOLAR_ECLIPSE, delegate)
 
         val evaluated = wrapped.evaluate(occ, loc, ctx)
 
@@ -199,8 +207,7 @@ class VisibilityResultCacheTest {
         // e.g. the comet has since dimmed below the magnitude gate
         val freshResult = result(Quality.NONE)
         val delegate = CountingModel(Phenomenon.COMET, freshResult)
-        val cache = VisibilityResultCache(snapshot, utc)
-        val wrapped = cache.wrap(mapOf(Phenomenon.COMET to delegate)).getValue(Phenomenon.COMET)
+        val (_, wrapped) = cacheWith(snapshot, Phenomenon.COMET, delegate)
 
         val evaluated = wrapped.evaluate(occ, loc, tomorrow)
 
@@ -219,8 +226,7 @@ class VisibilityResultCacheTest {
         val snapshot = mapOf(VisibilityCacheKey(occ.id, loc.id) to VisibilityCacheEntry(version, cachedResult, now))
 
         val delegate = CountingModel(Phenomenon.COMET, result(Quality.NONE))
-        val cache = VisibilityResultCache(snapshot, utc)
-        val wrapped = cache.wrap(mapOf(Phenomenon.COMET to delegate)).getValue(Phenomenon.COMET)
+        val (_, wrapped) = cacheWith(snapshot, Phenomenon.COMET, delegate)
 
         val evaluated = wrapped.evaluate(occ, loc, ctxB)
 
