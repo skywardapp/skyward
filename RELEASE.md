@@ -17,7 +17,14 @@ doesn't start is a day added to the critical path.
   foss/play release variants must resolve to identical dependency sets
   (§17.5b(c)/D13). Runs as part of `./gradlew check`.
 - **`checkDependencyLicenses`** (root `build.gradle.kts`) — fails the build on
-  any shipped dependency whose licence isn't on the §16 allowlist.
+  any shipped dependency whose licence isn't on the §16 allowlist. The
+  allowlist enforces both of §16's constraints: commercial use must stay
+  possible (P6/D12) *and* the licence must be GPL-3-compatible (D8), which is
+  why EPL and MPL-1.1 are not on it. Licences are read from each dependency's
+  POM, following `<parent>` when a POM declares none of its own. If a
+  dependency's licence genuinely can't be read that way, verify it by hand
+  against §16 and record the verdict in `licenseUnknownExceptions`; there is
+  no warn-and-pass path.
 - **`tools/ci/check-reproducible-build.sh`** — builds `fossRelease` twice from
   a clean workspace and asserts the two APKs are reproducible (§15.4/§17.5b):
   byte-for-byte identical first, and only if that fails, identical *content*
