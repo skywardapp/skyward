@@ -49,11 +49,22 @@ reason the resource is. Moving only the resource would package half a
 megabyte into the APK with no code able to read it; moving only the reader
 would leave it looking for a resource that is not there.
 
-Both are platform-neutral already — the binary format, the conversion task
-and the parser use nothing JVM-specific beyond `getResourceAsStream`, which
-is the one call the move has to replace with a `expect`/`actual` resource
-read (§15.3 keeps `commonMain` off platform APIs). That is the whole of the
-work; nothing about the format or the map rendering follows.
+The binary *format* is platform-neutral; the current reader is not. Three
+things in `NaturalEarthMap.kt` are JVM-only and have to go before it can
+compile in `commonMain` (§15.3 keeps it off platform APIs):
+
+- `NaturalEarthMap::class.java.getResourceAsStream` — the resource lookup.
+  `ShowersResource` already solves exactly this with `expect`/`actual`, and
+  is the pattern to copy rather than invent.
+- `java.io.DataInputStream` — the big-endian reads. Either decode from a
+  `ByteArray` in common code (the file is half a megabyte; reading it whole
+  is fine) or put the decoding behind the same `expect`/`actual` seam.
+- `System.err.println` on the missing-resource path — no `commonMain`
+  equivalent, and it should not gain one just for this.
+
+`convertNaturalEarth` stays where it is: it is a Gradle task, not app code,
+and nothing about it is target-specific. Nothing about the map rendering
+follows either — that is desktop UI and stays in `desktopApp`.
 
 ## Consequences
 
