@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window background the system paints before Compose's first frame.
+         Kept in step with SkywardTheme's fallback schemes so the handoff from
+         launch window to UI isn't a visible flash. -->
+    <color name="skyward_window_light">#FFFDFCFF</color>
+    <color name="skyward_window_dark">#FF0B0E14</color>
+</resources>

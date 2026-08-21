@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.planner.Planner
 import dev.fritze.skyward.core.rules.Anchor
@@ -50,7 +51,6 @@ import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.NumberField
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.common.phenomenonLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext

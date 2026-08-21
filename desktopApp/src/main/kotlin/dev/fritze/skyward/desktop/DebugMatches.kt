@@ -92,7 +92,12 @@ fun runDebugMatches() {
     val rules = defaultRules(now)
     val ctx = VisibilityContext(now = now, ovationGrid = null)
     val matches = Planner.computeMatches(occurrences, listOf(location), rules, visibilityModels, ctx)
-    val desired = Planner.desiredNotifications(matches, now, TimeZone.currentSystemDefault())
+    // Through reconcile against an empty history, i.e. exactly what a fresh
+    // install would plan: that is where §7.4.3's "a lead already in the past
+    // at plan time is dropped" is applied, and printing the raw candidate set
+    // would list reminders the app would never actually schedule.
+    val desired = Planner
+        .reconcile(emptyList(), Planner.desiredNotifications(matches, now, TimeZone.currentSystemDefault()), now, occurrences.associateBy { it.id })
         .sortedBy { it.fireAt }
 
     println("${occurrences.size} occurrences in horizon, ${matches.size} rule matches, ${desired.size} planned notifications")
