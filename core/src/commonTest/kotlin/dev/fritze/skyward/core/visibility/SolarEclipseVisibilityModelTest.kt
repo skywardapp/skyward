@@ -147,6 +147,46 @@ class SolarEclipseVisibilityModelTest {
     }
 
     @Test
+    fun aDeepPartialWithTheSunAlreadyDownTravelsTowardDaylightRatherThanZeroKm() = runTest {
+        // Clearing centralPath forces the partial-only travel search
+        // (nearestObscurationAtLeast) against this real eclipse's real
+        // geometry -- see the previous test for why the total-eclipse
+        // fixture is reused rather than hunting a genuinely partial-only
+        // eclipse.
+        val totalEclipse = august2026TotalEclipse()
+        val payload = totalEclipse.payload as SolarEclipsePayload
+        val partialOnly = totalEclipse.copy(payload = payload.copy(centralPath = emptyList()))
+
+        // Southern Italy on 2026-08-12: the sun sets *during* the eclipse,
+        // so obscuration climbs past 0.8 while the sun is already below the
+        // horizon at local peak. §8.2 rates that NONE ("sun down"), which
+        // sends the travel search running from a location that obscuration
+        // alone would have called GOOD -- the case the bisection's lower
+        // bound used to assume away.
+        val terminatorAdjacent = GeoPoint(40.0, 15.0)
+        val searchStart = (partialOnly.window.start - 1.hours).toAstroTime()
+        val here = searchLocalSolarEclipse(searchStart, Observer(terminatorAdjacent.latDeg, terminatorAdjacent.lonDeg, 0.0))
+        assertTrue(here.peak.time.toInstant() in partialOnly.window.start..partialOnly.window.end)
+        assertTrue(here.obscuration >= 0.8, "fixture precondition: deep partial locally, got ${here.obscuration}")
+        assertTrue(here.peak.altitude <= 0.0, "fixture precondition: sun down at peak, got ${here.peak.altitude}")
+
+        val result = model.evaluate(partialOnly, loc(terminatorAdjacent), ctx)
+
+        assertEquals(Quality.NONE, result.quality)
+        val travelDistanceKm = assertNotNull(result.travelDistanceKm, "expected partial-only travel guidance")
+        assertTrue(
+            travelDistanceKm > 100.0,
+            "the daylit side is hundreds of km away; got ${travelDistanceKm}km, i.e. 'travel nowhere for an eclipse that happens at night'",
+        )
+        val target = assertNotNull(result.nearestVisiblePoint)
+        val there = searchLocalSolarEclipse(searchStart, Observer(target.latDeg, target.lonDeg, 0.0))
+        assertTrue(there.peak.time.toInstant() in partialOnly.window.start..partialOnly.window.end)
+        assertTrue(there.obscuration >= 0.8, "travel target must reach the 80% threshold, got ${there.obscuration}")
+        assertTrue(there.peak.altitude > 0.0, "travel target must have the sun up at peak, got ${there.peak.altitude}")
+        assertEquals(Quality.GOOD, result.qualityAtNearestPoint)
+    }
+
+    @Test
     fun farFromTheEclipseEntirelyGetsNoVisibilityAndStillOffersTravelGuidance() = runTest {
         val occ = august2026TotalEclipse()
         // New Zealand: nowhere near the August 2026 path (Siberia/Arctic/Greenland/Iceland/Spain).

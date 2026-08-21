@@ -76,11 +76,17 @@ class ReplanCoordinatorTest {
         }
     }
 
-    private fun eclipseOcc(id: String, peakTime: Instant, fetchedAt: Instant = now) = Occurrence(
+    private fun eclipseOcc(
+        id: String,
+        peakTime: Instant,
+        fetchedAt: Instant = now,
+        certainty: Certainty = Certainty.CERTAIN,
+        expiresAt: Instant? = null,
+    ) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Eclipse",
-        window = TimeWindow(peakTime - 3.hours, peakTime + 3.hours), peakTime = peakTime, certainty = Certainty.CERTAIN,
+        window = TimeWindow(peakTime - 3.hours, peakTime + 3.hours), peakTime = peakTime, certainty = certainty,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = fetchedAt, expiresAt = null,
+        fetchedAt = fetchedAt, expiresAt = expiresAt,
     )
 
     private fun visibleRule(id: String = "r", hidden: Boolean = false, condition: Cond = Cond.VisibleAtLocation(Quality.MARGINAL)) = Rule(
@@ -137,6 +143,32 @@ class ReplanCoordinatorTest {
 
         assertEquals(1, reconciled.size)
         assertEquals(NotificationStatus.CANCELLED, reconciled.first().status)
+    }
+
+    @Test
+    fun aLaterReplanCancelsNotificationsForAnOccurrenceWhoseForecastHasExpired() = runTest {
+        // §5's expiry is phenomenon-agnostic; the payload is an eclipse only
+        // because that's the model this fixture registers. The case it
+        // stands for is an aurora nowcast (`expiresAt = fetchedAt + 2h`)
+        // left behind by an unreachable SWPC: no successful refresh means no
+        // withdrawal, so without expiry its pending notifications would
+        // still fire, presenting hours-old forecast data as current.
+        val fx = Fixture()
+        fx.locationRepo.upsert(SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now))
+        fx.occurrenceRepo.upsert(
+            eclipseOcc("fc:1", now + 30.days, certainty = Certainty.FORECAST, expiresAt = now + 2.hours),
+            firstSeenAt = now,
+        )
+        fx.ruleRepo.upsert(visibleRule())
+
+        val whileCurrent = fx.coordinator.replan(now, utc)
+        assertEquals(NotificationStatus.PENDING, whileCurrent.single().status)
+
+        // The source never came back; two hours on, the row is stale.
+        val afterExpiry = fx.coordinator.replan(now + 3.hours, utc)
+
+        assertEquals(NotificationStatus.CANCELLED, afterExpiry.single().status)
+        assertEquals(NotificationStatus.CANCELLED, fx.notificationRepo.getAll().single().status, "the cancellation must be persisted")
     }
 
     @Test
