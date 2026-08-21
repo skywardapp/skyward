@@ -123,7 +123,7 @@ class NotificationCopyTest {
 
         val copy = renderNotificationCopy(occ, home, result, rule(Cond.ReachableWithin(500.0)), fireAt = now, leadUntilAnchor = 30.days)
 
-        assertTrue(copy.body.contains("80%-eclipse point passes 180 km SSE of Home"), copy.body)
+        assertTrue(copy.body.contains("80%-eclipse point is 180 km SSE of Home"), copy.body)
         assertTrue(!copy.body.contains("totality", ignoreCase = true), copy.body)
         assertTrue(!copy.body.contains("annularity", ignoreCase = true), copy.body)
     }

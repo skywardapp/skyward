@@ -83,7 +83,7 @@ private fun solarEclipseCopy(
         val title = "${solarEclipseKindName(payload.kind)} solar eclipse — ${formatMonthDayYear(payload.greatestEclipseTime, location)}"
         val parts = mutableListOf<String>()
         if (travelWorthMentioning) {
-            parts += "${phrasing.pathNoun} passes ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
+            parts += "${phrasing.farLeadNoun} ${phrasing.farLeadVerb} ${travelKm.roundToKm()} km ${directionOf(visres.travelBearingDeg)}of ${location.name}."
         }
         if (details != null) {
             parts += "At ${location.name}: ${details.maxObscuration.toPercent()}% partial at ${hhmm(details.peak, location)}."
@@ -108,14 +108,15 @@ private fun solarEclipseCopy(
  * track, not totality, and a PARTIAL-only eclipse has no central path at
  * all — its target is merely the nearest ≥80%-obscuration point
  * (`SolarEclipseVisibilityModel.PARTIAL_TRAVEL_TARGET_OBSCURATION`), a
- * single point rather than a path.
+ * single point rather than a path, so it "is" somewhere rather than
+ * "passing" through it.
  */
-private data class EclipseTravelPhrasing(val pathNoun: String, val shortNoun: String)
+private data class EclipseTravelPhrasing(val farLeadNoun: String, val farLeadVerb: String, val shortNoun: String)
 
 private fun eclipseTravelPhrasing(kind: SolarEclipseKind): EclipseTravelPhrasing = when (kind) {
-    SolarEclipseKind.PARTIAL -> EclipseTravelPhrasing("The 80%-eclipse point", "The 80%-eclipse point")
-    SolarEclipseKind.ANNULAR -> EclipseTravelPhrasing("Path of annularity", "Annularity")
-    SolarEclipseKind.TOTAL, SolarEclipseKind.HYBRID -> EclipseTravelPhrasing("Path of totality", "Totality")
+    SolarEclipseKind.PARTIAL -> EclipseTravelPhrasing("The 80%-eclipse point", "is", "The 80%-eclipse point")
+    SolarEclipseKind.ANNULAR -> EclipseTravelPhrasing("Path of annularity", "passes", "Annularity")
+    SolarEclipseKind.TOTAL, SolarEclipseKind.HYBRID -> EclipseTravelPhrasing("Path of totality", "passes", "Totality")
 }
 
 private fun lunarEclipseCopy(payload: LunarEclipsePayload, visres: VisibilityResult, location: SavedLocation): NotificationCopy {

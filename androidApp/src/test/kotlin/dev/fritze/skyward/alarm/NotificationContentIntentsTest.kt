@@ -21,7 +21,8 @@ class NotificationContentIntentsTest {
         val ids = listOf(
             "se:2026-08-12",              // solar eclipse
             "ms:PER:2026",                // meteor shower
-            "au:3d:2026-08-12:18-21UT",   // aurora forecast slot
+            "au:3d:20260812:18",          // aurora 3-day forecast slot
+            "au:now:202608121815",        // aurora nowcast
             "cm:C2025A6",                 // stripped JPL designation
             "eo:EONET_6789",
             "raw/slash and space",        // defensive: not a real key shape, still must round-trip
