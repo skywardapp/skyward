@@ -253,6 +253,8 @@ def main() -> int:
             })
             kept += 1
         print(f"  {kept} daily samples", file=sys.stderr)
+        if kept < 360:
+            raise RuntimeError(f"{key}: only {kept} daily samples in {start}..{stop}; expected a daily year")
 
     write(ELEMENTS_OUTPUT, element_rows, (
         "# Osculating elements at perihelion for the §17.3b comets, from JPL Horizons.\n"
@@ -277,6 +279,8 @@ def main() -> int:
 
 
 def write(path: str, rows: list, header: str) -> None:
+    if not rows:
+        raise RuntimeError(f"refusing to write an empty fixture to {path}")
     buffer = io.StringIO()
     buffer.write(header)
     writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()), lineterminator="\n")
