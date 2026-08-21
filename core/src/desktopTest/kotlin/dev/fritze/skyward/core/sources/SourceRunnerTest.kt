@@ -169,6 +169,15 @@ class SourceRunnerTest {
         assertEquals(0, fx.replanCalls)
     }
 
+    private suspend fun Fixture.seedVisibilityCacheEntry(occurrenceId: String, locationId: String = "home") {
+        visibilityCacheRepo.upsertAll(
+            mapOf(
+                VisibilityCacheKey(occurrenceId, locationId) to
+                    VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now),
+            ),
+        )
+    }
+
     /** Seeds one FORECAST `se:1` via a forced run, then withdraws it via a second forced run with an empty result. */
     private suspend fun Fixture.seedThenWithdrawForecastOccurrence(source: FakeSource) {
         source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
@@ -194,11 +203,8 @@ class SourceRunnerTest {
         val source = FakeSource("test-source")
         source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now, force = setOf("test-source"))
-        val key = VisibilityCacheKey("se:1", "home")
-        fx.visibilityCacheRepo.upsertAll(
-            mapOf(key to VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now)),
-        )
-        assertTrue(fx.visibilityCacheRepo.getAll().containsKey(key))
+        fx.seedVisibilityCacheEntry("se:1")
+        assertTrue(fx.visibilityCacheRepo.getAll().containsKey(VisibilityCacheKey("se:1", "home")))
 
         source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now + 1.hours, force = setOf("test-source"))
@@ -241,10 +247,7 @@ class SourceRunnerTest {
         val source = FakeSource("test-source")
         source.nextResult = RefreshResult(listOf(occ("se:1", now - 400.days, Certainty.CERTAIN)), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now - 400.days, force = setOf("test-source"))
-        val key = VisibilityCacheKey("se:1", "home")
-        fx.visibilityCacheRepo.upsertAll(
-            mapOf(key to VisibilityCacheEntry("v1", VisibilityResult(true, Quality.GOOD, null, null, null, null, null), now)),
-        )
+        fx.seedVisibilityCacheEntry("se:1")
 
         source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now, force = setOf("test-source"))
