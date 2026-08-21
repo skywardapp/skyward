@@ -7,6 +7,8 @@ import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -130,6 +132,40 @@ class EclipseSourceTest {
 
         assertTrue(result.centralPathOf("se:20260812").isNotEmpty(), "a stale fingerprint must trigger a resample, not an empty path")
         assertEquals(result.centralPathOf("se:20260812"), refresh(start, end, state = result.newState).centralPathOf("se:20260812"))
+    }
+
+    /**
+     * A cached empty path is honoured, deliberately. [samplePath] is a pure
+     * function of the [GlobalSolarEclipseInfo] — same ephemeris, same grid,
+     * same result — so recomputing an empty one cannot turn it non-empty; it
+     * can only spend the thousands of local-eclipse searches this whole cache
+     * exists to avoid, on every daily pass, forever. That is issue #49's own
+     * failure mode. The escape hatch is the fingerprint's leading version
+     * component: a change to the sampling *algorithm* that leaves the four
+     * tuning constants alone must bump it, and then every stored path,
+     * empty ones included, is recomputed.
+     *
+     * (An empty path for a central eclipse is not a case that arises in
+     * practice — all 22 total/annular eclipses between 2026 and 2040 sample
+     * non-empty, the sparsest at 3 points — so this pins the reasoning rather
+     * than a behaviour anything is expected to hit.)
+     */
+    @Test
+    fun aCachedEmptyPathIsReusedRatherThanResampledEveryPass() = runTest(timeout = 180.seconds) {
+        // A window with no central eclipse costs no sampling and still writes a
+        // blob -- read the fingerprint back out of it rather than hardcoding
+        // one, so retuning the sampler cannot quietly turn this into a no-op.
+        val fingerprintCarrier = refresh(Instant.parse("2029-01-01T00:00:00Z"), Instant.parse("2029-02-01T00:00:00Z"))
+        val fingerprint = Json.parseToJsonElement(fingerprintCarrier.newState.values.single().decodeToString())
+            .jsonObject.getValue("algorithm").jsonPrimitive.content
+
+        val seeded = mapOf("central_paths_json" to """{"algorithm":"$fingerprint","paths":{"se:20260812":[]}}""".encodeToByteArray())
+        val (result, elapsed) = measureTimedValue {
+            refresh(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-20T00:00:00Z"), state = seeded)
+        }
+
+        assertTrue(result.centralPathOf("se:20260812").isEmpty(), "a fingerprint-matching cache entry is authoritative")
+        assertTrue(elapsed.inWholeSeconds < 5, "honouring it must not cost a resample, took $elapsed")
     }
 
     /**

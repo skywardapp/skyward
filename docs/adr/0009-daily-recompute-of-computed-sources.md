@@ -55,6 +55,15 @@ Two supporting changes make that safe:
 which is what §7.1.3 asks for ("run once per eclipse, cached") and what
 makes even the daily run cheap.
 
+Finally, `SourceRunner` runs the due POLLED sources **before** the due
+COMPUTED ones. The cache does not help on the pass that fills it, so a
+fresh install still has one pass that can spend minutes sampling paths;
+ordering decides what a pass that runs out of budget loses. Local astronomy
+is recomputed from the same ephemeris next pass, while a skipped fetch is
+the only way fresh aurora, comet and EONET data was ever going to arrive.
+§6.2 calls the registry's order irrelevant, so the runner is free to pick
+one — and has to, for that to keep being true.
+
 ## Consequences
 
 - A new occurrence at the far edge of a 3-year horizon appears up to a day
@@ -63,6 +72,14 @@ makes even the daily run cheap.
 - The periodic pass is bounded again, so the POLLED sources behind the
   COMPUTED ones actually run, and §10.2's replan happens from the periodic
   path as designed.
+- One case stays unbounded by design: the first pass on a fresh install,
+  where nothing is cached. It is why the POLLED sources go first. A pass
+  killed part-way through `EclipseSource.refresh` persists nothing and
+  re-samples from scratch next time — acceptable because Android reaches
+  that state through onboarding's foreground `force`, which has no worker
+  budget, and because §7.1.3 already budgets the cold run and asks for UI
+  progress. Persisting partial sampling progress would be the fix if a
+  device is ever found that cannot finish it.
 - `Schedule.OnHorizonChange` is now a name for a cadence chosen to match how
   fast the horizon moves, not for an absence of one. A source that wants a
   different granularity should say so with `Schedule.Periodic`.

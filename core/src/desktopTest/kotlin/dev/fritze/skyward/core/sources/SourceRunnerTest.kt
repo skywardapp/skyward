@@ -41,14 +41,16 @@ class SourceRunnerTest {
         override val id: String,
         override val phenomena: Set<Phenomenon> = setOf(Phenomenon.SOLAR_ECLIPSE),
         private val schedule: Schedule = Schedule.OnHorizonChange,
+        override val kind: SourceKind = SourceKind.COMPUTED,
+        private val onRefresh: (String) -> Unit = {},
     ) : EventSource {
-        override val kind = SourceKind.COMPUTED
         var nextResult: RefreshResult? = null
         var nextError: Exception? = null
         var callCount = 0
 
         override suspend fun refresh(req: RefreshRequest): RefreshResult {
             callCount++
+            onRefresh(id)
             nextError?.let { throw it }
             return nextResult ?: RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         }
@@ -135,6 +137,31 @@ class SourceRunnerTest {
 
         assertEquals(1, computed.callCount)
         assertEquals(1, polled.callCount)
+    }
+
+    /**
+     * A pass is not unbounded — WorkManager stops a non-expedited worker at
+     * ~10 minutes — and `EclipseSource`'s first, uncached run is the one thing
+     * able to spend that whole budget (§7.1.3). Polling has to go first, or a
+     * fresh install starves exactly the sources issue #49 was about, cache or
+     * no cache. Registration order deliberately says otherwise here: §6.2
+     * calls it irrelevant, and the runner is what has to make that true.
+     */
+    @Test
+    fun aBootstrapPassRunsThePolledSourcesBeforeTheComputedOnes() = runTest {
+        val fx = Fixture()
+        val order = mutableListOf<String>()
+        val computed = FakeSource("computed", kind = SourceKind.COMPUTED, onRefresh = { order += it })
+        val polled = FakeSource(
+            "polled",
+            schedule = Schedule.Periodic(6.hours),
+            kind = SourceKind.POLLED,
+            onRefresh = { order += it },
+        )
+
+        fx.runner(computed, polled).runDue(now) // neither has ever run, so both are due
+
+        assertEquals(listOf("polled", "computed"), order)
     }
 
     /**

@@ -63,7 +63,18 @@ class SourceRunner(
         val thresholds = deriveThresholds(ruleRepo.getEnabled())
 
         var anyMaterialChange = false
-        for (source in sources) {
+        // §6.2 calls the registry's order irrelevant; running the POLLED
+        // sources first is what keeps that true. A pass has a budget --
+        // WorkManager stops a non-expedited worker at ~10 minutes -- and the
+        // COMPUTED sources are the ones able to spend it: EclipseSource's
+        // first, uncached run samples every central eclipse in the horizon
+        // (§7.1.3), which is minutes of CPU on a mid-range phone however well
+        // it caches afterwards. Polling is seconds of mostly-idle network I/O.
+        // Ordering it first means a pass that does run out of budget loses the
+        // local astronomy, which the next pass recomputes from the same
+        // ephemeris, rather than the fetches that are the only way fresh
+        // aurora, comet and EONET data ever arrives (issue #49).
+        for (source in sources.sortedBy { it.kind == SourceKind.COMPUTED }) {
             val enabled = settingsRepo.isSourceEnabled(source.id)
             val forced = source.id in force
             if (!forced && (!enabled || !isDue(source.id, now))) continue
