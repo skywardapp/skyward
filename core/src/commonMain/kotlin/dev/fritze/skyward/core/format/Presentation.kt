@@ -30,8 +30,10 @@ import kotlin.time.Instant
  * to a desktop pane that formats both. A frontend may lay these out
  * differently — P2 says it may not word them differently.
  *
- * Everything here is a pure `String` function of already-computed domain
- * values; no domain logic lives in this file (§4.2).
+ * Everything here is a pure presentation helper over already-computed domain
+ * values; no domain logic lives in this file (§4.2). Most return `String`;
+ * [localDetailLines] returns a list of them and [relativeChangeAfter]
+ * returns the instant a caller should recompute at.
  */
 
 /** Kept in one place so the two frontends cannot drift apart on names (§4.1). */
