@@ -71,9 +71,13 @@ class EclipseSourceTest {
         // exact solve — allow a reasonable margin either side.
         assertTrue(maxDurationSec in 110.0..150.0, "expected max central duration near 138.2s, got $maxDurationSec")
 
-        // Path should trace west-to-east-ish through the published region
-        // (Siberia -> Arctic -> Greenland -> Iceland -> Spain) — every sample
-        // must itself be a real total/annular point (self-consistency, §17.2).
+        // Payload shape: a central-path sample without a positive duration is
+        // a row that should never have been emitted. This is a check on what
+        // the sampler *wrote*, not on where the point is — §17.2's
+        // self-consistency requirement ("every PathSample.point must itself
+        // evaluate as TOTAL via local search") needs an independent
+        // re-evaluation, and lives in EclipsePathCanonTest, which also
+        // compares the whole track against the GSFC canon.
         for (sample in payload.centralPath) {
             assertTrue(sample.centralDurationSec != null && sample.centralDurationSec > 0.0)
         }
