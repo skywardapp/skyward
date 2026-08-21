@@ -19,11 +19,13 @@ import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
+import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.core.visibility.VisibilityModel
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
@@ -256,6 +258,30 @@ class PlannerTest {
         // The dedup key still anchors on peakTime (not `now`), so exactly
         // one first-seen notification is ever produced per occurrence.
         assertEquals("se:test|${peak.epochSeconds}|first", desired.first().id)
+    }
+
+    /**
+     * #73: the state the rule editor could silently save. Worth a planner
+     * test rather than only a UI one — `sendsNoReminders` is a claim about
+     * what §9.2 will produce, and this is where that claim is true or false.
+     */
+    @Test
+    fun aScheduleWithNoLeadsAndNoFirstSeenPlansNothing() {
+        val home = loc("home", "Home")
+        val silent = rule("silent", leads = emptyList(), notifyOnFirstSeen = false)
+        assertTrue(silent.schedule.sendsNoReminders)
+
+        val matches = listOf(Match(silent, occ(), home, visres(Quality.EXCELLENT)))
+
+        // The rule matches — an excellent, visible, future eclipse — and still
+        // nothing is planned.
+        assertTrue(Planner.desiredNotifications(matches, now, utc).isEmpty())
+    }
+
+    @Test
+    fun aScheduleWithEitherTriggerIsNotSilent() {
+        assertFalse(rule("lead", leads = listOf(1.days)).schedule.sendsNoReminders)
+        assertFalse(rule("first", leads = emptyList(), notifyOnFirstSeen = true).schedule.sendsNoReminders)
     }
 
     @Test

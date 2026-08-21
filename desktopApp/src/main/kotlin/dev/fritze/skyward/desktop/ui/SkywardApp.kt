@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.desktop.ui.aurora.AuroraDashboardScreen
+import dev.fritze.skyward.desktop.ui.away.NotifierUnavailableBanner
 import dev.fritze.skyward.desktop.ui.away.WhileYouWereAwayBanner
 import dev.fritze.skyward.desktop.ui.map.EventMapScreen
 import dev.fritze.skyward.desktop.ui.overview.OverviewScreen
@@ -50,6 +51,10 @@ fun SkywardApp(state: DesktopAppState) {
                     // as its own destination — it's a one-shot startup report,
                     // not a place in the app.
                     WhileYouWereAwayBanner(state)
+                    // Above the startup panel's own placement and equally
+                    // screen-independent: "your reminders aren't reaching you"
+                    // is true wherever the user happens to be looking.
+                    NotifierUnavailableBanner(state)
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (state.destination) {
                             Destination.OVERVIEW -> OverviewScreen(state)

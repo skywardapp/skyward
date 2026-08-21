@@ -168,6 +168,54 @@ class DesktopSchedulerTest {
     }
 
     /**
+     * #79: closing the reminder out is right; doing it silently is not. The
+     * outcome has to reach something the user can see, which on desktop means
+     * the window — stderr is not a notification surface.
+     */
+    @Test
+    fun aDeliveryFailureIsReportedToTheWindow() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
+        val outcomes = mutableListOf<Boolean>()
+        notificationRepo.upsert(notification("undeliverable", now))
+
+        val scheduler = DesktopScheduler(
+            notificationRepo,
+            occurrenceRepo,
+            RecordingNotifier(succeed = false),
+            onActivated = {},
+            onDeliveryOutcome = { outcomes += it },
+            clock = FixedClock(now),
+        )
+        val job = launch { scheduler.run() }
+        advanceUntilIdle()
+        job.cancel()
+
+        assertEquals(listOf(false), outcomes)
+    }
+
+    /** The success half: a delivery that worked retracts a standing warning. */
+    @Test
+    fun aSuccessfulDeliveryIsReportedTooSoTheWarningCanBeRetracted() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
+        val outcomes = mutableListOf<Boolean>()
+        notificationRepo.upsert(notification("deliverable", now))
+
+        val scheduler = DesktopScheduler(
+            notificationRepo,
+            occurrenceRepo,
+            RecordingNotifier(),
+            onActivated = {},
+            onDeliveryOutcome = { outcomes += it },
+            clock = FixedClock(now),
+        )
+        val job = launch { scheduler.run() }
+        advanceUntilIdle()
+        job.cancel()
+
+        assertEquals(listOf(true), outcomes)
+    }
+
+    /**
      * Stands in for the startup re-plan: runs the real §10.4 reconciliation
      * over what is in the DB and writes the result back, exactly as
      * `DesktopContainer.replan` does. The panel's contents are decided there,

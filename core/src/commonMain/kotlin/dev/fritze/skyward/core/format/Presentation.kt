@@ -185,6 +185,7 @@ fun formatDistanceKm(km: Double): String = when {
     else -> "${(km / 100).roundToInt() / 10.0} thousand km"
 }
 
+/** English "add an s" pluralization, deliberately: docs/adr/0014-english-only-ui-strings.md. */
 private fun plural(count: Long, noun: String): String = if (count == 1L) "1 $noun" else "$count ${noun}s"
 
 /**

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,17 +23,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.alarm.AlarmScheduler
 import dev.fritze.skyward.core.format.CoordinateAxis
 import dev.fritze.skyward.core.format.parseCoordinate
 import dev.fritze.skyward.core.model.GeoPoint
@@ -72,8 +76,11 @@ fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
         // Scrollable: the location step's fields now carry a hint line each,
         // and a failure message can appear above them -- enough to push
         // "Continue" off a short screen or under a raised keyboard.
+        // imePadding, applied before the scroll so it resizes the scrollable
+        // area rather than the whole Scaffold, is what keeps the coordinate
+        // fields and "Continue" reachable once the keyboard is up too.
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
+            Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (finishFailed) {
@@ -90,7 +97,10 @@ fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
                 OnboardingStep.WELCOME -> WelcomeStep { step = OnboardingStep.LOCATION }
                 OnboardingStep.LOCATION -> LocationStep(viewModel, onNext = { step = OnboardingStep.NOTIFICATIONS })
                 OnboardingStep.NOTIFICATIONS -> NotificationsStep(onNext = { step = OnboardingStep.EXACT_ALARM })
-                OnboardingStep.EXACT_ALARM -> ExactAlarmStep(onNext = { step = OnboardingStep.RULES_PREVIEW })
+                OnboardingStep.EXACT_ALARM -> ExactAlarmStep(
+                    alarmScheduler = container.alarmScheduler,
+                    onNext = { step = OnboardingStep.RULES_PREVIEW },
+                )
                 OnboardingStep.RULES_PREVIEW -> RulesPreviewStep(viewModel, onFinish = ::attemptFinish)
             }
         }
@@ -150,20 +160,49 @@ private fun NotificationsStep(onNext: () -> Unit) {
     }
 }
 
+/**
+ * §10.2's exact-alarm explainer, asked of the system rather than assumed.
+ *
+ * The two states this step can be in are genuinely different, and the
+ * difference is not knowable from the API level alone: on the **foss**
+ * flavour, `USE_EXACT_ALARM` is granted at install on API 33+, so a user who
+ * has done nothing already has the permission — and telling them Skyward
+ * "needs" it, then sending them to a settings page with nothing to do, is
+ * false. Equally, a user who *did* grant it and came back would previously
+ * find "Not now" as the only way forward, which reads as a failure to do the
+ * thing they just did.
+ *
+ * [AlarmScheduler.canScheduleExact] is the same question the scheduler itself
+ * asks before every alarm (§10.2), so this step and the delivery path can
+ * never disagree about the answer. It is re-asked on resume because the grant
+ * happens in a different Activity — the system settings screen the button
+ * opens — which is the only moment we can learn it moved.
+ */
 @Composable
-private fun ExactAlarmStep(onNext: () -> Unit) {
+internal fun ExactAlarmStep(alarmScheduler: AlarmScheduler, onNext: () -> Unit) {
     val context = LocalContext.current
+    var canScheduleExact by remember(alarmScheduler) { mutableStateOf(alarmScheduler.canScheduleExact()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canScheduleExact = alarmScheduler.canScheduleExact()
+    }
+
     Text("Precise timing", style = MaterialTheme.typography.headlineSmall)
-    Text(
-        "For reminders to fire at the exact minute, Skyward needs the exact-alarm permission. Without it, " +
-            "reminders still work but may arrive a little late. You can change this later in Settings.",
-    )
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    if (canScheduleExact) {
+        Text(
+            "Exact alarms are on, so reminders fire at the minute you asked for. You can change " +
+                "this later in Settings.",
+        )
+        Button(onClick = onNext) { Text("Continue") }
+    } else {
+        Text(
+            "For reminders to fire at the exact minute, Skyward needs the exact-alarm permission. Without it, " +
+                "reminders still work but may arrive a little late. You can change this later in Settings.",
+        )
         Button(onClick = {
             context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
         }) { Text("Enable exact alarms") }
+        TextButton(onClick = onNext) { Text("Not now") }
     }
-    TextButton(onClick = onNext) { Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Not now" else "Continue") }
 }
 
 @Composable

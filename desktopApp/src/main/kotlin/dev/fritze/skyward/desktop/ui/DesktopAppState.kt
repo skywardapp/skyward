@@ -107,6 +107,14 @@ class DesktopAppState(
     private val _missedWhileAway = MutableStateFlow<List<MissedReminder>>(emptyList())
     val missedWhileAway: StateFlow<List<MissedReminder>> = _missedWhileAway
 
+    /**
+     * A reminder came due and no notification backend would show it (§10.3's
+     * DBus → notify-send chain exhausted). The scheduler logs that to stderr,
+     * which is not a place a user looks; this is what puts it in the window.
+     */
+    private val _notifierUnavailable = MutableStateFlow(false)
+    val notifierUnavailable: StateFlow<Boolean> = _notifierUnavailable
+
     private val _refreshingSources = MutableStateFlow<Set<String>>(emptySet())
     val refreshingSources: StateFlow<Set<String>> = _refreshingSources
 
@@ -137,6 +145,22 @@ class DesktopAppState(
 
     fun dismissMissedWhileAway() {
         _missedWhileAway.value = emptyList()
+    }
+
+    /**
+     * Both outcomes matter. A success retracts the warning — a notification
+     * daemon that has come back (a desktop-session restart, a portal that
+     * finally answered) should not leave a claim standing that it is broken —
+     * and the Settings "send a test notification" button reports through here
+     * for exactly that reason.
+     */
+    fun recordDeliveryOutcome(delivered: Boolean) {
+        _notifierUnavailable.value = !delivered
+    }
+
+    /** Dismissal is per-failure: the next undeliverable reminder raises it again. */
+    fun dismissNotifierUnavailable() {
+        _notifierUnavailable.value = false
     }
 
     fun visibilityContext(now: Instant = tick.value): VisibilityContext = VisibilityContext(now, _ovationGrid.value)

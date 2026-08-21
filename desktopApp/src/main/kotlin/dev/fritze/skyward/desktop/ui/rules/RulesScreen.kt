@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,6 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.deleteRuleConfirmation
 import dev.fritze.skyward.core.format.phenomenonLabel
@@ -49,19 +53,21 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.RuleLimits
+import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.NumberField
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * §14: the Rules screen, desktop two-pane — list on the left, the §13.4
@@ -159,8 +165,22 @@ private fun RuleRow(state: DesktopAppState, rule: Rule, isSelected: Boolean, onE
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(describeCondition(rule.condition), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // #73: a rule with no lead and no first-seen trigger plans
+                // nothing. The row is otherwise indistinguishable from one
+                // that reminds — including for rules §12.3's sync import
+                // brought in from another device.
+                if (rule.schedule.sendsNoReminders) {
+                    Text(
+                        "Sends no reminders",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
+            // The card itself opens the editor, so the switch keeps its own
+            // action and gains a name instead of the row becoming toggleable.
             Switch(
+                modifier = Modifier.semantics { contentDescription = "Enable ${rule.name}" },
                 checked = rule.enabled,
                 onCheckedChange = { enabled ->
                     state.launch {
@@ -213,6 +233,20 @@ private fun RuleEditorPane(
 
         if (violations.isNotEmpty()) {
             Text(violations.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+
+        // #73: with no leads and first-seen off, §9.2 plans nothing for this
+        // rule — it matches, shows in the overview, and is silent forever.
+        // A warning, not a blocked save: filter-only rules and §13.3's
+        // per-event mutes are legitimately silent. New drafts start at one
+        // day out, so this is only ever reachable deliberately.
+        if (draft.schedule.sendsNoReminders) {
+            Text(
+                "This rule sends no reminders: no lead time is chosen and \"notify as soon as it first " +
+                    "matches\" is off, so it will only ever show up in the overview.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         EditorActions(state, draft, existing, canSave = violations.isEmpty(), onClose = onClose)
@@ -269,51 +303,110 @@ private fun LocationsSection(state: DesktopAppState, draft: Rule, onDraftChange:
 
 @Composable
 private fun EditorActions(state: DesktopAppState, draft: Rule, existing: Boolean, canSave: Boolean, onClose: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            onClick = {
-                state.launch {
-                    // The editor has no enabled switch — the list row owns it —
-                    // so the draft's copy is a snapshot from when the pane
-                    // opened. Re-read it, or saving silently undoes a toggle
-                    // made in the list while the editor was open.
-                    val storedEnabled = state.container.ruleRepo.getAll().firstOrNull { it.id == draft.id }?.enabled
-                    state.container.ruleRepo.upsert(
-                        draft.copy(enabled = storedEnabled ?: draft.enabled, modifiedAt = Clock.System.now()),
+    // state.launch is fire-and-forget: closing the editor right after
+    // starting it, rather than after it finishes, meant a failed write left
+    // the editor gone with nothing said, and a failed replan left the rule
+    // store right while the OS-facing PlannedNotification rows went stale.
+    // Mirrors RuleEditorViewModel.writeThenReplan (Android) so both frontends
+    // report the same two failure shapes.
+    var error by remember(draft.id) { mutableStateOf<String?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = {
+                    state.launch {
+                        writeThenReplan(
+                            state = state,
+                            onDone = onClose,
+                            onError = { error = it },
+                            whenWriteFails = "Couldn't save this rule to this device — try again.",
+                            whenReplanFails = "The rule was saved, but its reminders couldn't be rescheduled — try again.",
+                        ) {
+                            // The editor has no enabled switch — the list row owns
+                            // it — so the draft's copy is a snapshot from when the
+                            // pane opened. Re-read it, or saving silently undoes a
+                            // toggle made in the list while the editor was open.
+                            val storedEnabled = state.container.ruleRepo.getAll().firstOrNull { it.id == draft.id }?.enabled
+                            state.container.ruleRepo.upsert(
+                                draft.copy(enabled = storedEnabled ?: draft.enabled, modifiedAt = Clock.System.now()),
+                            )
+                        }
+                    }
+                },
+                enabled = canSave && draft.phenomena.isNotEmpty() && draft.name.isNotBlank(),
+            ) { Text("Save") }
+            if (existing) {
+                var confirmDelete by remember { mutableStateOf(false) }
+                OutlinedButton(onClick = { confirmDelete = true }) { Text("Delete") }
+                // Android has always confirmed this; desktop deleted the rule and
+                // cancelled its reminders on one click. Same action, same
+                // consequence, so now the same dialog copy from `:core`.
+                if (confirmDelete) {
+                    val copy = deleteRuleConfirmation(draft.name)
+                    AlertDialog(
+                        onDismissRequest = { confirmDelete = false },
+                        title = { Text(copy.title) },
+                        text = { Text(copy.body) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirmDelete = false
+                                state.launch {
+                                    writeThenReplan(
+                                        state = state,
+                                        onDone = onClose,
+                                        onError = { error = it },
+                                        whenWriteFails = "Couldn't delete this rule — try again.",
+                                        whenReplanFails = "The rule was deleted, but its reminders couldn't be cancelled — try again.",
+                                    ) {
+                                        state.container.ruleRepo.delete(draft.id)
+                                    }
+                                }
+                            }) { Text("Delete") }
+                        },
+                        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
                     )
-                    state.container.replan()
                 }
-                onClose()
-            },
-            enabled = canSave && draft.phenomena.isNotEmpty() && draft.name.isNotBlank(),
-        ) { Text("Save") }
-        if (existing) {
-            var confirmDelete by remember { mutableStateOf(false) }
-            OutlinedButton(onClick = { confirmDelete = true }) { Text("Delete") }
-            // Android has always confirmed this; desktop deleted the rule and
-            // cancelled its reminders on one click. Same action, same
-            // consequence, so now the same dialog copy from `:core`.
-            if (confirmDelete) {
-                val copy = deleteRuleConfirmation(draft.name)
-                AlertDialog(
-                    onDismissRequest = { confirmDelete = false },
-                    title = { Text(copy.title) },
-                    text = { Text(copy.body) },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            confirmDelete = false
-                            state.launch {
-                                state.container.ruleRepo.delete(draft.id)
-                                state.container.replan()
-                            }
-                            onClose()
-                        }) { Text("Delete") }
-                    },
-                    dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
-                )
             }
         }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
+}
+
+/**
+ * Runs [write], then replans, and calls [onDone] only once both have
+ * succeeded — otherwise [onError] fires and the editor stays open. The two
+ * failures are reported apart because they leave different states behind: a
+ * failed write changed nothing, while a failed replan means the rule store
+ * is right and the OS-facing rows are not.
+ */
+private suspend fun writeThenReplan(
+    state: DesktopAppState,
+    onDone: () -> Unit,
+    onError: (String) -> Unit,
+    whenWriteFails: String,
+    whenReplanFails: String,
+    write: suspend () -> Unit,
+) {
+    try {
+        write()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        System.err.println("rule write failed (${e.message ?: e::class.simpleName})")
+        onError(whenWriteFails)
+        return
+    }
+    try {
+        state.container.replan()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        System.err.println("replan after rule write failed (${e.message ?: e::class.simpleName})")
+        onError(whenReplanFails)
+        return
+    }
+    onDone()
 }
 
 private val LEAD_PRESETS: List<Duration> = listOf(30.days, 14.days, 7.days, 2.days, 1.days, 6.hours, 2.hours, 30.minutes)
@@ -330,8 +423,16 @@ private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) 
                 Dropdown(schedule.anchor, Anchor.entries, { it.describe() }) { onChange(schedule.copy(anchor = it)) }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(schedule.notifyOnFirstSeen, { onChange(schedule.copy(notifyOnFirstSeen = it)) })
+            Row(
+                Modifier.toggleable(
+                    value = schedule.notifyOnFirstSeen,
+                    onValueChange = { onChange(schedule.copy(notifyOnFirstSeen = it)) },
+                    role = Role.Switch,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(schedule.notifyOnFirstSeen, onCheckedChange = null)
                 Text("Notify as soon as it first matches")
             }
 
@@ -366,9 +467,12 @@ private fun LeadChips(schedule: NotifySchedule, onChange: (NotifySchedule) -> Un
 private fun QuietHoursRow(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {
     val quiet = schedule.quietHours
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Named rather than toggleable-as-a-row: the row continues into the
+        // from/to number fields, which must stay separately reachable.
         Switch(
             checked = quiet != null,
             onCheckedChange = { on -> onChange(schedule.copy(quietHours = if (on) DEFAULT_QUIET_HOURS else null)) },
+            modifier = Modifier.semantics { contentDescription = "Quiet hours" },
         )
         Text("Quiet hours")
         if (quiet != null) {

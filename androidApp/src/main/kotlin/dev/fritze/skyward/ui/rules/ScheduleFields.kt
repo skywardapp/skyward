@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.rules.Anchor
 import kotlin.time.Duration
@@ -22,6 +24,16 @@ import kotlin.time.Duration.Companion.hours
 
 val LEAD_PRESETS: List<Duration> = listOf(2.hours, 6.hours, 12.hours, 1.days, 3.days, 7.days, 30.days, 180.days)
 
+/**
+ * What a brand-new rule opens with. Must be one of [LEAD_PRESETS] — it is
+ * rendered as a selected chip, and a lead with no chip could only be
+ * deselected, never restored.
+ */
+val DEFAULT_LEAD: Duration = 1.days
+
+// English plural rules, inline. That is a decision, not an oversight — see
+// docs/adr/0014-english-only-ui-strings.md, which also lists the other sites
+// a future translation pass has to visit.
 fun formatLead(duration: Duration): String = when {
     duration.inWholeDays >= 30 -> "${duration.inWholeDays / 30} month${if (duration.inWholeDays / 30 == 1L) "" else "s"} before"
     duration.inWholeDays >= 1 -> "${duration.inWholeDays} day${if (duration.inWholeDays == 1L) "" else "s"} before"
@@ -70,7 +82,18 @@ fun ScheduleEditor(draft: ScheduleDraft, onChange: (ScheduleDraft) -> Unit) {
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        // toggleable(role = Role.Switch) on the row rather than an interactive
+        // Switch beside a Text: as siblings, TalkBack reads out an unnamed
+        // switch and the label separately (#79).
+        Row(
+            Modifier.fillMaxWidth().toggleable(
+                value = draft.notifyOnFirstSeen,
+                onValueChange = { onChange(draft.copy(notifyOnFirstSeen = it)) },
+                role = Role.Switch,
+            ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
                 Text("Notify as soon as matched", style = MaterialTheme.typography.bodyMedium)
                 Text(
@@ -78,12 +101,20 @@ fun ScheduleEditor(draft: ScheduleDraft, onChange: (ScheduleDraft) -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Switch(checked = draft.notifyOnFirstSeen, onCheckedChange = { onChange(draft.copy(notifyOnFirstSeen = it)) })
+            Switch(checked = draft.notifyOnFirstSeen, onCheckedChange = null)
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().toggleable(
+                value = draft.quietHoursEnabled,
+                onValueChange = { onChange(draft.copy(quietHoursEnabled = it)) },
+                role = Role.Switch,
+            ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text("Quiet hours", style = MaterialTheme.typography.bodyMedium)
-            Switch(checked = draft.quietHoursEnabled, onCheckedChange = { onChange(draft.copy(quietHoursEnabled = it)) })
+            Switch(checked = draft.quietHoursEnabled, onCheckedChange = null)
         }
         if (draft.quietHoursEnabled) {
             LabeledIntSlider("From hour", draft.quietFromHour, 0..23) { onChange(draft.copy(quietFromHour = it)) }
