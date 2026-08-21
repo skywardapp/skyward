@@ -3,6 +3,7 @@ package dev.fritze.skyward.core.planner
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.LocalDetails
+import dev.fritze.skyward.core.model.MeteorShowerPayload
 import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
@@ -26,6 +27,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class PlannerTest {
@@ -39,10 +41,17 @@ class PlannerTest {
         createdAt = now, modifiedAt = now,
     )
 
-    private fun rule(id: String, leads: List<kotlin.time.Duration> = listOf(1.days), quietHours: QuietHours? = null, notifyOnFirstSeen: Boolean = false) = Rule(
-        id = id, name = id, enabled = true, phenomena = setOf(Phenomenon.SOLAR_ECLIPSE),
+    private fun rule(
+        id: String,
+        leads: List<kotlin.time.Duration> = listOf(1.days),
+        quietHours: QuietHours? = null,
+        notifyOnFirstSeen: Boolean = false,
+        phenomenon: Phenomenon = Phenomenon.SOLAR_ECLIPSE,
+        anchor: Anchor = Anchor.PEAK,
+    ) = Rule(
+        id = id, name = id, enabled = true, phenomena = setOf(phenomenon),
         locationIds = null, condition = Cond.VisibleAtLocation(Quality.MARGINAL),
-        schedule = NotifySchedule(leads, Anchor.PEAK, notifyOnFirstSeen, quietHours),
+        schedule = NotifySchedule(leads, anchor, notifyOnFirstSeen, quietHours),
         createdAt = now, modifiedAt = now,
     )
 
@@ -55,6 +64,30 @@ class PlannerTest {
 
     private fun visres(quality: Quality) = VisibilityResult(
         visibleAtLocation = quality != Quality.NONE, quality = quality, localDetails = null,
+        nearestVisiblePoint = null, travelDistanceKm = null, travelBearingDeg = null, qualityAtNearestPoint = null,
+    )
+
+    /** §7.2 shower occurrence, for the BEST_VIEWING anchor cases. */
+    private fun showerOcc(peakTime: Instant = peak) = Occurrence(
+        id = "ms:2026:PER", phenomenon = Phenomenon.METEOR_SHOWER, sourceId = "showers", title = "Perseids",
+        window = TimeWindow(peakTime - 2.days, peakTime + 2.days), peakTime = peakTime, certainty = Certainty.CERTAIN,
+        payload = MeteorShowerPayload(
+            iauCode = "PER", name = "Perseids", zhr = 100, zhrNote = null,
+            radiantRaDeg = 46.2, radiantDecDeg = 57.4, speedKmS = 59.0, parentBody = "109P/Swift-Tuttle",
+            activityStart = peakTime - 20.days, activityEnd = peakTime + 12.days, moonIlluminationAtPeak = 0.05,
+        ),
+        fetchedAt = now, expiresAt = null,
+    )
+
+    private fun showerVisres(quality: Quality, bestViewingStart: Instant) = VisibilityResult(
+        visibleAtLocation = quality != Quality.NONE, quality = quality,
+        localDetails = LocalDetails.MeteorLocal(
+            bestViewingStart = bestViewingStart,
+            bestViewingEnd = bestViewingStart + 5.hours,
+            maxRadiantAltDeg = 62.0,
+            moonIllumination = 0.05,
+            moonUpDuringBest = false,
+        ),
         nearestVisiblePoint = null, travelDistanceKm = null, travelBearingDeg = null, qualityAtNearestPoint = null,
     )
 
@@ -79,6 +112,60 @@ class PlannerTest {
         val notification = desired.first()
         assertEquals(ruleA.id, notification.ruleId, "expected the first matching rule")
         assertEquals(cabin.id, notification.locationId, "expected the best-quality location")
+    }
+
+    @Test
+    fun aBestViewingAnchorDedupsAcrossNearbyLocationsInsteadOfBuzzingTwice() {
+        // §9.3's whole point: "Home" and "Office" 10 km apart produce one
+        // notification. Each location solves its own dusk, so their
+        // bestViewingStart values differ by a minute or two -- which used to
+        // be enough to split the key and buzz twice per lead (ADR 0009).
+        val home = loc("home", "Home")
+        val office = loc("office", "Office")
+        val shower = showerOcc()
+        val r = rule("major-showers", leads = listOf(3.days, 6.hours), phenomenon = Phenomenon.METEOR_SHOWER, anchor = Anchor.BEST_VIEWING)
+        val homeBest = Instant.parse("2026-01-31T21:14:00Z")
+        val officeBest = homeBest + 78.seconds
+
+        val matches = listOf(
+            Match(r, shower, home, showerVisres(Quality.GOOD, homeBest)),
+            Match(r, shower, office, showerVisres(Quality.EXCELLENT, officeBest)),
+        )
+
+        val desired = Planner.desiredNotifications(matches, now, utc)
+
+        assertEquals(2, desired.size, "expected one notification per lead, not per location")
+        // Anchored on the best-quality location -- the same one whose
+        // viewing window the body quotes (§9.3), so the fire time and the
+        // copy can't disagree.
+        assertEquals(setOf(officeBest - 3.days, officeBest - 6.hours), desired.map { it.fireAt }.toSet())
+        assertEquals(setOf(office.id), desired.map { it.locationId }.toSet())
+        assertEquals(
+            setOf("ms:2026:PER|${officeBest.epochSeconds}|${3.days.inWholeSeconds}", "ms:2026:PER|${officeBest.epochSeconds}|${6.hours.inWholeSeconds}"),
+            desired.map { it.id }.toSet(),
+        )
+    }
+
+    @Test
+    fun aBestViewingRuleStillDedupsAgainstAPeakRuleWhenTheAnchorFallsBackToPeak() {
+        // §9.1: BEST_VIEWING falls back to PEAK when there's no viewing
+        // window. The fallback must keep landing on the *same* key a
+        // PEAK-anchored rule produces -- one notification, listing the
+        // first matching rule (§9.3).
+        val home = loc("home", "Home")
+        val shower = showerOcc()
+        val peakRule = rule("peak-rule", phenomenon = Phenomenon.METEOR_SHOWER)
+        val bestViewingRule = rule("best-viewing-rule", phenomenon = Phenomenon.METEOR_SHOWER, anchor = Anchor.BEST_VIEWING)
+        val noWindow = showerVisres(Quality.GOOD, peak).copy(localDetails = null)
+
+        val desired = Planner.desiredNotifications(
+            listOf(Match(peakRule, shower, home, noWindow), Match(bestViewingRule, shower, home, noWindow)),
+            now,
+            utc,
+        )
+
+        assertEquals(1, desired.size)
+        assertEquals(peakRule.id, desired.first().ruleId, "expected the first matching rule")
     }
 
     @Test

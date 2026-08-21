@@ -71,6 +71,10 @@ object Planner {
      * winning (rule, location) pair into a [PlannedNotification] via §10.5's
      * `core/format` templates. A lead computed in the past is dropped, not
      * fired (§7.4.3).
+     *
+     * The BEST_VIEWING anchor is resolved once per occurrence rather than
+     * per match, so nearby locations can't split the dedup key — see ADR
+     * 0009 and [bestViewingAnchorsByOccurrence].
      */
     fun desiredNotifications(matches: List<Match>, now: Instant, deviceZone: TimeZone): List<PlannedNotification> {
         data class Candidate(
@@ -83,9 +87,15 @@ object Planner {
             val leadUntilAnchor: Duration?,
         )
 
+        val bestViewingAnchors = bestViewingAnchorsByOccurrence(matches)
+
         val candidates = mutableListOf<Candidate>()
         for (m in matches) {
-            val anchorTime = resolveAnchor(m.rule.schedule.anchor, m.occ, m.visres)
+            val anchorTime = when (m.rule.schedule.anchor) {
+                // ADR 0009: one anchor per occurrence, not per location.
+                Anchor.BEST_VIEWING -> bestViewingAnchors[m.occ.id]
+                else -> resolveAnchor(m.rule.schedule.anchor, m.occ, m.visres)
+            }
             if (anchorTime != null) {
                 for (lead in m.rule.schedule.leads) {
                     val rawFireAt = anchorTime - lead
@@ -181,6 +191,31 @@ object Planner {
     }
 
     private fun NotificationStatus.isTerminalButNotFired() = this == NotificationStatus.CANCELLED || this == NotificationStatus.MISSED
+
+    /**
+     * ADR 0009. §9.3's dedup key is `(occurrenceId, anchorTime, lead)`
+     * expressly so "Home" and "Office" 10 km apart produce one
+     * notification. A BEST_VIEWING anchor breaks that on its own, because
+     * §9.1 resolves it from *each location's* `bestViewingStart`, and two
+     * locations 10 km apart solve dusk a minute or two apart — different
+     * anchors, different keys, two buzzes for the one shower peak.
+     *
+     * So resolve that anchor once per occurrence, from the same
+     * highest-quality location whose `localDetails` the notification body
+     * will quote (§9.3's "body shows the best location"): every match on
+     * the occurrence then shares one anchor, the key dedups as §9.3
+     * intends, and the fire time agrees with the viewing window the copy
+     * names. Occurrences with no BEST_VIEWING match are absent from the
+     * result — the anchor is only consulted for rules that ask for it.
+     */
+    private fun bestViewingAnchorsByOccurrence(matches: List<Match>): Map<String, Instant?> =
+        matches
+            .filter { it.rule.schedule.anchor == Anchor.BEST_VIEWING }
+            .groupBy { it.occ.id }
+            .mapValues { (_, group) ->
+                val best = group.maxBy { it.visres.quality }
+                resolveAnchor(Anchor.BEST_VIEWING, best.occ, best.visres)
+            }
 
     private fun resolveAnchor(anchor: Anchor, occ: Occurrence, visres: VisibilityResult): Instant? = when (anchor) {
         Anchor.PEAK -> occ.peakTime
