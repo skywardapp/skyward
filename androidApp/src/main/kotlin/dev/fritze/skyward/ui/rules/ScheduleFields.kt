@@ -22,6 +22,13 @@ import kotlin.time.Duration.Companion.hours
 
 val LEAD_PRESETS: List<Duration> = listOf(2.hours, 6.hours, 12.hours, 1.days, 3.days, 7.days, 30.days, 180.days)
 
+/**
+ * What a brand-new rule opens with. Must be one of [LEAD_PRESETS] — it is
+ * rendered as a selected chip, and a lead with no chip could only be
+ * deselected, never restored.
+ */
+val DEFAULT_LEAD: Duration = 1.days
+
 fun formatLead(duration: Duration): String = when {
     duration.inWholeDays >= 30 -> "${duration.inWholeDays / 30} month${if (duration.inWholeDays / 30 == 1L) "" else "s"} before"
     duration.inWholeDays >= 1 -> "${duration.inWholeDays} day${if (duration.inWholeDays == 1L) "" else "s"} before"

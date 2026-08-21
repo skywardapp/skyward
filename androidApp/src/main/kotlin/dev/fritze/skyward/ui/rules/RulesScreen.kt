@@ -69,6 +69,16 @@ private fun RuleRow(rule: Rule, onToggle: (Boolean) -> Unit, onClick: () -> Unit
                 Text("Reminds: " + rule.schedule.leads.joinToString(", ") { formatLead(it) }, style = MaterialTheme.typography.bodyMedium)
             } else if (rule.schedule.notifyOnFirstSeen) {
                 Text("Reminds: as soon as matched", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                // The row said nothing at all for a silent rule, which read as
+                // "reminders not shown here" rather than "there are none"
+                // (#73). Reachable for rules saved before the editor warned,
+                // and for anything §12.3's sync import brings in.
+                Text(
+                    "Sends no reminders",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }

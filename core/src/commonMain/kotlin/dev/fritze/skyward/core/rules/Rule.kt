@@ -133,6 +133,20 @@ data class NotifySchedule(
     val quietHours: QuietHours?, // suppress+defer to end of quiet window (null = none)
 )
 
+/**
+ * §9.2 plans one notification per (match, lead) plus one for
+ * [NotifySchedule.notifyOnFirstSeen]. With neither, a rule produces no
+ * `PlannedNotification` rows at all: it still matches, still shows in
+ * Upcoming's "Matched" scope and still previews a count in the editor — and
+ * never once reaches the user (#73).
+ *
+ * That is a legitimate rule to want (a filter, a §13.3 per-event mute) and a
+ * trap to write by accident, so this is a named question for the UI to ask
+ * rather than a save-time refusal.
+ */
+val NotifySchedule.sendsNoReminders: Boolean
+    get() = leads.isEmpty() && !notifyOnFirstSeen
+
 @Serializable
 enum class Anchor { PEAK, WINDOW_START, BEST_VIEWING }
 

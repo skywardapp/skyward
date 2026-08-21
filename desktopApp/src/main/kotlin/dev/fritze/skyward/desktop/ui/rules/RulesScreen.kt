@@ -47,6 +47,7 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.RuleLimits
+import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.NumberField
@@ -157,6 +158,17 @@ private fun RuleRow(state: DesktopAppState, rule: Rule, isSelected: Boolean, onE
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(describeCondition(rule.condition), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // #73: a rule with no lead and no first-seen trigger plans
+                // nothing. The row is otherwise indistinguishable from one
+                // that reminds — including for rules §12.3's sync import
+                // brought in from another device.
+                if (rule.schedule.sendsNoReminders) {
+                    Text(
+                        "Sends no reminders",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             Switch(
                 checked = rule.enabled,
@@ -211,6 +223,20 @@ private fun RuleEditorPane(
 
         if (violations.isNotEmpty()) {
             Text(violations.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+
+        // #73: with no leads and first-seen off, §9.2 plans nothing for this
+        // rule — it matches, shows in the overview, and is silent forever.
+        // A warning, not a blocked save: filter-only rules and §13.3's
+        // per-event mutes are legitimately silent. New drafts start at one
+        // day out, so this is only ever reachable deliberately.
+        if (draft.schedule.sendsNoReminders) {
+            Text(
+                "This rule sends no reminders: no lead time is chosen and \"notify as soon as it first " +
+                    "matches\" is off, so it will only ever show up in the overview.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
         EditorActions(state, draft, existing, canSave = violations.isEmpty(), onClose = onClose)
