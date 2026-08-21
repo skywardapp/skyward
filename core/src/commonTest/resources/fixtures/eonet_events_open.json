@@ -1,0 +1,5237 @@
+{
+	"title": "EONET Events",
+	"description": "Natural events from EONET.",
+	"link": "https://eonet.gsfc.nasa.gov/api/v3/events",
+	"events": [
+		{
+			"id": "EONET_22927",
+			"title": "Prescribed Fire RX Tom Green 7105, Tom Green, Texas",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22927",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-267105"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 560.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-20T09:26:00Z",
+					"type": "Point", 
+							"coordinates": [ -100.4783333, 31.14888889 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22931",
+			"title": "Wildfire Windmill, Stillwater, Montana",
+            "description": "9 Miles N from Reed Point, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22931",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTLG32-261150"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-19T18:05:00Z",
+					"type": "Point", 
+							"coordinates": [ -109.52349, 45.8358 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22929",
+			"title": "Wildfire North Heglar, Cassia, Idaho",
+            "description": "33 Miles SW from Pocatello, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22929",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDCAX-000198"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 700.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-19T17:25:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.094917, 42.490167 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22926",
+			"title": "Tropical Storm Saudel",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22926",
+			"closed": null,
+				"categories": [
+					{
+					"id": "severeStorms",
+					"title": "Severe Storms"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "JTWC",
+					"url": "https://www.metoc.navy.mil/jtwc/products/wp1726.tcw"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 154.2, 8.6 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 154.2, 8.6 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 153.7, 9.4 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 152.8, 10.5 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 151.6, 11.4 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 150.9, 11.9 ]
+							},
+
+							{
+							"magnitudeValue": 40.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 150.2, 12.8 ]
+							},
+
+							{
+							"magnitudeValue": 40.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 149.6, 13.7 ]
+							},
+
+							{
+							"magnitudeValue": 45.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-21T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 149, 14.7 ]
+							},
+
+							{
+							"magnitudeValue": 60.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-21T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ 148.5, 14.9 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22933",
+			"title": "Wildfire Sarpy, Big Horn, Montana",
+            "description": "8 Miles E from Hardin, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22933",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTCRA-261132"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 897.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-17T19:48:00Z",
+					"type": "Point", 
+							"coordinates": [ -107.4745, 45.718833 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22928",
+			"title": "Wildfire Mukluk, Southeast Fairbanks, Alaska",
+            "description": "2 Miles W from Tok, AK",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22928",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-AKTAS-613487"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 5077.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-17T15:55:00Z",
+					"type": "Point", 
+							"coordinates": [ -143.0636, 63.34225 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22798",
+			"title": "Wildfire Picture Rock, Lake, Oregon",
+            "description": "3 Miles N from Summer Lake, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22798",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORLAD-260313"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1625.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-16T15:55:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.774487, 43.00919 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22932",
+			"title": "Wildfire Jackson - Hwy 90, Jackson, Mississippi",
+            "description": "5 Miles NE from Moss Point, MS",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22932",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MSMSS-018314"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1428.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-16T15:16:00Z",
+					"type": "Point", 
+							"coordinates": [ -88.4663889, 30.4175 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22800",
+			"title": "Wildfire CATO 2, Chaves, New Mexico",
+            "description": "40 Miles NE from Roswell, NM",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22800",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NMROD-000632"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2080.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-15T23:18:00Z",
+					"type": "Point", 
+							"coordinates": [ -103.9452, 33.50765 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22791",
+			"title": "Wildfire THE H1, Palm Beach, Florida",
+            "description": "5 Miles W from DEEM CITY, FL",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22791",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-FLFLS-1800136"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3600.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-15T22:19:00Z",
+					"type": "Point", 
+							"coordinates": [ -80.7516667, 26.3688889 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22799",
+			"title": "Wildfire THE RADIO TOWER, Miami-Dade, Florida",
+            "description": "5 Miles W from KENDALE LAKES, FL",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22799",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-FLFLS-1800132"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 700.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-15T22:06:00Z",
+					"type": "Point", 
+							"coordinates": [ -80.4744444, 25.7111111 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22795",
+			"title": "Wildfire Shoshone, Churchill, Nevada",
+            "description": "58 Miles NE from Fallon, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22795",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVCCD-030721"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 7934.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-15T17:48:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.67618, 39.82989 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22790",
+			"title": "Wildfire Burnt Canyon, Woodward, Oklahoma",
+            "description": "12 Miles NW from Mooreland, OK",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22790",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OKOKS-260858"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3335.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-15T16:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -99.2663889, 36.5955556 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22801",
+			"title": "Wildfire Snake Mountain, Pushmataha, Oklahoma",
+            "description": "3 Miles E from Nashoba, OK",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22801",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OKOKS-260835"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 703.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-14T10:05:00Z",
+					"type": "Point", 
+							"coordinates": [ -95.1797222, 34.4830556 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22796",
+			"title": "Wildfire Fielder Mtn, Jackson, Oregon",
+            "description": "1 Miles W from Rogue River, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22796",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR712S-030327"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 573.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-13T18:23:00Z",
+					"type": "Point", 
+							"coordinates": [ -123.2067743, 42.4217473 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22563",
+			"title": "Tropical Storm Lala",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22563",
+			"closed": null,
+				"categories": [
+					{
+					"id": "severeStorms",
+					"title": "Severe Storms"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "JTWC",
+					"url": "https://www.metoc.navy.mil/jtwc/products/cp0126.tcw"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-12T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -142.2, 14.7 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -143.1, 14.7 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -144.1, 14.7 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -145, 14.9 ]
+							},
+
+							{
+							"magnitudeValue": 35.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -145.7, 15.2 ]
+							},
+
+							{
+							"magnitudeValue": 45.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-14T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -147, 16 ]
+							},
+
+							{
+							"magnitudeValue": 50.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-14T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -147.9, 16.2 ]
+							},
+
+							{
+							"magnitudeValue": 50.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-14T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -149, 16.5 ]
+							},
+
+							{
+							"magnitudeValue": 50.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-14T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -150.3, 17 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-15T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -151.9, 17.4 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-15T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -153, 17.6 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-15T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -154.1, 17.8 ]
+							},
+
+							{
+							"magnitudeValue": 65.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-15T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -155, 17.9 ]
+							},
+
+							{
+							"magnitudeValue": 65.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-16T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -155.7, 18.3 ]
+							},
+
+							{
+							"magnitudeValue": 65.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-16T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -156.5, 19.1 ]
+							},
+
+							{
+							"magnitudeValue": 60.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-16T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -157.6, 19.9 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-16T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -158.8, 20.8 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-17T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -160.9, 20.8 ]
+							},
+
+							{
+							"magnitudeValue": 50.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-17T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -162, 20.7 ]
+							},
+
+							{
+							"magnitudeValue": 50.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-17T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -162.9, 20.5 ]
+							},
+
+							{
+							"magnitudeValue": 55.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-17T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -163.9, 20.4 ]
+							},
+
+							{
+							"magnitudeValue": 60.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-18T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -165, 20.3 ]
+							},
+
+							{
+							"magnitudeValue": 65.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-18T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -165.8, 20.4 ]
+							},
+
+							{
+							"magnitudeValue": 70.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-18T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -166.6, 20.4 ]
+							},
+
+							{
+							"magnitudeValue": 85.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-18T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -167.7, 20.3 ]
+							},
+
+							{
+							"magnitudeValue": 100.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -168.5, 20.5 ]
+							},
+
+							{
+							"magnitudeValue": 115.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -169.3, 20.7 ]
+							},
+
+							{
+							"magnitudeValue": 110.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -169.9, 21 ]
+							},
+
+							{
+							"magnitudeValue": 110.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-19T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -170.7, 21.9 ]
+							},
+
+							{
+							"magnitudeValue": 100.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -171.3, 22.4 ]
+							},
+
+							{
+							"magnitudeValue": 95.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -171.8, 23.1 ]
+							},
+
+							{
+							"magnitudeValue": 85.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T12:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -172, 23.8 ]
+							},
+
+							{
+							"magnitudeValue": 80.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-20T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -172.3, 24.6 ]
+							},
+
+							{
+							"magnitudeValue": 80.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-21T00:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -172.4, 25.2 ]
+							},
+
+							{
+							"magnitudeValue": 80.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-21T06:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -171.9, 26.1 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22614",
+			"title": "Wildfire PLAINS, San Luis Obispo, California",
+            "description": "21 Miles NW from McKittrick, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22614",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CASLU-012768"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-12T15:36:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.001456, 35.416592 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22560",
+			"title": "Tropical Storm Cristobal",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22560",
+			"closed": null,
+				"categories": [
+					{
+					"id": "severeStorms",
+					"title": "Severe Storms"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "NOAA_NHC",
+					"url": "https://www.nhc.noaa.gov/archive/2026/CRISTOBAL.shtml"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 40.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-12T15:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -43, 36.7 ]
+							},
+
+							{
+							"magnitudeValue": 40.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-12T21:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -41, 37.2 ]
+							},
+
+							{
+							"magnitudeValue": 30.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T09:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -38.2, 38.6 ]
+							},
+
+							{
+							"magnitudeValue": 25.00,
+					"magnitudeUnit": "kts",
+					"date": "2026-08-13T15:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -36.8, 39.4 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22802",
+			"title": "Wildfire Austin Non-Stat, Clackamas, Oregon",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22802",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR581S-000041"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-12T14:19:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.9549232, 45.02547389 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22607",
+			"title": "Wildfire Sheep Pen, Las Animas, Colorado",
+            "description": "12 Miles SE from Kim, CO",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22607",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-COLSX-001553"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 712.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-12T10:18:00Z",
+					"type": "Point", 
+							"coordinates": [ -103.285535, 37.075637 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22619",
+			"title": "Wildfire Rancher fire, Oglala Lakota, South Dakota",
+            "description": "2 Miles E from Evergreen, SD 2 Miles E from Evergreen, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22619",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDPRA-000134"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-11T23:17:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.3327778, 43.3141667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22609",
+			"title": "Wildfire Post, Las Animas, Colorado",
+            "description": "7 Miles SE from Trinidad, CO",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22609",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-COLSX-001549"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4205.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-11T21:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -104.421389, 37.081944 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22616",
+			"title": "Wildfire XU Hill, Oglala Lakota, South Dakota",
+            "description": "12 Miles N from White River Ranger Station, SD 12 Miles N from White River Ranger Station, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22616",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDPRA-000130"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1297.23,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-11T20:30:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.4230758, 43.62272514 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22610",
+			"title": "Wildfire Dos Pistolas, Brooks, Texas",
+            "description": "15 Miles SW from Falfurrias, TX",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22610",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-266829"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-11T19:59:00Z",
+					"type": "Point", 
+							"coordinates": [ -98.35722222, 27.10444444 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22613",
+			"title": "Wildfire ALPOWA, Asotin, Washington",
+            "description": "8 Miles W from Clarkston, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22613",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-001959"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1334.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-11T18:20:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.24742, 46.40578 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22617",
+			"title": "Wildfire Cold Springs, Converse, Wyoming",
+            "description": "7 Miles SW from Douglas, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22617",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYCOX-000403"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1966.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-10T19:30:00Z",
+					"type": "Point", 
+							"coordinates": [ -105.491389, 42.724444 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22622",
+			"title": "Prescribed Fire RX Tom Green 6687, Tom Green, Texas",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22622",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-266687"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 860.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-10T18:16:00Z",
+					"type": "Point", 
+							"coordinates": [ -100.4636111, 31.15027778 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22618",
+			"title": "Wildfire Bufford Creek, Stephens, Texas",
+            "description": "5 Miles NE from Breckenridge, TX",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22618",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-266794"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3240.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-10T15:52:00Z",
+					"type": "Point", 
+							"coordinates": [ -98.82243696, 32.7971975 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22612",
+			"title": "Wildfire Stallion, Washoe, Nevada",
+            "description": "10 Miles W from Nixon, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22612",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVTMFX-030698"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 33426.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-10T13:31:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.525167, 39.822833 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22430",
+			"title": "Wildfire Harris, Rosebud, Montana",
+            "description": "30 Miles SW from Ashland, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22430",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTMCD-000676"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 924.30,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T16:55:00Z",
+					"type": "Point", 
+							"coordinates": [ -106.634317, 45.195183 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22424",
+			"title": "Wildfire WEISER KNOLL, Fremont, Wyoming",
+            "description": "13 Miles SE from Lander, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22424",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYWBD-000294"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T16:32:00Z",
+					"type": "Point", 
+							"coordinates": [ -108.607547, 42.636437 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22611",
+			"title": "Wildfire AUSTIN, Clackamas, Oregon",
+            "description": "25 Miles SE from Estacada, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22611",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORMHF-000863"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1430.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T14:30:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.944872, 45.025216 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22428",
+			"title": "Wildfire Brown, Oldham, Texas",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22428",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-266753"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 800.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T14:21:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.989, 35.3735 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22427",
+			"title": "Wildfire Fred Mt, Washoe, Nevada",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22427",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVTMFX-030694"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1400.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T13:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.8492, 39.762667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22431",
+			"title": "Wildfire Timber, Monterey, California",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22431",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CALPF-002271"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 800.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-09T00:36:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.717508, 36.215894 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22434",
+			"title": "Wildfire PALOUSE RIVER, Whitman, Washington",
+            "description": "2 Miles E from Colfax, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22434",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-001934"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 637.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-08T20:58:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.307978, 46.870892 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22432",
+			"title": "Wildfire Bug, Lassen, California",
+            "description": "3 Miles S from Hallelujah Junction, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22432",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVCCD-030683"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 15000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-08T18:49:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.038117, 39.727883 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22436",
+			"title": "Wildfire WELLS ROAD, Whitman, Washington",
+            "description": "14 Miles NE from St. John, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22436",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-001933"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1812.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-08T18:36:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.51, 47.24 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22426",
+			"title": "Wildfire NUNAMAKER ROAD, Franklin, Washington",
+            "description": "10 Miles S from Washtucna, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22426",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WASPD-260605"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 20870.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-08T14:16:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.4075, 46.5942 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22425",
+			"title": "Wildfire LITTLE GOOSE, Columbia, Washington",
+            "description": "18 Miles N from DAYTON, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22425",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-001924"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8524.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-07T21:01:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.09, 46.536 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22433",
+			"title": "Wildfire MP18, Humboldt, California",
+            "description": "2 Miles N from Hoopa, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22433",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CAHVT-000753"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-07T19:52:00Z",
+					"type": "Point", 
+							"coordinates": [ -123.685, 41.1330556 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22446",
+			"title": "Wildfire Rocky Canyon, Morgan, Utah",
+            "description": "6 Miles SW from Hennifer, UT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22446",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-UTNWS-200580"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4372.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-07T18:30:00Z",
+					"type": "Point", 
+							"coordinates": [ -111.642133, 40.939517 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22442",
+			"title": "Wildfire RIDGE, Los Angeles, California",
+            "description": "25 Miles S from Bakersfield, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22442",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CALAC-278844"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1134.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-07T17:44:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.82999, 34.79108 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22454",
+			"title": "Wildfire Montgomery Draw, Campbell, Wyoming",
+            "description": "15 Miles NW from Gillitte, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22454",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYCMX-000389"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 536.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-06T19:19:00Z",
+					"type": "Point", 
+							"coordinates": [ -105.8556, 44.366767 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22445",
+			"title": "Wildfire COTTONWOOD, Grant, Oregon",
+            "description": "15 Miles SW from LONG CREEK, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22445",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR952S-026181"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 723.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-06T18:41:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.380383, 44.628133 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22444",
+			"title": "Wildfire 310, Garfield, Colorado",
+            "description": "1 Miles E from Battlement Mesa, CO",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22444",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-COGFX-260411"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 601.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-06T15:40:00Z",
+					"type": "Point", 
+							"coordinates": [ -107.983983, 39.44445 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22447",
+			"title": "Wildfire B.B, Osage, Oklahoma",
+            "description": "6 Miles NE from Foraker, OK",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22447",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OKOSA-002275"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2304.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-06T12:56:00Z",
+					"type": "Point", 
+							"coordinates": [ -96.461093, 36.907919 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22196",
+			"title": "Wildfire Wrights Spring, Klamath, Oregon",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22196",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORFWF-260286"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1200.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-05T18:00:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.728667, 42.4695 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22195",
+			"title": "Wildfire BUZZARD, Kern, California",
+            "description": "6 Miles NW from LEBEC, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22195",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CAKRN-032905"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-05T11:08:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.9227778, 34.8997222 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22429",
+			"title": "Wildfire Frijoles, Santa Fe, New Mexico",
+            "description": "3 Miles E from Cundiyo, NM",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22429",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NMSNF-000444"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-05T10:05:00Z",
+					"type": "Point", 
+							"coordinates": [ -105.848167, 35.908667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22197",
+			"title": "Wildfire Bare, Sublette, Wyoming",
+            "description": "20 Miles NW from Big Piney, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22197",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYBTF-002621"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 800.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-04T17:46:00Z",
+					"type": "Point", 
+							"coordinates": [ -110.48225, 42.758633 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22201",
+			"title": "Wildfire Butte, Gila, Arizona",
+            "description": "20 Miles SW from San Carlos, AZ",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22201",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-AZSCA-001192"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 670.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-03T21:15:00Z",
+					"type": "Point", 
+							"coordinates": [ -110.163611, 33.509722 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22198",
+			"title": "Wildfire GANN, Calaveras, California",
+            "description": "6 Miles SE from Valley Springs, CA 6 Miles SE from Valley Springs, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22198",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CATCU-011483"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 10373.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-03T20:28:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.77336, 38.111446 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22101",
+			"title": "Wildfire Middle Coulee, Chouteau, Montana",
+            "description": "4 Miles N from Carter, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22101",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTLG19-000260"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1200.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-02T22:17:00Z",
+					"type": "Point", 
+							"coordinates": [ -110.990383, 47.733335 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22108",
+			"title": "Wildfire Antelope Creek, Elko, Nevada",
+            "description": "25 Miles N from Dunphy, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22108",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVEKD-010378"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 6500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-02T14:31:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.543867, 41.049033 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22105",
+			"title": "Wildfire Bluegill, Miami-Dade, Florida",
+            "description": "7 Miles W from Miami, FL",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22105",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-FLEVP-002390"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 750.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-02T12:47:00Z",
+					"type": "Point", 
+							"coordinates": [ -80.606167, 25.75775 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22107",
+			"title": "Wildfire MITRE ROCK, Stevens, Washington",
+            "description": "19 Miles NW from Davenport, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22107",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WASPA-001868"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1547.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T21:42:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.328486, 47.911635 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22109",
+			"title": "Wildfire Johnson Canyon, Box Elder, Utah",
+            "description": "13 Miles NW from Tremonton, UT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22109",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-UTBRS-200554"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 6500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T21:07:00Z",
+					"type": "Point", 
+							"coordinates": [ -112.304918, 41.874782 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22443",
+			"title": "Wildfire Black Bear, Ravalli, Montana",
+            "description": "15 Miles E from Hamilton, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22443",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTBRF-000282"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1469.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T20:58:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.8895, 46.167967 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22127",
+			"title": "Wildfire Semi 270, Woodward, Oklahoma",
+            "description": "8 Miles NW from Woodward, OK",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22127",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OKOKS-260786"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 682.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T20:51:00Z",
+					"type": "Point", 
+							"coordinates": [ -99.5161667, 36.5143333 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22115",
+			"title": "Wildfire Eggo, Wallowa, Oregon",
+            "description": "17 Miles NE from Enterprise, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22115",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR974S-000423"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3774.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T20:28:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.0871, 45.6696 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22125",
+			"title": "Wildfire HUDSPETH, Stevens, Washington",
+            "description": "3 Miles SE from HUNTERS, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22125",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001860"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4211.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T19:32:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.158917, 48.08845 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22104",
+			"title": "Wildfire AUTUMN LANE, Spokane, Washington",
+            "description": "7 Miles NW from Spokane, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22104",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001857"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3351.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T18:49:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.612833, 47.7945 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22110",
+			"title": "Wildfire FELIZ, Mendocino, California",
+            "description": "4 Miles NW from Hopland, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22110",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CAMEU-008929"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 872.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T18:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -123.16114, 38.99246 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22119",
+			"title": "Wildfire 0658 ROUND BUTTE, Jefferson, Oregon",
+            "description": "10 Miles W from Madras, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22119",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OROCF-000658"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1039.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T18:32:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.224778, 44.600111 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22111",
+			"title": "Wildfire FAIRVIEW, Spokane, Washington",
+            "description": "2 Miles NE from SPOKANE, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22111",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001852"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1056.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T17:42:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.3577, 47.750926 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22116",
+			"title": "Wildfire Sand Creek, Beaverhead, Montana",
+            "description": "5 Miles E from Wisdom, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22116",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTBDF-266319"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T16:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.325667, 45.554667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22112",
+			"title": "Wildfire OLD TRAILS, Spokane, Washington",
+            "description": "3 Miles W from SPOKANE, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22112",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001845"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3619.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T15:11:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.533414, 47.683851 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22128",
+			"title": "Wildfire Potato Creek, Jackson, South Dakota",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22128",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDPRA-260748"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8969.30,
+					"magnitudeUnit": "acres",
+					"date": "2026-08-01T12:10:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.07303, 43.563356 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22106",
+			"title": "Wildfire Big Rock, Jefferson, Idaho",
+            "description": "20 Miles E from Idaho Falls, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22106",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDIFD-000152"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2482.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-31T20:27:00Z",
+					"type": "Point", 
+							"coordinates": [ -111.664267, 43.63805 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22121",
+			"title": "Wildfire Bobcat Lakes, Beaverhead, Montana",
+            "description": "12 Miles E from Wisdom, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22121",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTBDF-266313"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 755.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-31T18:29:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.203883, 45.636817 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22100",
+			"title": "Wildfire Lumin, Sheridan, Wyoming",
+            "description": "22 Miles E from Sheridan, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22100",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYSHX-000363"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 7267.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-31T17:46:00Z",
+					"type": "Point", 
+							"coordinates": [ -106.4085, 44.8235 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22114",
+			"title": "Wildfire Ant Park, Meagher, Montana",
+            "description": "15 Miles NE from White Sulphur Springs, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22114",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTHLF-000529"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 700.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-31T17:46:00Z",
+					"type": "Point", 
+							"coordinates": [ -110.639667, 46.7365 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22103",
+			"title": "Wildfire Ward, White Pine, Nevada",
+            "description": "10 Miles S from Ely, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22103",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVHTF-040303"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8200.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-31T14:03:00Z",
+					"type": "Point", 
+							"coordinates": [ -114.89485, 39.103167 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22120",
+			"title": "Wildfire Black Canyon, Sanpete, Utah",
+            "description": "29 Miles SW from Price, UT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22120",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-UTMLF-005244"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-30T21:26:00Z",
+					"type": "Point", 
+							"coordinates": [ -111.307967, 39.383 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22202",
+			"title": "Wildfire Moose Mountain, Clearwater, Idaho",
+            "description": "27 Miles NE from Pierce, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22202",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDNCF-000349"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 660.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-30T12:37:00Z",
+					"type": "Point", 
+							"coordinates": [ -115.2167, 46.774933 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21965",
+			"title": "Wildfire Camden McCarthy Overpass Fire, Camden, Georgia",
+            "description": "3 Miles NE from Woodbine, GA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21965",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-GAGAS-042702"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 600.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-30T00:14:00Z",
+					"type": "Point", 
+							"coordinates": [ -81.6666667, 30.9780556 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22448",
+			"title": "Wildfire Lake Channel, Power, Idaho",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22448",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDTFD-000999"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2516.39,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-29T21:36:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.020005, 42.665061 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22608",
+			"title": "Wildfire Grotto, Idaho, Idaho",
+            "description": "20 Miles E from Lowell, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22608",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDNCF-000348"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 900.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-29T19:57:00Z",
+					"type": "Point", 
+							"coordinates": [ -115.093667, 46.2559 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22123",
+			"title": "Wildfire Skillet, Lincoln, Montana",
+            "description": "15 Miles W from Olney, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22123",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTFNF-000306"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1318.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-29T18:55:00Z",
+					"type": "Point", 
+							"coordinates": [ -114.86665, 48.491333 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21968",
+			"title": "Wildfire Duhamel, Pennington, South Dakota",
+            "description": "40 Miles N from Wall, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21968",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDPNX-260761"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 531.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-29T18:24:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.269833, 44.437 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21976",
+			"title": "Wildfire HOLEY LAND (6), Broward, Florida",
+            "description": "53 Miles NW from MIA AIRPORT, FL",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21976",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-FLFLS-261800117"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3900.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-28T19:53:00Z",
+					"type": "Point", 
+							"coordinates": [ -80.8119444, 26.26 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22118",
+			"title": "Wildfire Rio Blanco, Archuleta, Colorado",
+            "description": "10 Miles S from Pagosa Springs, CO",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22118",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-COSJF-000806"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1083.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-28T17:28:00Z",
+					"type": "Point", 
+							"coordinates": [ -106.985207, 37.124649 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21977",
+			"title": "Wildfire L 28, Broward, Florida",
+            "description": "20 Miles NW from Pembroke Pines, FL",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21977",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-FLSET-002349"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-28T09:53:00Z",
+					"type": "Point", 
+							"coordinates": [ -80.8295, 26.240333 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21966",
+			"title": "Wildfire Widemouth 2, Millard, Utah",
+            "description": "2 Miles SW from Kanosh, UT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21966",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-UTFIF-260341"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 5926.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T19:19:00Z",
+					"type": "Point", 
+							"coordinates": [ -112.498983, 38.728917 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21973",
+			"title": "Wildfire Potato Creek, Jackson, South Dakota",
+            "description": "13 Miles NE from Kyle, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21973",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDPRA-000126"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 9000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T17:22:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.0730299, 43.56335643 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21971",
+			"title": "Wildfire FISH, Kern, California",
+            "description": "3 Miles NW from HART FLAT, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21971",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CAKRN-031524"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4201.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T15:11:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.65, 35.2816667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21969",
+			"title": "Wildfire Rayado Mesa, Colfax, New Mexico",
+            "description": "5 Miles SW from Miami, NM",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21969",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NMN2S-000560"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 934.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T15:09:00Z",
+					"type": "Point", 
+							"coordinates": [ -104.8503, 36.3258 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21829",
+			"title": "Wildfire Fairpoint, Meade, South Dakota",
+            "description": "3 Miles W from Fairpoint, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21829",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-SDSDS-260728"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 510.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T11:21:00Z",
+					"type": "Point", 
+							"coordinates": [ -102.8436111, 44.7638889 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21972",
+			"title": "Wildfire Kohns, Campbell, Wyoming",
+            "description": "20 Miles NE from Gillette, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21972",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYCMX-000338"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2700.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T10:36:00Z",
+					"type": "Point", 
+							"coordinates": [ -105.096105, 44.456138 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21835",
+			"title": "Wildfire Twin Butte Ck, Corson, South Dakota",
+            "description": " ",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21835",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NDSRA-000101"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 890.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-27T00:31:00Z",
+					"type": "Point", 
+							"coordinates": [ -101.8215463, 45.50605836 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22122",
+			"title": "Wildfire Moose, Granite, Montana",
+            "description": "24 Miles SW from Philipsburg, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22122",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTBDF-266293"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 594.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T18:07:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.69075, 46.0722 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21821",
+			"title": "Wildfire SINLAHEKIN, Okanogan, Washington",
+            "description": "12 Miles W from TONASKET, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21821",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001791"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 939.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T17:21:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.693117, 48.704617 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21856",
+			"title": "Wildfire RANSIER, Yakima, Washington",
+            "description": "2 Miles S from White Swan, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21856",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAYAA-000072"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T16:56:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.742096, 46.366533 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21846",
+			"title": "Wildfire Alice, Harding, South Dakota",
+            "description": "32 Miles NW from Camp Crook, SD",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21846",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTMCD-000565"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T15:42:00Z",
+					"type": "Point", 
+							"coordinates": [ -103.533033, 45.85795 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21859",
+			"title": "Wildfire KAWAIHAE ROAD, Hawaii, Hawaii",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21859",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-HIHAWX-001140"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T15:26:00Z",
+					"type": "Point", 
+							"coordinates": [ -155.792517, 20.01978 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21818",
+			"title": "Wildfire Chimney, Elko, Nevada",
+            "description": "16 Miles SE from Midas, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21818",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVEKD-010352"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 12000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T12:37:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.988933, 41.441783 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21819",
+			"title": "Wildfire New Pass, Churchill, Nevada",
+            "description": "30 Miles NW from Austin, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21819",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVCCD-030614"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 5000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T12:28:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.486992, 39.698784 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21831",
+			"title": "Wildfire SR - Buffalo, Sheridan, Wyoming",
+            "description": "32 Miles E from Sheridan, WY",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21831",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WYSHX-000328"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1200.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T09:17:00Z",
+					"type": "Point", 
+							"coordinates": [ -106.320165, 44.792721 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21861",
+			"title": "Wildfire Island, La Paz, Arizona",
+            "description": "7 Miles S from Cibola, AZ",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21861",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-AZCBR-000843"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2815.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-26T02:14:00Z",
+					"type": "Point", 
+							"coordinates": [ -114.681482, 33.279651 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21813",
+			"title": "Wildfire Secret Pass, Elko, Nevada",
+            "description": "30 Miles E from Elko, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21813",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVECFX-010343"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4500.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T21:45:00Z",
+					"type": "Point", 
+							"coordinates": [ -115.260002, 40.896454 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21828",
+			"title": "Wildfire Bob Creek, Baker, Oregon",
+            "description": "48 Miles NE from Baker City, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21828",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORVAD-000402"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 600.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T19:38:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.8869, 44.9956 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21850",
+			"title": "Wildfire PEARL HILL, Douglas, Washington",
+            "description": "10 Miles SE from Bridgeport, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21850",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WASPD-260521"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8491.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T18:35:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.613157, 47.983535 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21824",
+			"title": "Wildfire QUAIL SPRINGS, Lincoln, Nevada",
+            "description": "30 Miles W from Alamo, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21824",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVSND-500738"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4450.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T18:31:00Z",
+					"type": "Point", 
+							"coordinates": [ -115.71, 37.4123 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21832",
+			"title": "Wildfire BRADEEN HILL, Stevens, Washington",
+            "description": "17 Miles SW from COLVILLE, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21832",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WANES-001782"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2595.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T17:15:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.114443, 48.312618 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21855",
+			"title": "Incident Complex CINDER COMPLEX, Inyo, California",
+            "description": "5 Miles S from Bishop, CA 5 Miles S from Bishop, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21855",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CABDU-011401"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2784.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T14:30:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.2569444, 36.9983333 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21817",
+			"title": "Wildfire Coleman Creek, Harney, Oregon",
+            "description": "15 Miles E from Juntura/Riverside, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21817",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORBUD-002696"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 34000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T11:35:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.303917, 43.589733 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21816",
+			"title": "Wildfire PEER, Owyhee, Idaho",
+            "description": "80 Miles S from BOISE, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21816",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDBOD-000764"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1324.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T10:13:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.91625, 42.5184 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21848",
+			"title": "Wildfire 4-May, Inyo, California",
+            "description": "null Miles null from null, ",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21848",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CABDU-011386"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1318.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T02:54:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.258, 37.015833 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21854",
+			"title": "Wildfire 3-May, Inyo, California",
+            "description": "null Miles null from null, ",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21854",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CABDU-011385"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 744.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-25T02:54:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.284, 36.996167 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21839",
+			"title": "Wildfire Jackass Butte, Harney, Oregon",
+            "description": "40 Miles S from Burns, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21839",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORBUD-002694"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 18539.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T22:40:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.955667, 43.045 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21862",
+			"title": "Wildfire Locust Grove, Benton, Washington",
+            "description": "3 Miles S from Kennewick, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21862",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-000711"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 750.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T21:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.1411111, 46.1497222 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22098",
+			"title": "Wildfire Doublesprings, Custer, Idaho",
+            "description": "31 Miles NW from Mackay, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22098",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDSCF-260103"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 600.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T20:46:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.859033, 44.325217 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21844",
+			"title": "Wildfire Second Flat, Harney, Oregon",
+            "description": "6 Miles NE from Riley, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21844",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORBUD-002693"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 76958.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T20:07:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.439167, 43.608667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21823",
+			"title": "Wildfire Signal Peak, Yakima, Washington",
+            "description": "1 Miles S from White Swan, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21823",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAYAA-000069"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 3000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T19:10:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.732219, 46.362281 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21836",
+			"title": "Wildfire HAT, Malheur, Oregon",
+            "description": "40 Miles E from BURNS, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21836",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORVAD-260207"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 42000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T18:58:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.1498, 43.274667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21970",
+			"title": "Wildfire Elder 1, Missoula, Montana",
+            "description": "6 Miles SW from Frenchtown, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21970",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTLNF-260296"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 923.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T18:11:00Z",
+					"type": "Point", 
+							"coordinates": [ -114.320867, 46.94 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22930",
+			"title": "Wildfire Three Links, Idaho, Idaho",
+            "description": "20 Miles E from Lowell, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22930",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDNCF-000330"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 510.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T18:03:00Z",
+					"type": "Point", 
+							"coordinates": [ -115.117667, 46.149833 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21975",
+			"title": "Wildfire Silvertip, Flathead, Montana",
+            "description": "30 Miles NE from Condon, MT",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21975",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-MTFNF-000280"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 4126.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T17:28:00Z",
+					"type": "Point", 
+							"coordinates": [ -113.2735, 47.8355 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21864",
+			"title": "Wildfire 8 MILE, Wasco, Oregon",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21864",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR954S-000699"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 532.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T17:04:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.245917, 45.462631 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22102",
+			"title": "Wildfire MOUSE MEADOW, Nye, Nevada",
+            "description": "35 Miles SW from Rachel, NV",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22102",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-NVNAFQ-500729"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 37553.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T16:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.157567, 37.2667 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21843",
+			"title": "Wildfire 0611 GREEN MOUNTAIN, Crook, Oregon",
+            "description": "11 Miles N from Prineville, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21843",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OROCF-000611"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 2136.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T13:51:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.691883, 44.441967 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21822",
+			"title": "Wildfire Tartar, Washington, Idaho",
+            "description": "21 Miles NW from Weiser, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21822",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDBOD-265460"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 10399.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-24T13:24:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.093, 44.541333 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21842",
+			"title": "Wildfire GRASSHOPPER, Wasco, Oregon",
+            "description": "3 Miles N from Sportsman Park, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21842",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORMHF-000688"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 15000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T23:39:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.510133, 45.252967 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21826",
+			"title": "Wildfire FOX, Baker, Oregon",
+            "description": "12 Miles NE from Huntington, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21826",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORVAD-260204"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 26445.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T23:32:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.212967, 44.523917 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22441",
+			"title": "Wildfire HIGH LAVA, Skamania, Washington",
+            "description": "11 Miles NW from Stabler, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22441",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAGPF-000684"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 878.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T23:02:00Z",
+					"type": "Point", 
+							"coordinates": [ -122.116167, 45.8805 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21860",
+			"title": "Wildfire DUNCAN, Owyhee, Idaho",
+            "description": "50 Miles SW from MOUNTAIN HOME, ID",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21860",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-IDBOD-000742"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 16362.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T21:59:00Z",
+					"type": "Point", 
+							"coordinates": [ -116.087768, 42.579329 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21857",
+			"title": "Wildfire Beachcomb, Jefferson, Oregon",
+            "description": "4 Miles S from Warm Springs, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21857",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORWSA-000101"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 13648.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T21:57:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.404444, 44.695278 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21853",
+			"title": "Wildfire 0567 LITTLE BUCK, Wasco, Oregon",
+            "description": "21 Miles W from Fossil, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21853",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORPRD-000567"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 25772.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T21:50:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.646917, 45.0403 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21840",
+			"title": "Wildfire Bald Mountain, Harney, Oregon",
+            "description": "50 Miles SE from Burns, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21840",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORBUD-002687"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 25992.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T20:52:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.474267, 42.995608 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21841",
+			"title": "Wildfire Stubble, Harney, Oregon",
+            "description": "15 Miles SW from Lawen, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21841",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORMAR-002683"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 15673.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T18:23:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.92, 43.18 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21845",
+			"title": "Wildfire Bench, Jefferson, Oregon",
+            "description": "4 Miles S from Warm Springs, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21845",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORWSA-000100"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 20180.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T18:13:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.350222, 44.631778 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21837",
+			"title": "Wildfire 0587 SHINGLE, Wheeler, Oregon",
+            "description": "14 Miles SE from Mitchell, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21837",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-OR953S-000587"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 53976.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T16:58:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.8976, 44.468717 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21834",
+			"title": "Wildfire FIELDS, Merced, California",
+            "description": "10 Miles NW from SNELLING, CA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21834",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-CAMMU-015106"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1280.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T16:53:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.429683, 37.528023 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21827",
+			"title": "Wildfire BIG GRASS, Malheur, Oregon",
+            "description": "25 Miles SW from JORDAN VALLEY, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21827",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORVAD-260201"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 280000.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T16:43:00Z",
+					"type": "Point", 
+							"coordinates": [ -117.30335, 42.6498 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21852",
+			"title": "Wildfire 0584 COTTONWOOD, Gilliam, Oregon",
+            "description": "16 Miles SE from Wasco, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21852",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORPRD-000584"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 15234.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T13:20:00Z",
+					"type": "Point", 
+							"coordinates": [ -120.426363, 45.453409 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21584",
+			"title": "Wildfire 0579 TEN MILE, Jefferson, Oregon",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21584",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORPRD-000579"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 800.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T11:55:00Z",
+					"type": "Point", 
+							"coordinates": [ -121.014327, 44.796442 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21576",
+			"title": "Wildfire RAILROAD, Grant, Washington",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21576",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WAWFS-260500"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 660.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T10:05:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.939349, 46.839052 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_22130",
+			"title": "Wildfire RAILROAD, Grant, Washington",
+            "description": "9 Miles N from Mattawa, WA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_22130",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-WASPD-260500"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 8216.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T10:05:00Z",
+					"type": "Point", 
+							"coordinates": [ -119.939349, 46.839052 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21838",
+			"title": "Wildfire Crater, Harney, Oregon",
+            "description": "35 Miles S from Burns, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21838",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORBUD-002680"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 745.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T05:04:00Z",
+					"type": "Point", 
+							"coordinates": [ -118.803383, 43.11995 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21825",
+			"title": "Wildfire Castle, Douglas, Oregon",
+            "description": "23 Miles NE from Tiller, OR",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21825",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-ORUPF-260297"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1400.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-23T00:22:00Z",
+					"type": "Point", 
+							"coordinates": [ -122.563283, 43.114033 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21577",
+			"title": "Wildfire Gypsum Creek, King, Texas",
+            "description": null,
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21577",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-266131"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 530.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-22T19:04:00Z",
+					"type": "Point", 
+							"coordinates": [ -100.0410599, 33.46780108 ]
+							}
+
+						
+			]
+		},
+
+			{
+			"id": "EONET_21575",
+			"title": "Wildfire West Blue Crab, Cameron, Louisiana",
+            "description": "10 Miles S from Coastal Marsh, LA",
+			"link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_21575",
+			"closed": null,
+				"categories": [
+					{
+					"id": "wildfires",
+					"title": "Wildfires"
+				}
+
+	    				],
+    			"sources": [
+					{
+					"id": "IRWIN",
+					"url": "https://irwin.doi.gov/observer/incidents/2026-LASBR-000235"
+				}
+
+						
+			],
+					"geometry": [
+					{
+							"magnitudeValue": 1382.00,
+					"magnitudeUnit": "acres",
+					"date": "2026-07-22T19:02:00Z",
+					"type": "Point", 
+							"coordinates": [ -93.42765, 29.880643 ]
+							}
+
+						
+			]
+		}
+
+		]
+}

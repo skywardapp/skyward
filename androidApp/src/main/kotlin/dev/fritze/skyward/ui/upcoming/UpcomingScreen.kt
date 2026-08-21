@@ -25,11 +25,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -60,10 +64,12 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
+fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit, onOpenLocations: () -> Unit) {
     val context = LocalContext.current
     val viewModel: UpcomingViewModel = viewModel { UpcomingViewModel(container) }
     val state by viewModel.uiState.collectAsState()
+    val refreshMessage by viewModel.refreshMessage.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val versionCode = remember(context) { appVersionCode(context) }
     var showExactAlarmCard by remember { mutableStateOf(false) }
@@ -84,10 +90,21 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
         refreshPermissionCards()
     }
 
+    // A refresh that could not reach a source has nowhere else to say so: the
+    // list looks the same either way, and `runDue` has already swallowed the
+    // failure into diagnostics (#71). The snackbar is dismissed by showing it
+    // — a stale "couldn't reach NOAA" would outlive the outage it describes.
+    LaunchedEffect(refreshMessage) {
+        val message = refreshMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message, withDismissAction = true)
+        viewModel.clearRefreshMessage()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("Upcoming") })
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // One problem at a time, the fatal one first: while nothing can be
@@ -141,6 +158,7 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
                     state.auroraBanner?.let { banner ->
                         AuroraNowcastBanner(
                             banner = banner,
+                            liveKpFailed = state.liveKpFailed,
                             onClick = { onOpenEvent(banner.occurrenceId) },
                         )
                     }
@@ -151,7 +169,12 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
                         ) {
                             CircularProgressIndicator(Modifier.padding(16.dp))
                         }
-                        state.items.isEmpty() -> EmptyState(state.filter.scope, Modifier.weight(1f))
+                        state.items.isEmpty() -> EmptyState(
+                            scope = state.filter.scope,
+                            hasLocations = state.hasLocations,
+                            onOpenLocations = onOpenLocations,
+                            modifier = Modifier.weight(1f),
+                        )
                         else -> LazyColumn(
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(16.dp),
@@ -231,18 +254,58 @@ private fun FilterRow(
     }
 }
 
+/**
+ * An empty list has more than one cause, and they need different answers
+ * (#71). "No saved location" is the one the user can act on and the one
+ * onboarding can leave behind — skipping the location step is an offered
+ * path, and Locations then sits two levels down under Settings, which is
+ * nowhere near where someone looking at an empty home screen would think to
+ * go. Desktop's Overview has drawn this distinction since M6; this is the
+ * Android half.
+ */
 @Composable
-private fun EmptyState(scope: UpcomingScope, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            if (scope == UpcomingScope.MATCHED) "Nothing matches your rules yet." else "Nothing in your horizon yet.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
+private fun EmptyState(
+    scope: UpcomingScope,
+    hasLocations: Boolean,
+    onOpenLocations: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (!hasLocations) {
+            Text("No saved locations yet.", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Visibility is always computed for a place, so Skyward needs one before it can " +
+                    "tell you what is worth going outside for.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+            Button(onClick = onOpenLocations, modifier = Modifier.padding(top = 12.dp)) {
+                Text("Add a location")
+            }
+        } else {
+            Text(
+                if (scope == UpcomingScope.MATCHED) "Nothing matches your rules yet." else "Nothing in your horizon yet.",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                if (scope == UpcomingScope.MATCHED) {
+                    "Switch to \"All\" to see everything in the horizon window."
+                } else {
+                    "Pull down to refresh — sources are polled on their own schedule."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
 @Composable
-private fun AuroraNowcastBanner(banner: AuroraBannerUiState, onClick: () -> Unit) {
+private fun AuroraNowcastBanner(banner: AuroraBannerUiState, liveKpFailed: Boolean, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -254,7 +317,10 @@ private fun AuroraNowcastBanner(banner: AuroraBannerUiState, onClick: () -> Unit
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                banner.currentKp?.let { "Kp ${it.oneDecimal()} estimated now." } ?: "Live Kp unavailable.",
+                banner.currentKp?.let { "Kp ${it.oneDecimal()} estimated now." }
+                    // "Unavailable" with no reason reads as a bug in Skyward
+                    // rather than as an unreachable NOAA (#71).
+                    ?: if (liveKpFailed) "Live Kp unavailable — couldn't reach NOAA SWPC." else "Live Kp unavailable.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(

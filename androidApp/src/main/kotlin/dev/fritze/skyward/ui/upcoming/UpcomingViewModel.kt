@@ -2,6 +2,7 @@ package dev.fritze.skyward.ui.upcoming
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.fritze.skyward.core.format.refreshFailureMessage
 import dev.fritze.skyward.core.model.AuroraForecastKind
 import dev.fritze.skyward.core.model.AuroraPayload
 import dev.fritze.skyward.core.model.LocalDetails
@@ -25,6 +26,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
@@ -41,6 +43,20 @@ data class UpcomingUiState(
     val filter: UpcomingFilter = UpcomingFilter(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
+    /**
+     * Whether any location is saved at all. The empty list means two very
+     * different things — "nothing is coming up" and "Skyward has nowhere to
+     * compute visibility for" — and only the second one is the user's to fix
+     * (#71). Onboarding lets location be skipped, so it is a reachable state,
+     * not a theoretical one.
+     */
+    val hasLocations: Boolean = false,
+    /**
+     * The last live-Kp fetch failed, as opposed to having returned nothing.
+     * The nowcast banner says "Live Kp unavailable" either way; this is what
+     * lets it say *why*.
+     */
+    val liveKpFailed: Boolean = false,
     /**
      * The instant this state was computed for. Carried into the state rather
      * than read at render time so that a card's countdown (§13.2) is part of
@@ -80,6 +96,17 @@ class UpcomingViewModel(
     private val filter = MutableStateFlow(UpcomingFilter())
     private val refreshing = MutableStateFlow(false)
     private val liveKp = MutableStateFlow<KpEstimate?>(null)
+    private val liveKpFailed = MutableStateFlow(false)
+
+    /**
+     * §13.2: a transient line for the surface that has no other way to speak —
+     * pull-to-refresh. `runDue` deliberately swallows a source's failure into
+     * its diagnostics and carries on (§6.2), so without this the spinner just
+     * stops and the screen looks unchanged whether the refresh reached NOAA or
+     * never left the device. Cleared by the screen once shown.
+     */
+    private val _refreshMessage = MutableStateFlow<String?>(null)
+    val refreshMessage: StateFlow<String?> = _refreshMessage.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -99,9 +126,10 @@ class UpcomingViewModel(
             UpcomingBaseState(occurrences, locations, rules, currentFilter, isRefreshing)
         },
         liveKp,
-    ) { base, currentKp ->
-        base to currentKp?.estimatedKp
-    }.flatMapLatest { (base, currentKp) ->
+        liveKpFailed,
+    ) { base, currentKp, kpFailed ->
+        Triple(base, currentKp?.estimatedKp, kpFailed)
+    }.flatMapLatest { (base, currentKp, kpFailed) ->
         // §7.3.2 rewrites the grid only as part of a source run, which reaches
         // us as an occurrence emission anyway — so it is read once per input
         // change here rather than once per tick below.
@@ -115,7 +143,7 @@ class UpcomingViewModel(
         val cachedModels = cache.wrap(container.visibilityModels)
         // Every emission above restarts the ticking, which is exactly what
         // `flatMapLatest` is for: fresh inputs mean fresh boundaries.
-        upcomingStatesOverTime(base, currentKp, ovationGrid, cachedModels, clock)
+        upcomingStatesOverTime(base, currentKp, ovationGrid, cachedModels, clock, kpFailed)
             .onEach {
                 // Snapshot before persisting and clear only what actually made
                 // it to the DB: `dirty` only grows otherwise, and this flow
@@ -143,15 +171,36 @@ class UpcomingViewModel(
         viewModelScope.launch {
             refreshing.value = true
             try {
-                container.sourceRunner.runDue(
-                    clock.now(),
-                    force = enabledPolledSourceIds(container.polledSources),
-                )
+                val forced = enabledPolledSourceIds(container.polledSources)
+                container.sourceRunner.runDue(clock.now(), force = forced)
                 refreshLiveKp()
+                _refreshMessage.value = refreshFailureMessage(failedSourceIds(forced))
             } finally {
                 refreshing.value = false
             }
         }
+    }
+
+    /** Dismissal is the screen's business: the message is shown once, then gone. */
+    fun clearRefreshMessage() {
+        _refreshMessage.value = null
+    }
+
+    /**
+     * Only the sources this refresh actually ran are asked. Diagnostics
+     * persist across runs, so a source that was not forced would answer with
+     * its *last* run's verdict — reporting a failure the user has already
+     * seen, or worse, one they already fixed.
+     */
+    private suspend fun failedSourceIds(forced: Set<String>): List<String> = buildList {
+        for (source in container.polledSources) {
+            if (source.id in forced && container.sourceRunner.getDiagnostics(source.id)?.ok == false) {
+                add(source.id)
+            }
+        }
+        // The banner's live Kp is a second, separate SWPC call (§7.3's nowcast
+        // endpoint), so it can fail while the source run succeeded.
+        if (liveKpFailed.value && SWPC_SOURCE_ID !in this) add(SWPC_SOURCE_ID)
     }
 
     private suspend fun enabledPolledSourceIds(polledSources: List<EventSource>): Set<String> =
@@ -162,11 +211,17 @@ class UpcomingViewModel(
         }
 
     private suspend fun refreshLiveKp() {
-        liveKp.value = if (container.settingsRepo.isSourceEnabled(SWPC_SOURCE_ID)) {
-            runCatchingCancellable { KpNowcast.fetchLatest() }.getOrNull()
-        } else {
-            null
+        if (!container.settingsRepo.isSourceEnabled(SWPC_SOURCE_ID)) {
+            liveKp.value = null
+            // A source the user turned off is not a failure to report.
+            liveKpFailed.value = false
+            return
         }
+        val result = runCatchingCancellable { KpNowcast.fetchLatest() }
+        liveKpFailed.value = result.isFailure
+        // A failed fetch keeps the last good estimate rather than blanking the
+        // badge: a Kp from twenty minutes ago is still the best thing known.
+        result.getOrNull()?.let { liveKp.value = it }
     }
 
     private companion object {

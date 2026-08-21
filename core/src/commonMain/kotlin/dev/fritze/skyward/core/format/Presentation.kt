@@ -30,8 +30,10 @@ import kotlin.time.Instant
  * to a desktop pane that formats both. A frontend may lay these out
  * differently — P2 says it may not word them differently.
  *
- * Everything here is a pure `String` function of already-computed domain
- * values; no domain logic lives in this file (§4.2).
+ * Everything here is a pure presentation helper over already-computed domain
+ * values; no domain logic lives in this file (§4.2). Most return `String`;
+ * [localDetailLines] returns a list of them and [relativeChangeAfter]
+ * returns the instant a caller should recompute at.
  */
 
 /** Kept in one place so the two frontends cannot drift apart on names (§4.1). */
@@ -52,6 +54,26 @@ fun qualityLabel(quality: Quality): String = when (quality) {
     Quality.MARGINAL -> "Marginal"
     Quality.GOOD -> "Good"
     Quality.EXCELLENT -> "Excellent"
+}
+
+/**
+ * The human name for an `EventSource.id`. This existed once per frontend,
+ * byte-identical, under a comment asking the next editor to keep it that way
+ * — the same §4.1 finding as [phenomenonLabel], one file later.
+ *
+ * Unknown ids fall through to the id itself: a source added to `:core` and
+ * not yet named here should read as an unfamiliar row in Settings, not
+ * vanish behind a blank label.
+ */
+fun sourceDisplayName(id: String): String = when (id) {
+    "swpc" -> "Aurora (NOAA SWPC)"
+    "jpl" -> "Comets (JPL)"
+    "eonet" -> "Terrestrial events (NASA EONET)"
+    "eclipse" -> "Eclipses"
+    "meteors" -> "Meteor showers"
+    "moon" -> "Moon events"
+    "conjunctions" -> "Conjunctions"
+    else -> id
 }
 
 /** §6.1's [Certainty], phrased as the promise it actually makes to the user. */

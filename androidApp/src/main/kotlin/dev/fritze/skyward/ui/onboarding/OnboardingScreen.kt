@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -32,8 +33,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.CoordinateAxis
+import dev.fritze.skyward.core.format.parseCoordinate
+import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.data.AppContainer
-import dev.fritze.skyward.ui.common.rememberLocationPermissionRequester
+import dev.fritze.skyward.ui.common.CoordinateEntrySection
 import kotlinx.coroutines.launch
 
 private enum class OnboardingStep { WELCOME, LOCATION, NOTIFICATIONS, EXACT_ALARM, RULES_PREVIEW }
@@ -65,10 +69,20 @@ fun OnboardingScreen(container: AppContainer, onDone: () -> Unit) {
     }
 
     Scaffold { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Scrollable: the location step's fields now carry a hint line each,
+        // and a failure message can appear above them -- enough to push
+        // "Continue" off a short screen or under a raised keyboard.
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             if (finishFailed) {
+                // The write this reports is `locationRepo.upsert`, a local
+                // SQLDelight transaction -- Skyward talks to no backend at all
+                // (P1), so blaming the network sent users to fix the one thing
+                // that could not have been involved.
                 Text(
-                    "Couldn't save your location -- check your connection and try again.",
+                    "Couldn't save your location to this device — try again.",
                     color = MaterialTheme.colorScheme.error,
                 )
             }
@@ -96,25 +110,22 @@ private fun LocationStep(viewModel: OnboardingViewModel, onNext: () -> Unit) {
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
 
-    val requestLocation = rememberLocationPermissionRequester { point ->
-        if (point != null) {
-            lat = point.latDeg.toString()
-            lon = point.lonDeg.toString()
-        }
-    }
-
     Text("Add your first location", style = MaterialTheme.typography.headlineSmall)
     Text("Skyward computes visibility from wherever you tell it — manual entry works fine, no permission required.")
-    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(value = lat, onValueChange = { lat = it }, label = { Text("Latitude") }, modifier = Modifier.fillMaxWidth())
-    OutlinedTextField(value = lon, onValueChange = { lon = it }, label = { Text("Longitude") }, modifier = Modifier.fillMaxWidth())
-    OutlinedButton(onClick = requestLocation) { Text("Use current location") }
+    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    CoordinateEntrySection(
+        latText = lat,
+        lonText = lon,
+        onLatChange = { lat = it },
+        onLonChange = { lon = it },
+        modifier = Modifier.fillMaxWidth(),
+    )
 
-    val latValue = lat.toDoubleOrNull()
-    val lonValue = lon.toDoubleOrNull()
+    val latValue = parseCoordinate(lat, CoordinateAxis.LATITUDE).degrees
+    val lonValue = parseCoordinate(lon, CoordinateAxis.LONGITUDE).degrees
     Button(
         onClick = {
-            if (latValue != null && lonValue != null) viewModel.addFirstLocation(name.ifBlank { "Home" }, dev.fritze.skyward.core.model.GeoPoint(latValue, lonValue))
+            if (latValue != null && lonValue != null) viewModel.addFirstLocation(name.ifBlank { "Home" }, GeoPoint(latValue, lonValue))
             onNext()
         },
         enabled = latValue != null && lonValue != null,
