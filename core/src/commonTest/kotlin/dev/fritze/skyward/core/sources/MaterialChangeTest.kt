@@ -73,6 +73,35 @@ class MaterialChangeTest {
     }
 
     @Test
+    fun cometElementsChangingIsMaterial() {
+        val elements = CometElements(now, 0.9, 1.0, 0.0, 0.0, 0.0, now)
+        val refinedElements = elements.copy(inclinationDeg = 0.01)
+        fun cometOcc(el: CometElements) = Occurrence(
+            id = "cm:test", phenomenon = Phenomenon.COMET, sourceId = "jpl", title = "t",
+            window = TimeWindow(now, now + 1.days), peakTime = now, certainty = Certainty.FORECAST,
+            payload = CometPayload("C/test", null, el, CometMagParams(4.0, 4.5), now, 4.0, now, magAtIngest = 4.0),
+            fetchedAt = now, expiresAt = null,
+        )
+        assertTrue(
+            isMaterialChange(cometOcc(elements), cometOcc(refinedElements)),
+            "an SBDB orbit refinement can shift bestViewingStart even with peakMagDate unchanged (issue #106)",
+        )
+        assertFalse(isMaterialChange(cometOcc(elements), cometOcc(elements.copy())))
+    }
+
+    @Test
+    fun cometMagParamsChangingAloneIsNotMaterial() {
+        val elements = CometElements(now, 0.9, 1.0, 0.0, 0.0, 0.0, now)
+        fun cometOcc(mp: CometMagParams) = Occurrence(
+            id = "cm:test", phenomenon = Phenomenon.COMET, sourceId = "jpl", title = "t",
+            window = TimeWindow(now, now + 1.days), peakTime = now, certainty = Certainty.FORECAST,
+            payload = CometPayload("C/test", null, elements, mp, now, 4.0, now, magAtIngest = 4.0),
+            fetchedAt = now, expiresAt = null,
+        )
+        assertFalse(isMaterialChange(cometOcc(CometMagParams(4.0, 4.5)), cometOcc(CometMagParams(5.0, 6.0))))
+    }
+
+    @Test
     fun fetchedAtChangingAloneIsNotMaterial() {
         val a = eclipseOcc(now)
         val b = a.copy(fetchedAt = now + 1.days)
