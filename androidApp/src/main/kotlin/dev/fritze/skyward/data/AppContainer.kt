@@ -104,7 +104,7 @@ class AppContainer(context: Context) {
     /** §9.7: recompute the desired/reconciled notification set and sync it onto real OS alarms. */
     suspend fun replanAndSync(now: Instant = Clock.System.now()) {
         val reconciled = replanCoordinator.replan(now)
-        AlarmSyncer.sync(reconciled, alarmScheduler, notificationRepo, now)
+        AlarmSyncer.sync(reconciled, alarmScheduler, notificationRepo, occurrenceRepo, now)
     }
 
     /**
