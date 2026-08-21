@@ -1,4 +1,4 @@
-# ADR 0010: `verifyMigrations` stays off until the schema's first post-release change
+# ADR 0011: `verifyMigrations` stays off until the schema's first post-release change
 
 **Status:** Accepted; revisit at the first migration
 

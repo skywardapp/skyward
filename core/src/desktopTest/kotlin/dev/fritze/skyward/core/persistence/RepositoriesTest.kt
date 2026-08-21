@@ -210,6 +210,12 @@ class RepositoriesTest {
         repo.setExactAlarmCardDismissedVersion(123L)
         assertEquals(123L, repo.getExactAlarmCardDismissedVersion())
 
+        // §13's "dark theme default-follows-system" rests on an unset theme
+        // reading back as SYSTEM rather than LIGHT.
+        assertEquals(ThemeChoice.SYSTEM, repo.observeTheme().first(), "theme defaults to following the system")
+        repo.setTheme(ThemeChoice.DARK)
+        assertEquals(ThemeChoice.DARK, repo.observeTheme().first())
+
         repo.set("custom", "value")
         assertEquals("value", repo.get("custom"))
         assertEquals(
@@ -218,6 +224,12 @@ class RepositoriesTest {
                 "onboarding_done" to "true",
                 "source.swpc.enabled" to "false",
                 "exact_alarm_card_dismissed_version" to "123",
+                // Pins the raw key and value, not just the typed pair above:
+                // the desktop settings screen reads `settings["theme"]`
+                // straight out of this map and §12's sync file ships it
+                // verbatim to the other platform, so a rename would break both
+                // while the typed round trip still passed.
+                "theme" to "DARK",
                 "custom" to "value",
             ),
             repo.observeAll().first(),

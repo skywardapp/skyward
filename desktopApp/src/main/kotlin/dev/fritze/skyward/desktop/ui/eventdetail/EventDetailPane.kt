@@ -34,11 +34,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
+import dev.fritze.skyward.core.format.COMET_DEVIATION_CAVEAT
+import dev.fritze.skyward.core.format.certaintyLabel
+import dev.fritze.skyward.core.format.cometElementsLine
+import dev.fritze.skyward.core.format.cometMagnitudeLine
 import dev.fritze.skyward.core.format.compassOf
 import dev.fritze.skyward.core.format.formatDateTime
-import dev.fritze.skyward.core.format.formatTime
+import dev.fritze.skyward.core.format.formatDistanceKm
+import dev.fritze.skyward.core.format.formatRelative
+import dev.fritze.skyward.core.format.localDetailLines
 import dev.fritze.skyward.core.format.phenomenonLabel
-import dev.fritze.skyward.core.model.Certainty
+import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.model.CometPayload
 import dev.fritze.skyward.core.model.LocalDetails
 import dev.fritze.skyward.core.model.Occurrence
@@ -51,14 +57,9 @@ import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.desktop.ui.DesktopAppState
-import dev.fritze.skyward.desktop.ui.common.formatDegrees
-import dev.fritze.skyward.desktop.ui.common.formatDistanceKm
-import dev.fritze.skyward.desktop.ui.common.formatPercent
-import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.openInBrowser
 import dev.fritze.skyward.desktop.ui.rules.describeLead
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
-import dev.fritze.skyward.desktop.ui.theme.qualityLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
@@ -194,7 +195,7 @@ private fun DetailHeader(state: DesktopAppState, occurrence: Occurrence, now: In
         Column(Modifier.weight(1f)) {
             Text(occurrence.title, style = MaterialTheme.typography.headlineSmall)
             Text(
-                "${phenomenonLabel(occurrence.phenomenon)} · ${occurrence.certainty.describe()}",
+                "${phenomenonLabel(occurrence.phenomenon)} · ${certaintyLabel(occurrence.certainty)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -253,7 +254,7 @@ private fun LocationVisibilityCard(state: DesktopAppState, location: SavedLocati
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            localDetailLines(visres.localDetails, state).forEach {
+            localDetailLines(visres.localDetails, state.zone).forEach {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -267,18 +268,14 @@ private fun CometHonestyCard(payload: CometPayload, visres: VisibilityResult?, s
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Comet forecast", style = MaterialTheme.typography.titleSmall)
+            Text(cometMagnitudeLine(payload, details, state.zone), style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Predicted magnitude ${details?.predictedMag?.roundTo(1) ?: payload.peakMag.roundTo(1)} " +
-                    "(best ${payload.peakMag.roundTo(1)} around ${formatDateTime(payload.peakMagDate, state.zone)})",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                "From JPL orbital elements of ${formatDateTime(payload.elements.epoch, state.zone)}.",
+                cometElementsLine(payload, details),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Comets often deviate from prediction — treat this as a rough guide, not a guarantee.",
+                COMET_DEVIATION_CAVEAT,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -289,45 +286,6 @@ private fun CometHonestyCard(payload: CometPayload, visres: VisibilityResult?, s
             }
         }
     }
-}
-
-private fun localDetailLines(details: LocalDetails?, state: DesktopAppState): List<String> = when (details) {
-    is LocalDetails.SolarEclipseLocal -> listOfNotNull(
-        "Max ${formatPercent(details.maxObscuration)} obscuration at ${formatTime(details.peak, state.zone)}, sun ${formatDegrees(details.sunAltAtPeakDeg)} up",
-        details.localKind?.let { "Locally: ${it.name.lowercase()}" },
-    )
-    is LocalDetails.LunarEclipseLocal -> listOf(
-        "Visible ${formatTime(details.visiblePhaseStart, state.zone)}–${formatTime(details.visiblePhaseEnd, state.zone)}, " +
-            "moon ${formatDegrees(details.moonAltAtMidDeg)} up at mid-eclipse",
-    )
-    is LocalDetails.MeteorLocal -> listOfNotNull(
-        details.bestViewingStart?.let { start ->
-            "Best ${formatTime(start, state.zone)}–${details.bestViewingEnd?.let { formatTime(it, state.zone) } ?: "dawn"}"
-        },
-        "Radiant up to ${formatDegrees(details.maxRadiantAltDeg)}, Moon ${formatPercent(details.moonIllumination)}",
-    )
-    is LocalDetails.AuroraLocal -> listOfNotNull(
-        "Geomagnetic latitude ${formatDegrees(details.geomagneticLatDeg, 1)} — needs Kp ${details.kpNeeded.roundTo(1)}",
-        details.ovationProbability?.let { "OVATION overhead probability $it %" },
-        details.darknessStart?.let { start ->
-            "Dark ${formatTime(start, state.zone)}–${details.darknessEnd?.let { formatTime(it, state.zone) } ?: "dawn"}"
-        } ?: "No astronomical darkness tonight",
-    )
-    is LocalDetails.CometLocal -> listOfNotNull(
-        "Highest at ${formatDegrees(details.maxAltDeg)}" + (details.maxAltTime?.let { " around ${formatTime(it, state.zone)}" } ?: ""),
-    )
-    is LocalDetails.GenericLocal -> listOf(details.note)
-    null -> emptyList()
-}
-
-private fun Certainty.describe() = when (this) {
-    Certainty.CERTAIN -> "Ephemeris-derived"
-    Certainty.FORECAST -> "Forecast — may change"
-}
-
-private fun Double.roundTo(decimals: Int): Double {
-    val factor = if (decimals == 1) 10.0 else 100.0
-    return kotlin.math.round(this * factor) / factor
 }
 
 internal fun muteRuleId(occurrenceId: String) = "mute:$occurrenceId"
