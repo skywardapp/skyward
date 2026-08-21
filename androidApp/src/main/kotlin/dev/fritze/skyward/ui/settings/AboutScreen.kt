@@ -1,13 +1,15 @@
 package dev.fritze.skyward.ui.settings
 
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -19,31 +21,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.BuildConfig
-
-private data class Attribution(val component: String, val license: String, val note: String)
-
-// §16's table, condensed for the About screen; the full table + NOTICE file is the source of truth.
-private val ATTRIBUTIONS = listOf(
-    Attribution("Astronomy Engine (Don Cross)", "MIT", "Core ephemeris calculations"),
-    Attribution("Stellarium meteor-shower catalog", "GPL-2.0-or-later", "Meteor shower data from the Stellarium project"),
-    Attribution("Natural Earth 1:50m", "Public domain", "Made with Natural Earth"),
-    Attribution("NOAA SWPC (Kp, OVATION)", "US Gov public domain", "Aurora forecast data"),
-    Attribution("NASA EONET", "US Gov / NASA open", "Event data: NASA EONET"),
-    Attribution("NASA/JPL Small-Body Database", "US Gov public domain", "Comet orbital data: NASA/JPL Small-Body Database"),
-    Attribution("NASA GSFC eclipse canon (Espenak & Meeus)", "Free with acknowledgment", "Eclipse predictions courtesy of Fred Espenak and Jean Meeus, NASA/GSFC"),
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val packageInfo = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
+    var showNotice by remember { mutableStateOf(false) }
+    val notice = remember(context) { loadNotice(context) }
 
     Scaffold(
         topBar = {
@@ -54,7 +51,7 @@ fun AboutScreen(onBack: () -> Unit) {
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Skyward", style = MaterialTheme.typography.headlineSmall)
@@ -74,18 +71,42 @@ fun AboutScreen(onBack: () -> Unit) {
 
             HorizontalDivider()
             Text("Attributions", style = MaterialTheme.typography.titleMedium)
-            for (attribution in ATTRIBUTIONS) {
+            Text(
+                "Event data from NOAA SWPC, NASA EONET and NASA/JPL. Eclipse predictions courtesy of Fred Espenak " +
+                    "and Jean Meeus, NASA/GSFC. Meteor shower catalog from the Stellarium project. Ephemeris " +
+                    "calculations by Astronomy Engine (Don Cross). Made with Natural Earth.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(onClick = { showNotice = !showNotice }) {
+                Text(if (showNotice) "Hide third-party notices" else "Third-party notices")
+            }
+            if (showNotice) {
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(attribution.component, style = MaterialTheme.typography.titleSmall)
-                        Text(attribution.license, style = MaterialTheme.typography.bodySmall)
-                        Text(attribution.note, style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text(
+                        notice,
+                        Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
                 }
             }
         }
     }
 }
+
+/**
+ * §16: "`NOTICE` file enumerates the rows below; About screen renders them."
+ *
+ * The screen used to carry its own condensed retyping of §16's table, which
+ * made two sources of truth for a licence obligation — the one place a
+ * divergence is least acceptable and least likely to be noticed. The
+ * repository's `NOTICE` is packaged as an asset instead (see `bundleNotice`
+ * in androidApp/build.gradle.kts), exactly as the desktop app packages it as
+ * a resource, so both frontends render the file the repository ships.
+ */
+private fun loadNotice(context: Context): String =
+    runCatching { context.assets.open("NOTICE").use { it.readBytes().decodeToString() } }
+        .getOrElse { "NOTICE file not bundled in this build." }
 
 // §16/§13.1: GPL §6(d) requires Corresponding Source available from the same
 // place a released build is distributed from, tagged to match versionCode --

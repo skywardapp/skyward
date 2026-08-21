@@ -2,6 +2,7 @@ package dev.fritze.skyward.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.fritze.skyward.core.format.sourceDisplayName
 import dev.fritze.skyward.core.sources.SourceDiagnostics
 import dev.fritze.skyward.data.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +34,7 @@ class SourcesViewModel(private val container: AppContainer) : ViewModel() {
             _rows.value = allSources.map { source ->
                 SourceRow(
                     id = source.id,
-                    displayName = displayName(source.id),
+                    displayName = sourceDisplayName(source.id),
                     polled = source in container.polledSources,
                     enabled = container.settingsRepo.isSourceEnabled(source.id),
                     diagnostics = container.sourceRunner.getDiagnostics(source.id),
@@ -67,16 +68,5 @@ class SourcesViewModel(private val container: AppContainer) : ViewModel() {
             container.sourceRunner.runDue(Clock.System.now(), force = setOf(sourceId))
             reload()
         }
-    }
-
-    private fun displayName(id: String): String = when (id) {
-        "swpc" -> "Aurora (NOAA SWPC)"
-        "jpl" -> "Comets (JPL)"
-        "eonet" -> "Terrestrial events (NASA EONET)"
-        "eclipse" -> "Eclipses"
-        "meteors" -> "Meteor showers"
-        "moon" -> "Moon events"
-        "conjunctions" -> "Conjunctions"
-        else -> id
     }
 }
