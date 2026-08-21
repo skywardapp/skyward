@@ -312,6 +312,26 @@ class PlannerTest {
     }
 
     @Test
+    fun aPendingRowWhoseRecomputedFireTimeLandsInThePastIsCancelledNotFired() {
+        // §6.3 refines the anchor (or a timezone change reshuffles a quiet-hours
+        // deferral) and the same key now resolves to a time that has already
+        // passed. §7.4.3: that lead was in the past the moment it was computed,
+        // so it is dropped -- pushing it into the still-PENDING row would hand it
+        // straight to §10.4's catch-up branch on the next pass and fire it.
+        val home = loc("home", "Home")
+        val theOcc = occ(windowEnd = peak + 3.hours)
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val previous = Planner.desiredNotifications(matches, now, utc) // fires 2026-01-31T12:00Z
+        val movedIntoThePast = previous.map { it.copy(fireAt = now - 1.hours) }
+
+        val result = Planner.reconcile(previous, movedIntoThePast, now, mapOf(theOcc.id to theOcc))
+
+        assertEquals(NotificationStatus.CANCELLED, result.single().status)
+        // ...and it stays cancelled: a second pass must not re-desire it either.
+        assertEquals(result, Planner.reconcile(result, movedIntoThePast, now, mapOf(theOcc.id to theOcc)))
+    }
+
+    @Test
     fun repeatedPlanningWithUnchangedInputsProducesIdenticalDesiredSets() {
         // Regression analog for "two consecutive comet refreshes 30 days
         // apart produce identical peakMagDate and therefore zero re-plans"

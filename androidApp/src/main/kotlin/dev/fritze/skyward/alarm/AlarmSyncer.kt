@@ -64,20 +64,21 @@ object AlarmSyncer {
     }
 
     /**
-     * Read only when something is actually overdue. Most syncs (the daily
-     * top-up, an exact-alarm permission flip) have nothing past due, and the
-     * §10.4 window check is the only thing this whole table is needed for.
+     * Window ends for the overdue rows only — usually none at all, and rarely
+     * more than a couple. Reading the whole table instead would deserialize
+     * every `payload_json` (an eclipse carries its whole sampled `centralPath`,
+     * §7.1.3) to look at one timestamp per row, and this runs inside
+     * `BootReceiver`'s `goAsync()` budget.
      */
     private suspend fun occurrenceWindowEnds(
         reconciled: List<PlannedNotification>,
         occurrenceRepo: OccurrenceRepo,
         now: Instant,
     ): Map<String, Instant> {
-        val anyOverdue = reconciled.any {
-            (it.status == NotificationStatus.PENDING || it.status == NotificationStatus.REGISTERED) && it.fireAt < now
-        }
-        if (!anyOverdue) return emptyMap()
-        return occurrenceRepo.getAll().associate { it.id to it.window.end }
+        val overdue = reconciled
+            .filter { (it.status == NotificationStatus.PENDING || it.status == NotificationStatus.REGISTERED) && it.fireAt < now }
+            .mapTo(mutableSetOf()) { it.occurrenceId }
+        return overdue.mapNotNull { id -> occurrenceRepo.getById(id)?.let { id to it.window.end } }.toMap()
     }
 
     /** An occurrence that has since been withdrawn (§6.3) has no window left to be inside. */

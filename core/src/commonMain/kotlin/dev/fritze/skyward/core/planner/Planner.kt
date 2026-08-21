@@ -170,10 +170,15 @@ object Planner {
                 p.fireAt < now -> catchUpOrMiss(p, stillDesired = d != null, now, occurrencesById)
                 d == null -> p.copy(status = NotificationStatus.CANCELLED)
                 // Same dedup key, still pending, but the desired fire time moved
-                // (e.g. device timezone change shifts a quiet-hours deferral) --
-                // the key doesn't encode `fireAt`, so without this the stale time
-                // would stick forever.
-                d.fireAt != p.fireAt -> p.copy(fireAt = d.fireAt)
+                // (e.g. device timezone change shifts a quiet-hours deferral, or
+                // §6.3 refined the anchor) -- the key doesn't encode `fireAt`, so
+                // without this the stale time would stick forever. A drift *into
+                // the past* is not propagated: that recomputed lead was in the
+                // past the moment it was computed, and §7.4.3 says such a lead is
+                // dropped rather than queued -- pushing it into the row would
+                // hand it to the catch-up branch above on the next pass and fire
+                // it. Dropping an already-queued row means cancelling it.
+                d.fireAt != p.fireAt -> if (now <= d.fireAt) p.copy(fireAt = d.fireAt) else p.copy(status = NotificationStatus.CANCELLED)
                 else -> p // unchanged
             }
         }
