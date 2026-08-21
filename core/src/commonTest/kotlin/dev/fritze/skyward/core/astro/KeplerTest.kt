@@ -189,4 +189,12 @@ class KeplerTest {
         assertEquals(null, solveUniversalAnomaly(1.0, Double.POSITIVE_INFINITY, 0.0))
         assertEquals(null, heliocentricPosition(infiniteEccentricity, infiniteEccentricity.tpPerihelion))
     }
+
+    @Test
+    fun anOverflowingAlphaReturnsNullRatherThanANanPosition() {
+        // A finite e and finite, positive q can still make alpha = (1 - e) /
+        // q overflow: this exercises solveUniversalAnomaly's `!alpha.isFinite()`
+        // guard directly, rather than the `!e.isFinite()` guard above it.
+        assertEquals(null, solveUniversalAnomaly(Double.MIN_VALUE, Double.MAX_VALUE, 50.0))
+    }
 }

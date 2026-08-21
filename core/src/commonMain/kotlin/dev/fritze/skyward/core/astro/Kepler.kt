@@ -145,7 +145,14 @@ internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): Univer
         // days — see KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans)
         // floating-point cancellation keeps |f(x)| a couple of ULPs above
         // KEPLER_TOLERANCE forever even once x itself has stopped moving.
-        if (abs(step) < 1e-12 * maxOf(1.0, abs(x))) return UniversalAnomaly(x, iteration + 1)
+        // A non-finite value or derivative here means the Stumpff overflow
+        // above already forced a finite newtonStep out of an infinite
+        // derivative (see the comment on that overflow) -- a suspiciously
+        // small step from that division is not evidence of convergence, so
+        // don't accept it; let the loop's bracket-based safeguards recover.
+        if (x.isFinite() && value.isFinite() && derivative.isFinite() && abs(step) < 1e-12 * maxOf(1.0, abs(x))) {
+            return UniversalAnomaly(x, iteration + 1)
+        }
 
         val next = f(x)
         value = next.first
