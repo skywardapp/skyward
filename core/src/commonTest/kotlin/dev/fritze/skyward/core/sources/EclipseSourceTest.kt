@@ -7,8 +7,11 @@ import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -26,16 +29,19 @@ class EclipseSourceTest {
 
     private val source = EclipseSource()
 
-    private suspend fun refresh(start: Instant, end: Instant) = source.refresh(
+    private suspend fun refresh(start: Instant, end: Instant, state: Map<String, ByteArray> = emptyMap()) = source.refresh(
         RefreshRequest(
             now = start,
             horizon = TimeWindow(start, end),
             locations = emptyList(),
-            state = emptyMap(),
+            state = state,
             settings = SourceSettings(),
             derivedThresholds = DerivedThresholds(null, null, null),
         )
     )
+
+    private fun RefreshResult.centralPathOf(occurrenceId: String) =
+        (occurrences.first { it.id == occurrenceId }.payload as SolarEclipsePayload).centralPath
 
     @Test
     fun august2026TotalEclipseGreatestPointMatchesPublishedCoordinates() = runTest(timeout = 180.seconds) {
@@ -77,6 +83,89 @@ class EclipseSourceTest {
         for (sample in payload.centralPath) {
             assertTrue(sample.centralDurationSec != null && sample.centralDurationSec > 0.0)
         }
+    }
+
+    /**
+     * §7.1.3's budget — <60 s desktop, <3 min Android — is *per eclipse*, and
+     * it says the sampling is "run once per eclipse, cached". Recomputing it
+     * on every refresh instead is what let a 15-minute periodic pass run for
+     * tens of minutes and take the polled sources down with it (issue #49).
+     *
+     * Also covers the pruning half: the runner upserts `newState` key by key
+     * and never deletes, so a cache that did not drop what fell out of the
+     * horizon would grow without bound.
+     */
+    @Test
+    fun aSecondRefreshReusesTheCachedPathAndDropsEclipsesOutsideTheHorizon() = runTest(timeout = 180.seconds) {
+        val start = Instant.parse("2026-08-01T00:00:00Z")
+        val end = Instant.parse("2026-08-20T00:00:00Z")
+        val first = refresh(start, end)
+        val sampled = first.centralPathOf("se:20260812")
+        assertTrue(sampled.isNotEmpty(), "expected the first refresh to sample a path")
+
+        val (second, elapsed) = measureTimedValue { refresh(start, end, state = first.newState) }
+        assertEquals(sampled, second.centralPathOf("se:20260812"), "a cached path must come back unchanged")
+        // The coarse scan alone is thousands of local-eclipse searches; a
+        // second refresh that took anywhere near that long did not use the
+        // cache, whatever it returned.
+        assertTrue(elapsed.inWholeSeconds < 5, "cached refresh took $elapsed, expected it to skip sampling entirely")
+
+        // A window three years later holds no total or annular eclipse, so
+        // nothing carries 2026's entry forward.
+        val elsewhere = refresh(Instant.parse("2029-01-01T00:00:00Z"), Instant.parse("2029-02-01T00:00:00Z"), state = second.newState)
+        val carried = elsewhere.newState.values.single().decodeToString()
+        assertFalse("se:20260812" in carried, "a path outside the horizon must be dropped, not carried forever")
+    }
+
+    /**
+     * The cache is an optimization; it may never be the reason a refresh
+     * fails. A blob left by an older sampling tuning, or a truncated one,
+     * costs a recompute and nothing else.
+     */
+    @Test
+    fun anUnusableCachedPathBlobFallsBackToSampling() = runTest(timeout = 180.seconds) {
+        val start = Instant.parse("2026-08-01T00:00:00Z")
+        val end = Instant.parse("2026-08-20T00:00:00Z")
+        val garbage = mapOf("central_paths_json" to """{"algorithm":"from-a-future-tuning","paths":{"se:20260812":[]}}""".encodeToByteArray())
+
+        val result = refresh(start, end, state = garbage)
+
+        assertTrue(result.centralPathOf("se:20260812").isNotEmpty(), "a stale fingerprint must trigger a resample, not an empty path")
+        assertEquals(result.centralPathOf("se:20260812"), refresh(start, end, state = result.newState).centralPathOf("se:20260812"))
+    }
+
+    /**
+     * A cached empty path is honoured, deliberately. [samplePath] is a pure
+     * function of the [GlobalSolarEclipseInfo] — same ephemeris, same grid,
+     * same result — so recomputing an empty one cannot turn it non-empty; it
+     * can only spend the thousands of local-eclipse searches this whole cache
+     * exists to avoid, on every daily pass, forever. That is issue #49's own
+     * failure mode. The escape hatch is the fingerprint's leading version
+     * component: a change to the sampling *algorithm* that leaves the four
+     * tuning constants alone must bump it, and then every stored path,
+     * empty ones included, is recomputed.
+     *
+     * (An empty path for a central eclipse is not a case that arises in
+     * practice — all 22 total/annular eclipses between 2026 and 2040 sample
+     * non-empty, the sparsest at 3 points — so this pins the reasoning rather
+     * than a behaviour anything is expected to hit.)
+     */
+    @Test
+    fun aCachedEmptyPathIsReusedRatherThanResampledEveryPass() = runTest(timeout = 180.seconds) {
+        // A window with no central eclipse costs no sampling and still writes a
+        // blob -- read the fingerprint back out of it rather than hardcoding
+        // one, so retuning the sampler cannot quietly turn this into a no-op.
+        val fingerprintCarrier = refresh(Instant.parse("2029-01-01T00:00:00Z"), Instant.parse("2029-02-01T00:00:00Z"))
+        val fingerprint = Json.parseToJsonElement(fingerprintCarrier.newState.values.single().decodeToString())
+            .jsonObject.getValue("algorithm").jsonPrimitive.content
+
+        val seeded = mapOf("central_paths_json" to """{"algorithm":"$fingerprint","paths":{"se:20260812":[]}}""".encodeToByteArray())
+        val (result, elapsed) = measureTimedValue {
+            refresh(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-20T00:00:00Z"), state = seeded)
+        }
+
+        assertTrue(result.centralPathOf("se:20260812").isEmpty(), "a fingerprint-matching cache entry is authoritative")
+        assertTrue(elapsed.inWholeSeconds < 5, "honouring it must not cost a resample, took $elapsed")
     }
 
     /**

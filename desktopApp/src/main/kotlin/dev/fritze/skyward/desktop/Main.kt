@@ -54,10 +54,7 @@ fun main(args: Array<String>) {
             occurrenceId?.let(state::openOccurrence)
         },
     )
-    val refreshLoop = SourceRefreshLoop(
-        sourceRunner = container.sourceRunner,
-        forcedSourceIds = container.computedSources.mapTo(mutableSetOf()) { it.id },
-    )
+    val refreshLoop = SourceRefreshLoop(sourceRunner = container.sourceRunner)
 
     container.applicationScope.launch { startBackgroundWork(container, state, scheduler, refreshLoop) }
 
