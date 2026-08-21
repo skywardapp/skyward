@@ -14,6 +14,7 @@ import dev.fritze.skyward.core.model.TimeWindow
 import dev.fritze.skyward.core.persistence.NotificationRepo
 import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
+import dev.fritze.skyward.core.planner.Planner
 import dev.fritze.skyward.desktop.notify.DesktopNotification
 import dev.fritze.skyward.desktop.notify.DesktopNotifier
 import kotlinx.coroutines.Job
@@ -141,6 +142,25 @@ class DesktopSchedulerTest {
         assertEquals(1, notifier.posted.size, "expected one attempt, got ${notifier.posted.size}")
     }
 
+    /**
+     * Stands in for the startup re-plan: runs the real §10.4 reconciliation
+     * over what is in the DB and writes the result back, exactly as
+     * `DesktopContainer.replan` does. The panel's contents are decided there,
+     * so a test that hand-wrote the MISSED rows would prove nothing.
+     */
+    private suspend fun replan(
+        notificationRepo: NotificationRepo,
+        occurrenceRepo: OccurrenceRepo,
+        now: Instant,
+        desired: List<PlannedNotification> = emptyList(),
+    ): List<PlannedNotification> {
+        val previous = notificationRepo.getAll()
+        val occurrences = occurrenceRepo.getAll().associateBy { it.id }
+        val reconciled = Planner.reconcile(previous, desired, now, occurrences)
+        for (n in reconciled) notificationRepo.upsert(n)
+        return previous
+    }
+
     @Test
     fun startupReportsWhatWasMissedInsteadOfFiringIt() = runBlocking {
         val database = newDatabase()
@@ -148,12 +168,14 @@ class DesktopSchedulerTest {
         val occurrenceRepo = OccurrenceRepo(database)
         val notifier = RecordingNotifier()
 
-        val stale = notification("stale", now - 3.hours)
-        notificationRepo.upsert(stale)
+        // Due at 17:00 for a supermoon whose window closed at 18:00 -- genuinely
+        // stale by the time the app is opened again at 20:00.
+        notificationRepo.upsert(notification("stale", now - 3.hours))
         occurrenceRepo.upsert(occurrence(TimeWindow(now - 4.hours, now - 2.hours)), firstSeenAt = now - 5.hours)
 
         val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
-        val missed = scheduler.collectMissedWhileAway(now, preexistingIds = setOf("stale"))
+        val beforeReplan = replan(notificationRepo, occurrenceRepo, now)
+        val missed = scheduler.collectMissedWhileAway(beforeReplan)
 
         assertEquals(1, missed.size)
         assertEquals("stale", missed.single().notification.id)
@@ -163,21 +185,66 @@ class DesktopSchedulerTest {
     }
 
     @Test
+    fun anOverdueReminderForAnEventStillUnderWayFiresInsteadOfLandingInThePanel() = runBlocking {
+        // Issue #48's desktop case: the app was closed across the reminder's
+        // fire time, but the supermoon is still up. §10.4 says fire it now;
+        // sweeping it into "While you were away" is losing the reminder.
+        val database = newDatabase()
+        val notificationRepo = NotificationRepo(database)
+        val occurrenceRepo = OccurrenceRepo(database)
+        val notifier = RecordingNotifier()
+
+        val overdue = notification("overdue", now - 3.hours)
+        notificationRepo.upsert(overdue)
+        occurrenceRepo.upsert(occurrence(TimeWindow(now - 4.hours, now + 2.hours)), firstSeenAt = now - 5.hours)
+
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
+        val beforeReplan = replan(notificationRepo, occurrenceRepo, now, desired = listOf(overdue))
+        val missed = scheduler.collectMissedWhileAway(beforeReplan)
+
+        assertTrue(missed.isEmpty(), "still inside the occurrence's window -- overdue, not missed")
+        assertEquals(NotificationStatus.PENDING, notificationRepo.getById("overdue")?.status)
+
+        val job = launch { scheduler.run() }
+        awaitCondition { notificationRepo.getById("overdue")?.status == NotificationStatus.FIRED }
+        job.cancel()
+
+        assertEquals(1, notifier.posted.size, "expected the catch-up delivery, got ${notifier.posted}")
+    }
+
+    @Test
     fun aReminderDiscoveredDuringStartupIsNotDemotedIntoTheMissedPanel() = runBlocking {
         val database = newDatabase()
         val notificationRepo = NotificationRepo(database)
         val notifier = RecordingNotifier()
 
         // A notifyOnFirstSeen row the startup re-plan just created: its fireAt
-        // is `now`, so only the preexisting-id check separates it from
+        // is `now`, so only the before/after comparison separates it from
         // something the user actually missed.
-        notificationRepo.upsert(notification("fresh-nowcast", now))
+        val fresh = notification("fresh-nowcast", now)
+        val beforeReplan = notificationRepo.getAll()
+        notificationRepo.upsert(fresh)
 
         val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), notifier, onActivated = {}, clock = FixedClock(now))
-        val missed = scheduler.collectMissedWhileAway(now, preexistingIds = emptySet())
+        val missed = scheduler.collectMissedWhileAway(beforeReplan)
 
         assertTrue(missed.isEmpty(), "a just-discovered reminder is news, not history")
         assertEquals(NotificationStatus.PENDING, notificationRepo.getById("fresh-nowcast")?.status)
+    }
+
+    @Test
+    fun missesFromAnEarlierSessionDoNotResurfaceInThePanel() = runBlocking {
+        // The panel is "while you were away", not the whole history view
+        // (§13.4) -- a row that was already MISSED before this startup's
+        // re-plan has been shown once and must not come back every launch.
+        val database = newDatabase()
+        val notificationRepo = NotificationRepo(database)
+        notificationRepo.upsert(notification("old-miss", now - 30.hours, NotificationStatus.MISSED))
+
+        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), RecordingNotifier(), onActivated = {}, clock = FixedClock(now))
+        val missed = scheduler.collectMissedWhileAway(notificationRepo.getAll())
+
+        assertTrue(missed.isEmpty())
     }
 
     @Test
@@ -187,7 +254,7 @@ class DesktopSchedulerTest {
         notificationRepo.upsert(notification("history", now - 5.hours, NotificationStatus.FIRED))
 
         val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), RecordingNotifier(), onActivated = {}, clock = FixedClock(now))
-        val missed = scheduler.collectMissedWhileAway(now, preexistingIds = setOf("history"))
+        val missed = scheduler.collectMissedWhileAway(notificationRepo.getAll())
 
         assertTrue(missed.isEmpty())
         assertEquals(NotificationStatus.FIRED, notificationRepo.getById("history")?.status)

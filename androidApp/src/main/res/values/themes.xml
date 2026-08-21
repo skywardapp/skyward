@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Pure Compose UI (Material 3 in-Compose, §13); this platform theme only
-         sets the window background/status bar before Compose takes over. -->
+         sets the window background/status bar before Compose takes over. It is
+         still load-bearing for §13's "dark theme default-follows-system": the
+         launch window is on screen before any composable runs, so without the
+         values-night variant a night-mode user gets a white flash on every cold
+         start no matter what SkywardTheme resolves to. -->
     <style name="Theme.Skyward" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/skyward_window_light</item>
     </style>
 </resources>

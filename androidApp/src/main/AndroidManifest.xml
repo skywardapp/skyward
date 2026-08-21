@@ -22,9 +22,14 @@
         android:theme="@style/Theme.Skyward"
         android:supportsRtl="true">
 
+        <!-- singleTop: tapping a fired reminder (§10.2) targets this same
+             Activity with the occurrence to open. Without it, each tap would
+             stack a second copy of the whole single-Activity app on top of
+             the running one instead of being delivered to onNewIntent. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Skyward">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
