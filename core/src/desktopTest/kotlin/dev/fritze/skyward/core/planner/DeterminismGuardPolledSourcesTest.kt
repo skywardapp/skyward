@@ -99,9 +99,15 @@ class DeterminismGuardPolledSourcesTest {
         val computedOccurrences = computedSources.flatMap { it.refresh(req).occurrences }
 
         val pollHttpClient = mockPolledSourcesHttpClient(now, location)
-        val auroraResult = AuroraSource(pollHttpClient).refresh(req)
-        val cometResult = CometSource(pollHttpClient).refresh(req)
-        val eonetResult = EonetSource(pollHttpClient).refresh(req)
+        val (auroraResult, cometResult, eonetResult) = try {
+            Triple(
+                AuroraSource(pollHttpClient).refresh(req),
+                CometSource(pollHttpClient).refresh(req),
+                EonetSource(pollHttpClient).refresh(req),
+            )
+        } finally {
+            pollHttpClient.close()
+        }
 
         // Mirrors how ReplanCoordinator actually wires the NOWCAST grid in
         // production (AuroraSource.loadOvationGrid, fed from persisted
@@ -188,7 +194,10 @@ class DeterminismGuardPolledSourcesTest {
         )
     }
 
-    /** One mock engine serving all four POLLED-source URLs used by this test's sources. */
+    /**
+     * One mock engine serving all four POLLED-source URLs used by this
+     * test's sources.
+     */
     private fun mockPolledSourcesHttpClient(now: Instant, location: SavedLocation): HttpClient {
         val engine = MockEngine { request ->
             val url = request.url.toString()
@@ -203,20 +212,32 @@ class DeterminismGuardPolledSourcesTest {
         return HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
     }
 
-    /** A single slot at Kp 7 -- above every enabled rule's `KpAtLeast` threshold, so both THREE_DAY ingest and the OVATION active tier trigger. */
+    /**
+     * A single slot at Kp 7 -- above every enabled rule's `KpAtLeast`
+     * threshold, so both THREE_DAY ingest and the OVATION active tier
+     * trigger.
+     */
     private fun kpForecastFixture(now: Instant): String = """
         [["time_tag","kp","observed","noaa_scale"],
          ["${(now + 3.hours).toSwpcTimeString()}","7.00","predicted","G3"]]
     """.trimIndent()
 
-    /** One high-probability cell close enough to bilinearly interpolate above both the 10% ingest prefilter and the 25% MARGINAL nowcast quality gate at [location]. */
+    /**
+     * One high-probability cell close enough to bilinearly interpolate
+     * above both the 10% ingest prefilter and the 25% MARGINAL nowcast
+     * quality gate at [location].
+     */
     private fun ovationFixture(now: Instant, location: SavedLocation): String {
         val lon = location.point.lonDeg.toInt() + 1
         val lat = location.point.latDeg.toInt()
         return """{"Observation Time":"${now.toSwpcTimeString()}","Forecast Time":"${(now + 5.minutes).toSwpcTimeString()}","coordinates":[[$lon,$lat,80]]}"""
     }
 
-    /** A bright comet fixture (same shape as CometSourceTest's) with perihelion inside the test's 2-year horizon, guaranteed to clear the fixed 6.0 ingest floor. */
+    /**
+     * A bright comet fixture (same shape as CometSourceTest's) with
+     * perihelion inside the test's 2-year horizon, guaranteed to clear the
+     * fixed 6.0 ingest floor.
+     */
     private fun cometFixture(now: Instant): String {
         val tp = now + 45.days
         fun instantToJulianDate(instant: Instant): Double = instant.epochSeconds / 86400.0 + 2440587.5
@@ -227,7 +248,10 @@ class DeterminismGuardPolledSourcesTest {
         """.trimIndent()
     }
 
-    /** An open volcano event within `default:volcano-within-reach`'s 300km reach of [location]. */
+    /**
+     * An open volcano event within `default:volcano-within-reach`'s 300km
+     * reach of [location].
+     */
     private fun eonetFixture(now: Instant, location: SavedLocation): String {
         val eventLat = location.point.latDeg + 0.5
         val eventLon = location.point.lonDeg + 0.5
