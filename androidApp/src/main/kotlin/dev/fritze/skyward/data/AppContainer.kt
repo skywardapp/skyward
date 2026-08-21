@@ -9,6 +9,8 @@ import dev.fritze.skyward.alarm.AlarmScheduler
 import dev.fritze.skyward.alarm.AlarmSyncer
 import dev.fritze.skyward.alarm.AlarmWindowTopUpWorker
 import dev.fritze.skyward.alarm.AndroidAlarmScheduler
+import dev.fritze.skyward.alarm.AndroidNotificationGate
+import dev.fritze.skyward.alarm.NotificationGate
 import dev.fritze.skyward.alarm.RefreshWorker
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.persistence.LocationRepo
@@ -78,6 +80,13 @@ class AppContainer(context: Context) {
 
     /** Var (not val): instrumented tests substitute a fake per §17.5, since there's no DI framework. */
     var alarmScheduler: AlarmScheduler = AndroidAlarmScheduler(appContext)
+
+    /**
+     * §10.1: whether reminders can reach the user at all, as opposed to
+     * whether they can reach them on time (that's [alarmScheduler]). Read by
+     * the fire path and by the warning cards. Var for the same reason.
+     */
+    var notificationGate: NotificationGate = AndroidNotificationGate(appContext)
 
     val replanCoordinator = ReplanCoordinator(
         occurrenceRepo, locationRepo, ruleRepo, notificationRepo, visibilityCacheRepo, visibilityModels,

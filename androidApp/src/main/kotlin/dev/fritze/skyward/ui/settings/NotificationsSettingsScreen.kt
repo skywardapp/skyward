@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,17 +33,21 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.common.openAppNotificationSettings
 
-/** §13.1/§10.1: channels shortcut, the honesty explainer, and exact-alarm permission state. Quiet hours are per-rule (§9.1), editable via the full RuleEditor (M5) -- shown read-only here. */
+/** §13.1/§10.1: channels shortcut, the honesty explainer, and both permission states -- whether reminders can be delivered at all, and whether they can be delivered on time. Quiet hours are per-rule (§9.1), editable via the full RuleEditor (M5) -- shown read-only here. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val context = LocalContext.current
     var canScheduleExact by remember { mutableStateOf(container.alarmScheduler.canScheduleExact()) }
-    // The system settings screen for enabling exact alarms is a separate Activity; re-read on
-    // resume so coming back here reflects a change made there instead of showing a stale value.
+    var canPostNotifications by remember { mutableStateOf(container.notificationGate.canPost()) }
+    // The system settings screens for enabling exact alarms and for unblocking notifications are
+    // both separate Activities; re-read on resume so coming back here reflects a change made
+    // there instead of showing a stale value.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         canScheduleExact = container.alarmScheduler.canScheduleExact()
+        canPostNotifications = container.notificationGate.canPost()
     }
 
     Scaffold(
@@ -54,6 +59,35 @@ fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // First card, above the explainer: with notifications off, nothing the
+            // explainer describes happens at all (§10.1). Coloured as an error only
+            // in that state -- the same card states the healthy case plainly, so the
+            // screen always answers "are my reminders getting through?".
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = if (canPostNotifications) {
+                    CardDefaults.cardColors()
+                } else {
+                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                },
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Notifications", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (canPostNotifications) {
+                            "Allowed — reminders will be shown."
+                        } else {
+                            "Blocked — every reminder is dropped and recorded as missed. " +
+                                "Nothing else on this screen matters until this is fixed."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (!canPostNotifications) {
+                        Button(onClick = { openAppNotificationSettings(context) }) { Text("Turn notifications on") }
+                    }
+                }
+            }
+
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("How reminders are delivered", style = MaterialTheme.typography.titleSmall)
@@ -82,10 +116,7 @@ fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 }
             }
 
-            OutlinedButton(onClick = {
-                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                context.startActivity(intent)
-            }) { Text("Open system notification settings") }
+            OutlinedButton(onClick = { openAppNotificationSettings(context) }) { Text("Open system notification settings") }
         }
     }
 }

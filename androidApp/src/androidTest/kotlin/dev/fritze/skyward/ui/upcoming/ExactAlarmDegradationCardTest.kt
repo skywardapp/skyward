@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -14,9 +13,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
+import dev.fritze.skyward.alarm.AndroidNotificationGate
 import dev.fritze.skyward.alarm.FakeAlarmScheduler
+import dev.fritze.skyward.alarm.NotificationGate
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.awaitText
+import dev.fritze.skyward.ui.awaitTextGone
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,8 +40,21 @@ class ExactAlarmDegradationCardTest {
             val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
             container = app.container
             container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
+            // UpcomingScreen shows the exact-alarm card only when notifications
+            // are getting through at all (§10.1: one problem at a time, the
+            // fatal one first), so this suite has to pin the healthy state
+            // rather than inherit whatever the emulator's notification toggle
+            // happens to be.
+            container.notificationGate = NotificationGate { true }
             container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
         }
+    }
+
+    // The container is a process singleton, so a substituted gate would
+    // otherwise leak into every test class that runs after this one.
+    @After
+    fun restoreNotificationGate() {
+        container.notificationGate = AndroidNotificationGate(ApplicationProvider.getApplicationContext())
     }
 
     // Block bodies, not `= runBlocking { ... }`: an expression body's return
@@ -102,15 +119,3 @@ private fun appVersionCode(context: Context): Long = runCatching {
         packageInfo.versionCode.toLong()
     }
 }.getOrDefault(0L)
-
-private fun ComposeTestRule.awaitText(text: String) {
-    waitUntil(timeoutMillis = 10_000) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
-    }
-}
-
-private fun ComposeTestRule.awaitTextGone(text: String) {
-    waitUntil(timeoutMillis = 10_000) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isEmpty()
-    }
-}

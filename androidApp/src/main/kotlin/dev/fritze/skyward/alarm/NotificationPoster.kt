@@ -1,10 +1,8 @@
 package dev.fritze.skyward.alarm
 
-import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Notification
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dev.fritze.skyward.R
@@ -25,7 +23,26 @@ object NotificationPoster {
         val notification = container.notificationRepo.getById(notificationId) ?: return
         // A race is possible: the alarm/work item fired just as a replan
         // cancelled this row (occurrence withdrawn, rule disabled, muted).
-        if (notification.status == NotificationStatus.CANCELLED || notification.status == NotificationStatus.FIRED) return
+        // MISSED is terminal for the same reason FIRED is (§10.4): its moment
+        // has passed, so a late-arriving duplicate must not resurrect it.
+        if (notification.status.isTerminal()) return
+
+        // Checked before anything else, and before the row is touched: §10.1
+        // promises reminders are "never silently dropped", and a notification
+        // the OS will refuse to show is exactly that. Recording it FIRED would
+        // write a delivery into history that never happened — and §12.3
+        // exports FIRED keys, so it would teach a second device not to notify
+        // either. MISSED is §10.4's existing status for "the moment passed
+        // without reaching you", and the warning cards in Upcoming and
+        // Settings › Notifications explain the cause while it lasts.
+        //
+        // Bailing here also protects the once-ever APPROXIMATE hedge below:
+        // rendering the body first would burn that "already shown" flag on a
+        // notification nobody ever saw.
+        if (!container.notificationGate.canPost()) {
+            container.notificationRepo.updateStatus(notification.id, NotificationStatus.MISSED, firedAt = null)
+            return
+        }
 
         val occurrence = container.occurrenceRepo.getById(notification.occurrenceId)
         val channelId = occurrence?.let { NotificationChannels.channelIdFor(it) } ?: NotificationChannels.DIAGNOSTICS_CHANNEL_ID
@@ -47,14 +64,26 @@ object NotificationPoster {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        val canPost = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        if (canPost) {
-            NotificationManagerCompat.from(context).notify(notification.id.hashCode(), androidNotification)
-        }
+        postToSystem(context, notification.id, androidNotification)
 
         container.notificationRepo.updateStatus(notification.id, NotificationStatus.FIRED, Clock.System.now())
     }
+
+    /**
+     * Lint can no longer see the POST_NOTIFICATIONS check that guards this
+     * call, because it moved out of this file and behind [NotificationGate]
+     * — which is the whole point: the fire path and the UI warnings have to
+     * read one definition of "can we deliver", or they drift. The suppression
+     * is a single statement wide so it can never come to cover a genuinely
+     * unguarded call added later.
+     */
+    @SuppressLint("MissingPermission")
+    private fun postToSystem(context: Context, notificationId: String, notification: Notification) {
+        NotificationManagerCompat.from(context).notify(notificationId.hashCode(), notification)
+    }
+
+    private fun NotificationStatus.isTerminal() =
+        this == NotificationStatus.CANCELLED || this == NotificationStatus.FIRED || this == NotificationStatus.MISSED
 
     private const val KEY_APPROXIMATE_HEDGE_SHOWN = "approximate_hedge_shown"
 }
