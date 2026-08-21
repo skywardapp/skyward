@@ -19,8 +19,8 @@ sees two `Occurrence`s.
 JPL's monthly SBDB refresh (§7.4) can republish a refined orbit solution
 that shifts a comet's position enough to move `bestViewingStart` by a few
 minutes, without moving `peakMagDate` past §6.3's 5-minute threshold — the
-#60 fix (ADR-less; see `CometSource.buildCometOccurrence`, §7.4.3) makes
-`peakMagDate` itself stable across refreshes, but says nothing about
+issue `#60` fix (ADR-less; see `CometSource.buildCometOccurrence`, §7.4.3)
+makes `peakMagDate` itself stable across refreshes, but says nothing about
 position. §9.1 resolves `BEST_VIEWING` from `CometLocal.bestViewingStart`,
 and ADR 0013 resolves that anchor once per occurrence and reuses it for
 every match — assuming (Consequences section) that "if the highest-quality

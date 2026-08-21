@@ -10,7 +10,7 @@ import kotlin.time.Duration.Companion.minutes
 
 /**
  * §6.3 point 3: whether re-fetching [previous] as [fresh] is worth a full
- * re-plan. Explicitly NOT material on its own: `Comet.magAtIngest`/
+ * re-plan. Explicitly NOT material on its own: `CometPayload.magAtIngest`/
  * `magParams` (display-only, changes every refresh by design, §7.4.3) and
  * `fetchedAt` — this function never looks at either, so they can't
  * trigger one. "Getting this list wrong produces notification storms"
