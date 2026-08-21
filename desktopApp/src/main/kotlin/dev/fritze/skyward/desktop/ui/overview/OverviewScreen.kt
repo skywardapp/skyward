@@ -36,7 +36,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.formatDate
+import dev.fritze.skyward.core.format.formatDateTime
+import dev.fritze.skyward.core.format.formatKp
+import dev.fritze.skyward.core.format.formatPercent
+import dev.fritze.skyward.core.format.formatRelative
 import dev.fritze.skyward.core.format.phenomenonLabel
+import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.model.AuroraPayload
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SolarEclipsePayload
@@ -45,16 +51,10 @@ import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.Destination
-import dev.fritze.skyward.desktop.ui.common.formatDate
-import dev.fritze.skyward.desktop.ui.common.formatDateTime
-import dev.fritze.skyward.desktop.ui.common.formatKp
-import dev.fritze.skyward.desktop.ui.common.formatPercent
-import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.rememberUpcoming
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import dev.fritze.skyward.desktop.ui.theme.kpColor
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
-import dev.fritze.skyward.desktop.ui.theme.qualityLabel
 
 /**
  * §14: "Overview = Upcoming list + mini aurora status + next-eclipse hero
