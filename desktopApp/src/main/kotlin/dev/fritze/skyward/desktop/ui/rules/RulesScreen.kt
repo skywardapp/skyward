@@ -393,6 +393,7 @@ private suspend fun writeThenReplan(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        System.err.println("rule write failed (${e.message ?: e::class.simpleName})")
         onError(whenWriteFails)
         return
     }
@@ -401,6 +402,7 @@ private suspend fun writeThenReplan(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        System.err.println("replan after rule write failed (${e.message ?: e::class.simpleName})")
         onError(whenReplanFails)
         return
     }
