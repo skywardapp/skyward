@@ -37,7 +37,9 @@ class VisibilityResultCacheTest {
 
     private val now = Instant.parse("2026-06-15T12:00:00Z")
     private val utc = TimeZone.UTC
-    private val loc = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 11.0), isPrimary = true, createdAt = now, modifiedAt = now)
+    private val loc = SavedLocation(
+        name = "Home", id = "home", createdAt = now, modifiedAt = now, point = GeoPoint(48.0, 11.0), isPrimary = true,
+    )
 
     private class CountingModel(override val phenomenon: Phenomenon, private val response: VisibilityResult) : VisibilityModel {
         var evaluations = 0
@@ -47,33 +49,41 @@ class VisibilityResultCacheTest {
         }
     }
 
-    private fun eclipseOcc(fetchedAt: Instant) = Occurrence(
-        id = "se:1", phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Test Eclipse",
-        window = TimeWindow(now, now + 4.hours), peakTime = now + 2.hours, certainty = Certainty.CERTAIN,
-        payload = SolarEclipsePayload(SolarEclipseKind.PARTIAL, GeoPoint(12.0, 34.0), now + 2.hours, emptyList(), 0.8),
-        fetchedAt = fetchedAt, expiresAt = null,
-    )
+    private fun eclipseOcc(fetchedAt: Instant): Occurrence {
+        val peak = now + 2.hours
+        val payload = SolarEclipsePayload(SolarEclipseKind.PARTIAL, GeoPoint(12.0, 34.0), peak, emptyList(), 0.8)
+        return Occurrence(
+            phenomenon = Phenomenon.SOLAR_ECLIPSE, id = "se:1", title = "Test Eclipse", sourceId = "eclipse",
+            certainty = Certainty.CERTAIN, peakTime = peak, window = TimeWindow(now, now + 4.hours),
+            expiresAt = null, payload = payload, fetchedAt = fetchedAt,
+        )
+    }
 
     // These tests only need *a* valid CometElements, not real ephemeris data
     // (contrast CometVisibilityModelTest's Horizons-validated Encke elements).
     private val testElements = CometElements(now, 0.9, 1.0, 0.0, 0.0, 0.0, now)
 
-    private fun cometOcc(fetchedAt: Instant) = Occurrence(
-        id = "cm:test", phenomenon = Phenomenon.COMET, sourceId = "jpl", title = "Comet",
-        window = TimeWindow(now, now + 30.days), peakTime = now + 15.days, certainty = Certainty.FORECAST,
-        payload = CometPayload(
+    private fun cometOcc(fetchedAt: Instant): Occurrence {
+        val peak = now + 15.days
+        val payload = CometPayload(
             designation = "C/2025 K1", name = null, elements = testElements, magParams = CometMagParams(6.0, 10.0),
-            perihelionDate = testElements.tpPerihelion, peakMag = 4.0, peakMagDate = now + 15.days, magAtIngest = 4.0,
-        ),
-        fetchedAt = fetchedAt, expiresAt = null,
-    )
+            perihelionDate = testElements.tpPerihelion, peakMag = 4.0, peakMagDate = peak, magAtIngest = 4.0,
+        )
+        return Occurrence(
+            phenomenon = Phenomenon.COMET, id = "cm:test", title = "Comet", sourceId = "jpl",
+            certainty = Certainty.FORECAST, peakTime = peak, window = TimeWindow(now, now + 30.days),
+            expiresAt = null, payload = payload, fetchedAt = fetchedAt,
+        )
+    }
 
-    private fun auroraOcc(kind: AuroraForecastKind, fetchedAt: Instant) = Occurrence(
-        id = "au:1", phenomenon = Phenomenon.AURORA, sourceId = "swpc", title = "Test Aurora",
-        window = TimeWindow(now, now + 6.hours), peakTime = null, certainty = Certainty.FORECAST,
-        payload = AuroraPayload(kpForecast = 5.5, forecastKind = kind, issuedAt = fetchedAt),
-        fetchedAt = fetchedAt, expiresAt = null,
-    )
+    private fun auroraOcc(kind: AuroraForecastKind, fetchedAt: Instant): Occurrence {
+        val payload = AuroraPayload(kpForecast = 5.5, forecastKind = kind, issuedAt = fetchedAt)
+        return Occurrence(
+            phenomenon = Phenomenon.AURORA, id = "au:1", title = "Test Aurora", sourceId = "swpc",
+            certainty = Certainty.FORECAST, peakTime = null, window = TimeWindow(now, now + 6.hours),
+            expiresAt = null, payload = payload, fetchedAt = fetchedAt,
+        )
+    }
 
     private fun grid(observationTime: Instant) =
         OvationGrid(observationTime, observationTime + 30.minutes, ByteArray(360 * 181))
