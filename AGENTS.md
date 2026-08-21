@@ -133,9 +133,14 @@ because that is the startup path a packaging mistake actually breaks (ADR
 ## Testing
 
 - Domain tests live in `:core` `commonTest` and run on both JVM and Android.
+  The one deliberate exception is the golden tests that read fixture *files*:
+  they live in `desktopTest` and are JVM-only (ADR 0010).
 - Astronomy and parser tests run against checked-in fixtures (golden GSFC
   eclipse rows, captured SWPC/EONET/JPL responses, JPL Horizons ephemerides) —
-  §17.1–17.3b. Regenerate fixtures with the `tools/` fetchers, never by hand.
+  §17.1–17.3b. Regenerate fixtures with the `tools/fixtures/` fetchers, never
+  by hand; refreshing one is a review of the diff, not a rubber stamp. Inputs
+  written to provoke a specific failure (malformed rows, swapped columns) are
+  not fixtures and stay inline in `commonTest`, named `*_SAMPLE`.
 - §17.6's determinism guard runs the whole pipeline twice and asserts
   identical planned notifications; the natural-key/dedup design (§6.4, §10.4)
   depends on it, so treat a failure there as a design bug, not a flaky test.

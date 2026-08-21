@@ -5,6 +5,7 @@ import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.LunarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipseKind
+import dev.fritze.skyward.core.testing.Fixtures
 import io.github.cosinekitty.astronomy.EclipseKind
 import io.github.cosinekitty.astronomy.GlobalSolarEclipseInfo
 import io.github.cosinekitty.astronomy.Observer
@@ -30,7 +31,7 @@ class EclipseCanonFixtureTest {
 
     @Test
     fun solarCanonSweep2020To2040MatchesKindPeakAndGreatestPoint() {
-        val rows = readCsv("fixtures/gsfc_solar_eclipses_2020_2040.csv").map {
+        val rows = Fixtures.csv("gsfc_solar_eclipses_2020_2040.csv").map {
             SolarCanonRow(
                 date = it.getValue("date"),
                 greatestTimeUtc = Instant.parse(it.getValue("greatest_time_utc")),
@@ -78,7 +79,7 @@ class EclipseCanonFixtureTest {
 
     @Test
     fun lunarCanonSweep2020To2040MatchesKindAndPeakTime() {
-        val rows = readCsv("fixtures/gsfc_lunar_eclipses_2020_2040.csv").map {
+        val rows = Fixtures.csv("gsfc_lunar_eclipses_2020_2040.csv").map {
             LunarCanonRow(
                 date = it.getValue("date"),
                 peakUtc = Instant.parse(it.getValue("peak_time_utc")),
@@ -114,7 +115,7 @@ class EclipseCanonFixtureTest {
 
     @Test
     fun localCircumstancesNamedEclipseSpotChecksMatchPublishedTimes() {
-        val rows = readCsv("fixtures/gsfc_local_solar_circumstances_named_eclipses.csv").map {
+        val rows = Fixtures.csv("gsfc_local_solar_circumstances_named_eclipses.csv").map {
             LocalCircumstanceRow(
                 eclipseDate = it.getValue("eclipse_date"),
                 city = it.getValue("city"),
@@ -172,23 +173,6 @@ class EclipseCanonFixtureTest {
     }
 
     private fun Double.toRadians(): Double = this * PI / 180.0
-
-    private fun readCsv(resourcePath: String): List<Map<String, String>> {
-        val text = checkNotNull(javaClass.classLoader.getResourceAsStream(resourcePath)) {
-            "missing fixture resource: $resourcePath"
-        }.bufferedReader(Charsets.UTF_8).use { it.readText() }
-
-        val lines = text.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .toList()
-
-        val header = lines.first().split(',')
-        return lines.drop(1).map { line ->
-            val cols = line.split(',')
-            header.zip(cols).toMap()
-        }
-    }
 
     private data class SolarCanonRow(
         val date: String,

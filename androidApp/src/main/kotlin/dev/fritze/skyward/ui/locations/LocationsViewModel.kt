@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SavedLocation
+import dev.fritze.skyward.core.persistence.deleteLocation
+import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.data.AppContainer
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,9 +17,16 @@ class LocationsViewModel(private val container: AppContainer) : ViewModel() {
     val locations: StateFlow<List<SavedLocation>> = container.locationRepo.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Visible rules only: the delete dialog names the rules a user could go and fix, not §13.3's hidden mutes. */
+    val rules: StateFlow<List<Rule>> = container.ruleRepo.observeVisible()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun delete(id: String) {
         viewModelScope.launch {
-            container.locationRepo.delete(id)
+            // Rewriting the rules that named this location, and promoting a
+            // new primary, are part of the delete -- see core's
+            // `deleteLocation`, which both frontends call.
+            deleteLocation(container.locationRepo, container.ruleRepo, id, Clock.System.now())
             container.replanAndSync()
         }
     }

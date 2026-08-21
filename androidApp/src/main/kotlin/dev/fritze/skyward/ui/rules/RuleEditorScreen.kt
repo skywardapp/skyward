@@ -1,5 +1,6 @@
 package dev.fritze.skyward.ui.rules
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.deleteRuleConfirmation
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
@@ -52,6 +54,7 @@ import dev.fritze.skyward.core.rules.RuleLimits
 import dev.fritze.skyward.core.rules.sendsNoReminders
 import dev.fritze.skyward.data.AppContainer
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * §13.4: "Rule = name + phenomena multi-select + locations select + condition
@@ -67,6 +70,8 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
     val state = remember { RuleDraftState() }
     val stableNewId = remember { newRuleId() } // fixed for this screen instance, not regenerated on every recomposition
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+    val error by viewModel.error.collectAsState()
 
     LaunchedEffect(ruleId) { state.load(viewModel.load()) }
 
@@ -77,12 +82,24 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
     // accident, unsaid (#73).
     val sendsNoReminders = state.loaded && state.toRule("preview").schedule.sendsNoReminders
 
+    // Leaving the editor threw every edit away without a word, from the back
+    // arrow and from the system back gesture alike. Both now ask, and only
+    // when there is actually something to lose.
+    val leave: () -> Unit = {
+        if (state.isDirty(stableNewId)) {
+            showDiscardConfirm = true
+        } else {
+            onDone()
+        }
+    }
+    BackHandler(enabled = state.isDirty(stableNewId)) { showDiscardConfirm = true }
+
     Scaffold(
         topBar = {
             RuleEditorTopBar(
                 isEditing = ruleId != null,
                 canDelete = state.existing != null,
-                onBack = onDone,
+                onBack = leave,
                 onDeleteRequested = { showDeleteConfirm = true },
             )
         },
@@ -96,6 +113,7 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
                 violations = violations,
                 sendsNoReminders = sendsNoReminders,
                 canSave = canSave,
+                error = error,
                 onSave = { viewModel.save(state.toRule(stableNewId), onDone) },
             )
         }
@@ -106,6 +124,13 @@ fun RuleEditorScreen(container: AppContainer, ruleId: String?, onDone: () -> Uni
             ruleName = state.existing?.name.orEmpty(),
             onDismiss = { showDeleteConfirm = false },
             onConfirm = { showDeleteConfirm = false; state.existing?.let { viewModel.delete(it, onDone) } },
+        )
+    }
+
+    if (showDiscardConfirm) {
+        DiscardChangesDialog(
+            onDismiss = { showDiscardConfirm = false },
+            onConfirm = { showDiscardConfirm = false; onDone() },
         )
     }
 }
@@ -129,11 +154,28 @@ private class RuleDraftState {
 
     val locationIds: List<String>? get() = if (useAllLocations) null else chosenLocationIds.toList()
 
+    /** The draft exactly as it was loaded, for comparison -- see [isDirty]. */
+    private var pristine by mutableStateOf<Rule?>(null)
+
     fun load(rule: Rule?) {
         existing = rule
         if (rule != null) applyExisting(rule)
+        pristine = comparable(SNAPSHOT_ID)
         loaded = true
     }
+
+    /**
+     * Whether the user has changed anything since the screen opened.
+     *
+     * Compared as whole [Rule] values rather than field by field, so a
+     * condition or schedule edit counts too; the id and the timestamps are
+     * normalised away because [toRule] stamps `modifiedAt` with the current
+     * instant, which would make every draft differ from itself.
+     */
+    fun isDirty(stableNewId: String): Boolean = loaded && comparable(stableNewId) != pristine
+
+    private fun comparable(stableNewId: String): Rule =
+        toRule(stableNewId).copy(id = SNAPSHOT_ID, createdAt = SNAPSHOT_TIME, modifiedAt = SNAPSHOT_TIME)
 
     private fun applyExisting(rule: Rule) {
         name = rule.name
@@ -175,6 +217,12 @@ private class RuleDraftState {
     }
 
     fun isSaveable(violations: List<String>): Boolean = loaded && name.isNotBlank() && phenomena.isNotEmpty() && violations.isEmpty()
+
+    private companion object {
+        /** Stand-in id and timestamps, so a dirty-check compares the user's edits and nothing else. */
+        const val SNAPSHOT_ID = "snapshot"
+        val SNAPSHOT_TIME: Instant = Instant.fromEpochSeconds(0)
+    }
 }
 
 /**
@@ -227,6 +275,7 @@ private fun RuleEditorForm(
     violations: List<String>,
     sendsNoReminders: Boolean,
     canSave: Boolean,
+    error: String?,
     onSave: () -> Unit,
 ) {
     LazyColumn(
@@ -250,6 +299,7 @@ private fun RuleEditorForm(
         item { ScheduleSection(state.schedule) { state.schedule = it } }
         item { ViolationsCard(violations) }
         item { SilentRuleWarning(sendsNoReminders) }
+        item { ErrorText(error) }
         item { LivePreviewPanel(viewModel = viewModel, phenomena = state.phenomena, locationIds = state.locationIds, conditionRoot = state.conditionRoot) }
         item { Button(onClick = onSave, enabled = canSave, modifier = Modifier.fillMaxWidth()) { Text("Save") } }
     }
@@ -336,14 +386,35 @@ private fun SilentRuleWarning(sendsNoReminders: Boolean) {
     }
 }
 
+/** A save or delete that didn't happen -- [RuleEditorViewModel.error]. */
+@Composable
+private fun ErrorText(error: String?) {
+    if (error == null) return
+    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+}
+
 @Composable
 private fun DeleteRuleDialog(ruleName: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    // Shared with desktop (`:core`'s deleteRuleConfirmation) so the same
+    // action doesn't describe itself differently per platform.
+    val copy = deleteRuleConfirmation(ruleName)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete this rule?") },
-        text = { Text("\"$ruleName\" will stop matching events and its reminders will be cancelled.") },
+        title = { Text(copy.title) },
+        text = { Text(copy.body) },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun DiscardChangesDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Discard your changes?") },
+        text = { Text("This rule has edits you haven't saved. Leaving now throws them away.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep editing") } },
     )
 }
 
