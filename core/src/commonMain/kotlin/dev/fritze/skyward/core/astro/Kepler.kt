@@ -87,10 +87,11 @@ internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): Univer
     // The bracket and the f' >= q > 0 argument above both require a real,
     // positive perihelion distance and a physical eccentricity; degenerate
     // elements are unsolvable, not slow to solve (§7.4.2).
-    if (!(q > 0.0) || !q.isFinite() || !(e >= 0.0) || !dtDays.isFinite()) return null
+    if (!(q > 0.0) || !q.isFinite() || !(e >= 0.0) || !e.isFinite() || !dtDays.isFinite()) return null
 
     // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for hyperbolas — no branch.
     val alpha = (1.0 - e) / q
+    if (!alpha.isFinite()) return null
 
     fun f(x: Double): Pair<Double, Double> {
         val z = alpha * x * x

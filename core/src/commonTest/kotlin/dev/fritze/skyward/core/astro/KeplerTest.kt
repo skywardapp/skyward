@@ -101,7 +101,11 @@ class KeplerTest {
                     )
                     val position = heliocentricPosition(el, Instant.fromEpochMilliseconds((dt * 86400_000L).toLong()))
                     assertNotNull(position, "e=$e, q=$q au, dt=$dt days: no position")
-                    assertTrue(position.length() > 0.0, "e=$e, q=$q au, dt=$dt days: expected a nonzero radius")
+                    val radius = position.length()
+                    assertTrue(
+                        radius.isFinite() && radius > 0.0,
+                        "e=$e, q=$q au, dt=$dt days: expected a finite, nonzero radius",
+                    )
                 }
             }
         }
@@ -162,5 +166,27 @@ class KeplerTest {
         val t = Instant.fromEpochMilliseconds(50L * 86400_000L)
         assertEquals(null, heliocentricPosition(degenerate, t))
         assertEquals(null, apparentMagnitude(degenerate, CometMagParams(m1 = 10.0, k1 = 4.5), t))
+    }
+
+    @Test
+    fun nonFiniteEccentricityReturnsNullRatherThanANanPosition() {
+        // CodeRabbit review (PR #107): an infinite `e` passes a bare `e >=
+        // 0.0` guard, and at exactly perihelion passage (dtDays == 0.0) the
+        // zero-time fast path returns UniversalAnomaly(0.0, 0) without ever
+        // evaluating alpha — which is itself non-finite ((1 - Infinity) / q).
+        // heliocentricPosition then multiplies that non-finite alpha by
+        // x*x == 0.0, and Infinity * 0.0 is NaN, not 0.0: every downstream
+        // coordinate comes out NaN instead of null.
+        val infiniteEccentricity = CometElements(
+            epoch = Instant.fromEpochMilliseconds(0),
+            eccentricity = Double.POSITIVE_INFINITY,
+            perihelionDistanceAu = 1.0,
+            inclinationDeg = 0.0,
+            ascendingNodeDeg = 0.0,
+            argPerihelionDeg = 0.0,
+            tpPerihelion = Instant.fromEpochMilliseconds(0),
+        )
+        assertEquals(null, solveUniversalAnomaly(1.0, Double.POSITIVE_INFINITY, 0.0))
+        assertEquals(null, heliocentricPosition(infiniteEccentricity, infiniteEccentricity.tpPerihelion))
     }
 }
