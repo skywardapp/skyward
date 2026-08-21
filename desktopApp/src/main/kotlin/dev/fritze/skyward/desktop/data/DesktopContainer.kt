@@ -11,6 +11,7 @@ import dev.fritze.skyward.core.persistence.RuleRepo
 import dev.fritze.skyward.core.persistence.SettingsRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.core.persistence.SourceStateRepo
+import dev.fritze.skyward.core.persistence.SyncImportRepo
 import dev.fritze.skyward.core.persistence.VisibilityCacheRepo
 import dev.fritze.skyward.core.planner.ReplanCoordinator
 import dev.fritze.skyward.core.rules.defaultRules
@@ -51,6 +52,7 @@ class DesktopContainer(
     val notificationRepo = NotificationRepo(database)
     val sourceStateRepo = SourceStateRepo(database)
     val settingsRepo = SettingsRepo(database)
+    val syncImportRepo = SyncImportRepo(database)
     val visibilityCacheRepo = VisibilityCacheRepo(database)
 
     val visibilityModels: Map<Phenomenon, VisibilityModel> = defaultVisibilityModels
