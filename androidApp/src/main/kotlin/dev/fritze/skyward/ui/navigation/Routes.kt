@@ -1,5 +1,7 @@
 package dev.fritze.skyward.ui.navigation
 
+import android.net.Uri
+
 /** §13.1's navigation map. */
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -14,7 +16,17 @@ object Routes {
 
     const val EVENT_DETAIL_ARG = "occurrenceId"
     const val EVENT_DETAIL = "event/{$EVENT_DETAIL_ARG}"
-    fun eventDetail(occurrenceId: String) = "event/$occurrenceId"
+
+    /**
+     * Occurrence ids are natural keys (§6.4), and some of them carry
+     * characters a single path segment cannot: `comet:C/2025 A6`'s slash
+     * would split the route into three segments that no destination matches,
+     * and `navigate` throws instead of opening anything. Encoding here keeps
+     * every phenomenon's detail screen reachable — Navigation decodes path
+     * arguments again on the way out, so [EVENT_DETAIL_ARG] still reads back
+     * as the id the source minted.
+     */
+    fun eventDetail(occurrenceId: String) = "event/" + Uri.encode(occurrenceId)
 
     const val LOCATION_EDITOR_ARG = "locationId"
     const val LOCATION_EDITOR_NEW = "settings/locations/new"
