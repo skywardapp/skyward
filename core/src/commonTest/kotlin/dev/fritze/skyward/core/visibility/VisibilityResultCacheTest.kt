@@ -80,7 +80,9 @@ class VisibilityResultCacheTest {
 
     private fun result(quality: Quality) = VisibilityResult(quality != Quality.NONE, quality, null, null, null, null, null)
 
-    /** A cache over [snapshot], and the single [phenomenon] model it wraps [delegate] as. */
+    /**
+     * Creates a cache over [snapshot] and wraps [delegate] for [phenomenon].
+     */
     private fun cacheWith(
         snapshot: Map<VisibilityCacheKey, VisibilityCacheEntry>,
         phenomenon: Phenomenon,

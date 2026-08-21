@@ -203,13 +203,21 @@ class SourceRunnerTest {
         val source = FakeSource("test-source")
         source.nextResult = RefreshResult(listOf(occ("se:1", now + 1.days, Certainty.FORECAST)), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now, force = setOf("test-source"))
-        fx.seedVisibilityCacheEntry("se:1")
+        // Two locations for the withdrawn occurrence, plus an unrelated one --
+        // a delete-all implementation would also pass an assertTrue(isEmpty()).
+        fx.seedVisibilityCacheEntry("se:1", "home")
+        fx.seedVisibilityCacheEntry("se:1", "work")
+        fx.seedVisibilityCacheEntry("se:other")
         assertTrue(fx.visibilityCacheRepo.getAll().containsKey(VisibilityCacheKey("se:1", "home")))
 
         source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now + 1.hours, force = setOf("test-source"))
 
-        assertTrue(fx.visibilityCacheRepo.getAll().isEmpty(), "a dropped occurrence's cached verdicts must not survive it (§11)")
+        assertEquals(
+            setOf(VisibilityCacheKey("se:other", "home")),
+            fx.visibilityCacheRepo.getAll().keys,
+            "only the withdrawn occurrence's cache entries must be dropped, not the unrelated one's (§11)",
+        )
     }
 
     @Test
@@ -247,12 +255,18 @@ class SourceRunnerTest {
         val source = FakeSource("test-source")
         source.nextResult = RefreshResult(listOf(occ("se:1", now - 400.days, Certainty.CERTAIN)), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now - 400.days, force = setOf("test-source"))
-        fx.seedVisibilityCacheEntry("se:1")
+        fx.seedVisibilityCacheEntry("se:1", "home")
+        fx.seedVisibilityCacheEntry("se:1", "work")
+        fx.seedVisibilityCacheEntry("se:other")
 
         source.nextResult = RefreshResult(emptyList(), emptyMap(), null, SourceDiagnostics(ok = true))
         fx.runner(source).runDue(now, force = setOf("test-source"))
 
-        assertTrue(fx.visibilityCacheRepo.getAll().isEmpty(), "pruning a CERTAIN occurrence outside the horizon must also drop its cache entries")
+        assertEquals(
+            setOf(VisibilityCacheKey("se:other", "home")),
+            fx.visibilityCacheRepo.getAll().keys,
+            "pruning a CERTAIN occurrence outside the horizon must drop only its own cache entries",
+        )
     }
 
     @Test
