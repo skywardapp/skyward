@@ -50,7 +50,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
-import dev.fritze.skyward.desktop.ui.theme.phenomenonColor
+import dev.fritze.skyward.desktop.ui.theme.SkywardPalette
 import kotlin.math.roundToInt
 
 /**
@@ -232,7 +232,9 @@ private fun EclipseLabels(state: DesktopAppState, paths: List<EclipsePathPolylin
                 Text(
                     text = formatDayAndMonth(path.peakTime, state.zone),
                     style = MaterialTheme.typography.labelSmall,
-                    color = phenomenonColor(Phenomenon.SOLAR_ECLIPSE),
+                    // Drawn on top of the map canvas, so it follows the
+                    // canvas's dark ground rather than the app theme.
+                    color = SkywardPalette.Dark.phenomenon(Phenomenon.SOLAR_ECLIPSE),
                     modifier = Modifier.absoluteOffsetPx(screen.x, screen.y),
                 )
             }
@@ -312,8 +314,11 @@ private fun DrawScope.drawAuroraOverlay(camera: MapCamera, overlay: androidx.com
     )
 }
 
+// SkywardPalette.Dark, not the themed ramp: the map paints its own ocean and
+// landmass below (OCEAN/LAND_FILL), so this canvas is a dark surface whatever
+// the app theme is — the light ramp would be drawing dark-on-dark (#79).
 private fun DrawScope.drawEclipsePaths(camera: MapCamera, paths: List<EclipsePathPolyline>, selectedOccurrenceId: String?) {
-    val color = phenomenonColor(Phenomenon.SOLAR_ECLIPSE)
+    val color = SkywardPalette.Dark.phenomenon(Phenomenon.SOLAR_ECLIPSE)
     for (path in paths) {
         val selected = path.occurrenceId == selectedOccurrenceId
         for (segment in path.segments) {
@@ -330,7 +335,7 @@ private fun DrawScope.drawEclipsePaths(camera: MapCamera, paths: List<EclipsePat
 }
 
 private fun DrawScope.drawEonetMarkers(camera: MapCamera, markers: List<EonetMarker>) {
-    val color = phenomenonColor(Phenomenon.TERRESTRIAL)
+    val color = SkywardPalette.Dark.phenomenon(Phenomenon.TERRESTRIAL)
     for (marker in markers) {
         val center = camera.project(marker.point, size)
         drawCircle(color.copy(alpha = 0.9f), radius = 4f, center = center)

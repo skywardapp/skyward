@@ -152,6 +152,11 @@ private fun KpGaugeCard(estimate: KpEstimate?, failed: Boolean, state: DesktopAp
             )
             return@SectionCard
         }
+        // Read outside the draw lambda: the gauge is drawn straight onto the
+        // card's surface, so its arcs follow the theme — but `onDraw` is not a
+        // composable scope and cannot read the palette itself.
+        val bandColors = List(9) { step -> kpColor(step + 0.5) }
+        val needleColor = MaterialTheme.colorScheme.onSurface
         Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val center = Offset(size.width / 2f, size.height * 0.95f)
@@ -160,7 +165,7 @@ private fun KpGaugeCard(estimate: KpEstimate?, failed: Boolean, state: DesktopAp
                 for (step in 0 until 9) {
                     val startAngle = 180f + step * 20f
                     drawArc(
-                        color = kpColor(step + 0.5),
+                        color = bandColors[step],
                         startAngle = startAngle,
                         sweepAngle = 18f,
                         useCenter = false,
@@ -172,7 +177,7 @@ private fun KpGaugeCard(estimate: KpEstimate?, failed: Boolean, state: DesktopAp
                 val fraction = (estimate.estimatedKp / 9.0).coerceIn(0.0, 1.0)
                 val angle = Math.toRadians(180.0 + fraction * 180.0)
                 drawLine(
-                    color = Color(0xFFF2F5FA),
+                    color = needleColor,
                     start = center,
                     end = Offset(
                         center.x + (radius * 0.92 * cos(angle)).toFloat(),
@@ -180,7 +185,7 @@ private fun KpGaugeCard(estimate: KpEstimate?, failed: Boolean, state: DesktopAp
                     ),
                     strokeWidth = 3f,
                 )
-                drawCircle(Color(0xFFF2F5FA), radius = 5f, center = center)
+                drawCircle(needleColor, radius = 5f, center = center)
             }
         }
         Text(
@@ -243,7 +248,7 @@ private fun ForecastStripCard(slots: List<ForecastSlot>, issuedAt: Instant?, sta
                             // stub, so the strip reads as "24 quiet slots"
                             // rather than as a card that failed to draw.
                             .height(if (kp == null) EMPTY_SLOT_HEIGHT else (kp / 9.0 * 80.0).dp.coerceAtLeast(3.dp))
-                            .background(if (kp == null) Color(0xFF39445C) else kpColor(kp)),
+                            .background(if (kp == null) MaterialTheme.colorScheme.surfaceVariant else kpColor(kp)),
                     )
                 }
             }
@@ -344,6 +349,8 @@ private fun DrawScope.drawLocationPins(locations: List<SavedLocation>, center: O
     }
 }
 
+// The polar plot paints its own night ground, so these stay fixed in either
+// theme — same reasoning as the map's ocean (#79).
 private val POLAR_BACKGROUND = Color(0xFF0D1522)
 private val GRATICULE = Color(0xFF56637C)
 private val PIN_FILL = Color(0xFFF2F5FA)

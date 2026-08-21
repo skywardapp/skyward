@@ -59,6 +59,7 @@ import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.formatRelative
 import dev.fritze.skyward.desktop.ui.common.rememberUpcoming
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
+import dev.fritze.skyward.desktop.ui.theme.SkywardPalette
 import dev.fritze.skyward.desktop.ui.theme.phenomenonColor
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import dev.fritze.skyward.desktop.ui.theme.qualityLabel
@@ -429,10 +430,13 @@ private fun DrawScope.drawMonthGrid(monthTicks: List<MonthTick>, axisHeightPx: F
     }
 }
 
+// SkywardPalette.Dark, not the themed ramp: the canvas paints its own lane
+// bands and grid (LANE_BAND_COLOR/GRID_COLOR) rather than sitting on the app
+// surface, so its marks stay on a dark ground in either theme (#79).
 private fun DrawScope.drawMarkers(items: List<TimelineItem>, axisHeightPx: Float, laneHeightPx: Float, selectedOccurrenceId: String?) {
     for (item in items) {
         val centerY = axisHeightPx + item.laneIndex * laneHeightPx + laneHeightPx / 2f
-        val color = qualityColor(item.quality)
+        val color = SkywardPalette.Dark.quality(item.quality)
         val selected = item.occurrence.id == selectedOccurrenceId
         if (item.isSegment) {
             drawRoundRect(
