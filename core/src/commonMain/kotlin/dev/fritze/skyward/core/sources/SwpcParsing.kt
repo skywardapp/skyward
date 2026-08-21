@@ -3,7 +3,10 @@ package dev.fritze.skyward.core.sources
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -22,10 +25,28 @@ private val swpcJson = Json { ignoreUnknownKeys = true }
  * [dev.fritze.skyward.core.sources.SourceRunner]'s existing diagnose+backoff
  * path (§19 R3) rather than swallowing it here. Individual malformed rows
  * are skipped rather than failing the whole parse.
+ *
+ * SWPC also serves this file as a plain array of objects
+ * (`[{"time_tag":…,"kp":2.67,"observed":"observed"},…]`, with `kp` a JSON
+ * number rather than a string) -- the shape the captured fixture has, and
+ * the shape `/products/noaa-scales.json` has always had. Both are accepted:
+ * a row encoding the app doesn't recognise would otherwise blank the whole
+ * aurora forecast with no diagnostic, which is exactly the silent failure
+ * §19 R3 exists to prevent.
  */
 fun parseSwpcKpForecast(raw: String): List<KpSlot> {
-    val rows = swpcJson.decodeFromString<List<List<String>>>(raw)
-    if (rows.isEmpty()) return emptyList()
+    val root = swpcJson.parseToJsonElement(raw).jsonArray
+    if (root.isEmpty()) return emptyList()
+    return when (root.first()) {
+        is JsonArray -> parseHeaderRowShape(root)
+        is JsonObject -> root.mapNotNull { row -> (row as? JsonObject)?.let(::parseObjectRow) }
+        else -> emptyList()
+    }
+}
+
+/** The header-row shape: the first row names the columns and every value is a quoted string. */
+private fun parseHeaderRowShape(root: JsonArray): List<KpSlot> {
+    val rows = root.map { row -> row.jsonArray.map { it.jsonPrimitive.content } }
     val header = rows.first()
     val idx = header.withIndex().associate { (i, k) -> k to i }
     val timeCol = idx["time_tag"] ?: return emptyList()
@@ -48,6 +69,20 @@ fun parseSwpcKpForecast(raw: String): List<KpSlot> {
         }.getOrNull()
     }
 }
+
+/** The object shape: one JSON object per slot, `kp` a number, no header row to consult. */
+private fun parseObjectRow(row: JsonObject): KpSlot? = runCatching {
+    val kp = row.getValue("kp").jsonPrimitive.content.toDouble()
+    require(kp.isFinite()) { "non-finite kp value" }
+    KpSlot(
+        time = parseUtcNoZoneInstant(row.getValue("time_tag").jsonPrimitive.content),
+        kp = kp,
+        // A JSON null reads back as the literal string "null" through
+        // JsonPrimitive.content, which is not a state -- it is the absence of
+        // one, and must not reach a caller as a string.
+        state = row["observed"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content,
+    )
+}.getOrNull()
 
 @Serializable
 private data class OvationRawResponse(
