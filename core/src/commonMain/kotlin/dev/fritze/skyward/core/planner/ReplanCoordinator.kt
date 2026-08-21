@@ -20,6 +20,16 @@ import kotlin.time.Instant
  * what's already in the DB, and persists the result. Deliberately stops at
  * persistence: turning the reconciled rows into actual OS alarms is
  * platform glue (`AlarmScheduler`, §10.2), not `:core`'s job.
+ *
+ * Also prunes old `FIRED` history (§10.4) on every run, rather than on a
+ * separate daily job: `replan` already runs on every trigger the doc
+ * names (source upsert, rule/location/settings edit, sync import,
+ * boot/app start) and a `DELETE ... WHERE status = 'FIRED'` is cheap
+ * enough to repeat, so there is no reason to wait for a dedicated daily
+ * tick that doesn't otherwise exist on desktop. The sync export path
+ * additionally prunes for itself right before reading history (see
+ * `SyncViewModel`/`SyncSection`), so an export is never stale even if no
+ * replan has run yet this session.
  */
 class ReplanCoordinator(
     private val occurrenceRepo: OccurrenceRepo,
@@ -51,6 +61,7 @@ class ReplanCoordinator(
         val reconciled = Planner.reconcile(previous, desired, now, occurrencesById)
 
         for (notification in reconciled) notificationRepo.upsert(notification)
+        notificationRepo.pruneFiredBefore(now - NotificationRepo.FIRED_RETENTION)
 
         return reconciled
     }

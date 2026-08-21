@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.model.NotificationStatus
+import dev.fritze.skyward.core.persistence.NotificationRepo
 import dev.fritze.skyward.core.sync.ParsedSyncFile
 import dev.fritze.skyward.core.sync.SyncCodec
 import dev.fritze.skyward.core.sync.SyncFile
@@ -130,8 +131,13 @@ private fun defaultExportName(): String = "skyward-export-${Clock.System.now().t
 
 private suspend fun runExport(state: DesktopAppState, target: File): String = try {
     val container = state.container
+    val now = Clock.System.now()
+    // §10.4: prune here too, not just in ReplanCoordinator.replan -- an
+    // export must never carry FIRED history older than 180 days even if
+    // no replan has run yet this session.
+    container.notificationRepo.pruneFiredBefore(now - NotificationRepo.FIRED_RETENTION)
     val file = SyncFile(
-        exportedAt = Clock.System.now(),
+        exportedAt = now,
         appVersion = APP_VERSION,
         locations = container.locationRepo.getAll(),
         rules = container.ruleRepo.getAll(), // §9.1: hidden rules are included in sync

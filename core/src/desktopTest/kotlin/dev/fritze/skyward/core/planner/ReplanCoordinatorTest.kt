@@ -6,6 +6,8 @@ import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
+import dev.fritze.skyward.core.model.PlannedNotification
+import dev.fritze.skyward.core.model.Precision
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.SolarEclipseKind
@@ -169,4 +171,33 @@ class ReplanCoordinatorTest {
         val ids = reconciled.map { it.id }.toSet()
         assertEquals(2, ids.size, "dedup keys (§10.4) must not collide")
     }
+
+    @Test
+    fun replanPrunesFiredHistoryOlderThan180DaysButKeepsEverythingElse() = runTest {
+        val fx = Fixture()
+        fx.notificationRepo.upsert(fired("old-fired", firedAt = now - 181.days))
+        fx.notificationRepo.upsert(fired("boundary-fired", firedAt = now - 180.days))
+        fx.notificationRepo.upsert(fired("recent-fired", firedAt = now - 179.days))
+        fx.notificationRepo.upsert(pending("ancient-pending", fireAt = now - 400.days))
+
+        fx.coordinator.replan(now, utc)
+
+        val remainingIds = fx.notificationRepo.getAll().mapTo(mutableSetOf()) { it.id }
+        assertTrue("old-fired" !in remainingIds, "a FIRED row older than 180 days must be pruned")
+        assertTrue("boundary-fired" in remainingIds, "a FIRED row exactly 180 days old is not yet older than the window")
+        assertTrue("recent-fired" in remainingIds, "a FIRED row inside the 180-day window must be kept")
+        assertTrue("ancient-pending" in remainingIds, "non-FIRED rows must be kept regardless of age")
+    }
+
+    private fun fired(id: String, firedAt: Instant) = PlannedNotification(
+        id = id, occurrenceId = "occ-$id", ruleId = "r", locationId = "home",
+        fireAt = firedAt, status = NotificationStatus.FIRED, precision = Precision.EXACT,
+        title = "t", body = "b", createdAt = firedAt, firedAt = firedAt,
+    )
+
+    private fun pending(id: String, fireAt: Instant) = PlannedNotification(
+        id = id, occurrenceId = "occ-$id", ruleId = "r", locationId = "home",
+        fireAt = fireAt, status = NotificationStatus.PENDING, precision = Precision.EXACT,
+        title = "t", body = "b", createdAt = fireAt, firedAt = null,
+    )
 }
