@@ -89,7 +89,8 @@ internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): Univer
     // elements are unsolvable, not slow to solve (§7.4.2).
     if (!(q > 0.0) || !q.isFinite() || !(e >= 0.0) || !e.isFinite() || !dtDays.isFinite()) return null
 
-    // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for hyperbolas — no branch.
+    // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for
+    // hyperbolas — no branch.
     val alpha = (1.0 - e) / q
     if (!alpha.isFinite()) return null
 
