@@ -62,9 +62,22 @@ Rejected alternatives:
   the notification *body*, and the alternative is the double-buzz §9.3
   exists to prevent. The Upcoming screen (§13.2) is unaffected: it
   evaluates and displays per location.
-- The anchor no longer drifts when a refresh moves one location's dusk
-  solution by seconds, so §6.3 materiality and §10.4 reconciliation see a
-  stable key.
+- Within one planning pass, every match on the occurrence shares one
+  anchor, so §6.3 materiality and §10.4 reconciliation see one key
+  instead of as many keys as matching locations that pass produced.
+  That guarantee is per-pass, not permanent: if the highest-quality
+  location itself changes between refreshes — the occurrence's own data
+  changed materially, or a location's quality crossed a threshold — the
+  anchor moves with it, and the previous key is superseded like any
+  other re-plan. That is §6.3's ordinary re-plan behaviour, the same
+  thing that already happens to a PEAK-anchored notification when
+  `peakTime` itself changes; this ADR does not claim to suppress it.
+- Ties in "highest-quality location" break on `matches`' iteration
+  order (§9.2: occurrences outer, locations inner), the same tie-break
+  `desiredNotifications` already uses to pick the location the
+  notification *body* quotes. A different tie-break for the anchor
+  alone would let the anchor and the body disagree about which location
+  "won" — the one failure mode this ADR exists to prevent.
 - §9.3's key *format* is untouched — this changes which instant fills the
   `anchorTime` slot for one anchor type, not the natural-key design
   (§6.4, §10.4) the §17.6 determinism guard protects.
