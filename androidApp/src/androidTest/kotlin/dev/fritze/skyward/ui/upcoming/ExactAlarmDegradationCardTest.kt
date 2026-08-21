@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -15,8 +14,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
 import dev.fritze.skyward.alarm.FakeAlarmScheduler
+import dev.fritze.skyward.alarm.allowNotifications
+import dev.fritze.skyward.alarm.restoreRealNotificationGate
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.awaitText
+import dev.fritze.skyward.ui.awaitTextGone
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,8 +40,21 @@ class ExactAlarmDegradationCardTest {
             val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
             container = app.container
             container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
+            // UpcomingScreen shows the exact-alarm card only when notifications
+            // are getting through at all (§10.1: one problem at a time, the
+            // fatal one first), so this suite has to pin the healthy state
+            // rather than inherit whatever the emulator's notification toggle
+            // happens to be.
+            container.allowNotifications()
             container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
         }
+    }
+
+    // The container is a process singleton, so a substituted gate would
+    // otherwise leak into every test class that runs after this one.
+    @After
+    fun restoreNotificationGate() {
+        container.restoreRealNotificationGate(ApplicationProvider.getApplicationContext())
     }
 
     // Block bodies, not `= runBlocking { ... }`: an expression body's return
@@ -90,9 +107,6 @@ class ExactAlarmDegradationCardTest {
     }
 }
 
-private const val EXACT_ALARM_CARD_TITLE = "Exact alarms are off"
-private const val EXACT_ALARM_DISMISSED_VERSION_KEY = "exact_alarm_card_dismissed_version"
-
 private fun appVersionCode(context: Context): Long = runCatching {
     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -102,15 +116,3 @@ private fun appVersionCode(context: Context): Long = runCatching {
         packageInfo.versionCode.toLong()
     }
 }.getOrDefault(0L)
-
-private fun ComposeTestRule.awaitText(text: String) {
-    waitUntil(timeoutMillis = 10_000) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
-    }
-}
-
-private fun ComposeTestRule.awaitTextGone(text: String) {
-    waitUntil(timeoutMillis = 10_000) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isEmpty()
-    }
-}
