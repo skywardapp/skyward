@@ -260,19 +260,19 @@ private fun Double.roundToKm(): Int = roundToInt()
 private fun Double.oneDecimal(): String = ((this * 10).roundToInt() / 10.0).toString()
 private fun Double.toPercent(): Int = (this * 100).roundToInt()
 
+// `hhmm` and `monthAbbreviation` are DateTimeFormat.kt's, shared with the two
+// frontends. The *shape* here stays notification-specific: §10.5 writes dates
+// as "Jan 5, 2026" while the screens write "5 Jan 2026".
 private fun hhmm(instant: Instant, location: SavedLocation): String = approximateLocalDateTime(instant, location.point.lonDeg).hhmm()
 private fun hhmmUtc(instant: Instant): String = instant.toLocalDateTime(TimeZone.UTC).hhmm()
-private fun LocalDateTime.hhmm(): String = "${hour.pad2()}:${minute.pad2()}"
-private fun Int.pad2(): String = if (this < 10) "0$this" else toString()
 
-private val MONTH_ABBREVIATIONS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 private fun formatMonthDayYear(instant: Instant, location: SavedLocation): String {
     val local = approximateLocalDateTime(instant, location.point.lonDeg)
     // .month.number / .day (the non-deprecated kotlinx-datetime replacements) don't resolve
     // against this project's kotlinx-datetime version -- monthNumber/dayOfMonth are deprecated
     // but the only ones that actually compile here.
     @Suppress("DEPRECATION")
-    return "${MONTH_ABBREVIATIONS[local.monthNumber - 1]} ${local.dayOfMonth}, ${local.year}"
+    return "${monthAbbreviation(local.monthNumber)} ${local.dayOfMonth}, ${local.year}"
 }
 
 /** [compassOf] followed by a trailing space, or "" when [bearingDeg] is null -- avoids a double space at call sites that join it against a following word ("... of Home"). */

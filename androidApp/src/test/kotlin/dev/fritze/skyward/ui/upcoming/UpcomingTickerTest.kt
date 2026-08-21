@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -201,10 +202,61 @@ class UpcomingTickerTest {
     }
 
     /**
+     * #71: an empty list has two causes and one of them is the user's to fix.
+     * The screen can only tell them apart if the state carries the answer, and
+     * an occurrence in the horizon is not evidence either way — a location can
+     * be missing while sources have plenty to say.
+     */
+    @Test
+    fun emptyLocationListIsCarriedIntoTheState() = runTest {
+        val target = start + 2.days
+        val occurrence = auroraOccurrence(
+            "3day",
+            window = TimeWindow(target, target + 1.hours),
+            peakTime = target,
+            expiresAt = target + 2.hours,
+            kind = AuroraForecastKind.THREE_DAY,
+        )
+
+        val withLocation = collectStates(base(listOf(occurrence), UpcomingFilter(scope = UpcomingScope.ALL)))
+        val withoutLocation = collectStates(
+            base(listOf(occurrence), UpcomingFilter(scope = UpcomingScope.ALL), locations = emptyList()),
+        )
+        runCurrent()
+
+        assertTrue(withLocation.last().hasLocations)
+        assertFalse(withoutLocation.last().hasLocations)
+    }
+
+    /** #71: "Live Kp unavailable" has to be able to say whether the fetch failed. */
+    @Test
+    fun liveKpFailureIsCarriedIntoTheState() = runTest {
+        val target = start + 2.days
+        val occurrence = auroraOccurrence(
+            "3day",
+            window = TimeWindow(target, target + 1.hours),
+            peakTime = target,
+            expiresAt = target + 2.hours,
+            kind = AuroraForecastKind.THREE_DAY,
+        )
+
+        val states = collectStates(
+            base(listOf(occurrence), UpcomingFilter(scope = UpcomingScope.ALL)),
+            liveKpFailed = true,
+        )
+        runCurrent()
+
+        assertTrue(states.last().liveKpFailed)
+    }
+
+    /**
      * Collects into a list that later assertions read; the flow keeps ticking
      * on [TestScope.backgroundScope], which `runTest` cancels for us.
      */
-    private fun TestScope.collectStates(base: UpcomingBaseState): List<UpcomingUiState> {
+    private fun TestScope.collectStates(
+        base: UpcomingBaseState,
+        liveKpFailed: Boolean = false,
+    ): List<UpcomingUiState> {
         val states = mutableListOf<UpcomingUiState>()
         upcomingStatesOverTime(
             base = base,
@@ -212,6 +264,7 @@ class UpcomingTickerTest {
             ovationGrid = grid(home.point to 62),
             visibilityModels = visibilityModels,
             clock = virtualClock(),
+            liveKpFailed = liveKpFailed,
         ).onEach { states += it }.launchIn(backgroundScope)
         return states
     }
@@ -229,9 +282,10 @@ class UpcomingTickerTest {
     private fun base(
         occurrences: List<Occurrence>,
         filter: UpcomingFilter = UpcomingFilter(),
+        locations: List<SavedLocation> = listOf(home),
     ) = UpcomingBaseState(
         occurrences = occurrences,
-        locations = listOf(home),
+        locations = locations,
         rules = emptyList(),
         filter = filter,
         isRefreshing = false,

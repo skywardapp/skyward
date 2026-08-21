@@ -77,7 +77,14 @@ fun SkywardNavHost(container: AppContainer, onboardingDone: Boolean) {
                 }
             }
             composable(Routes.UPCOMING) {
-                UpcomingScreen(container, onOpenEvent = { navController.navigate(Routes.eventDetail(it)) })
+                UpcomingScreen(
+                    container,
+                    onOpenEvent = { navController.navigate(Routes.eventDetail(it)) },
+                    // Straight to Locations, not to Settings: the empty state's
+                    // whole point is that the screen the user needs is two
+                    // levels away from where they are looking (#71).
+                    onOpenLocations = { navController.navigate(Routes.LOCATIONS) },
+                )
             }
             composable(Routes.EVENT_DETAIL) { entry ->
                 val occurrenceId = entry.arguments?.getString(Routes.EVENT_DETAIL_ARG).orEmpty()
