@@ -1,11 +1,16 @@
 package dev.fritze.skyward.desktop
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.FrameWindowScope
+import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
@@ -16,11 +21,12 @@ import dev.fritze.skyward.desktop.scheduler.SourceRefreshLoop
 import dev.fritze.skyward.desktop.tray.SkywardTray
 import dev.fritze.skyward.desktop.tray.TrayActions
 import dev.fritze.skyward.desktop.ui.DesktopAppState
+import dev.fritze.skyward.desktop.ui.Destination
 import dev.fritze.skyward.desktop.ui.SkywardApp
 import dev.fritze.skyward.desktop.util.runCatchingCancellable
+import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 /** Shown in the About section and written into §12 export files. Kept in step with `compose.desktop`'s `packageVersion`. */
 const val APP_VERSION = "0.1.0"
@@ -53,6 +59,7 @@ fun main(args: Array<String>) {
             windowVisibility.value = true
             occurrenceId?.let(state::openOccurrence)
         },
+        onDeliveryOutcome = state::recordDeliveryOutcome,
     )
     val refreshLoop = SourceRefreshLoop(sourceRunner = container.sourceRunner)
 
@@ -98,10 +105,42 @@ fun main(args: Array<String>) {
             state = windowState,
             visible = visible,
         ) {
+            SkywardMenuBar(state)
             SkywardApp(state)
         }
     }
 }
+
+/**
+ * §79's other half: the app was mouse-only — no menu bar, no shortcuts, and
+ * canvases that cannot take focus. A menu bar is the cheapest thing that
+ * makes every destination reachable from the keyboard *and* discoverable,
+ * since it also tells the user the shortcuts exist. It is the standard place
+ * a Linux desktop user looks for both.
+ *
+ * Ctrl+1..7 in [Destination] order, matching the nav rail top to bottom, so
+ * the two orderings can't drift: the rail is built from the same `entries`.
+ */
+@Composable
+private fun FrameWindowScope.SkywardMenuBar(state: DesktopAppState) {
+    MenuBar {
+        Menu("View", mnemonic = 'V') {
+            Destination.entries.forEachIndexed { index, destination ->
+                Item(
+                    text = destination.title,
+                    shortcut = KeyShortcut(digitKeys[index], ctrl = true),
+                    onClick = { state.navigateTo(destination) },
+                )
+            }
+        }
+        Menu("Data", mnemonic = 'D') {
+            Item("Refresh all sources", shortcut = KeyShortcut(Key.R, ctrl = true), onClick = state::refreshEverything)
+        }
+    }
+}
+
+/** Key constants are not indexable, so the 1..7 row is spelled out once. */
+private val digitKeys = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven)
 
 private const val FLAG_BACKGROUND = "--background"
 

@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.sourceDisplayName
@@ -74,9 +76,13 @@ internal fun SourcesSection(state: DesktopAppState) {
                     onClick = { state.refreshSources(setOf(row.id)) },
                     enabled = row.enabled && row.id !in refreshing,
                 ) { Text("Refresh") }
+                // The row also carries a "Refresh" button, so it cannot be
+                // toggleable as a whole; the switch is named instead, so a
+                // screen reader says which source it belongs to (#79).
                 Switch(
                     checked = row.enabled,
                     onCheckedChange = { enabled -> state.launch { setSourceEnabled(state, row.id, enabled) } },
+                    modifier = Modifier.semantics { contentDescription = "Enable ${row.displayName}" },
                 )
             }
         }
