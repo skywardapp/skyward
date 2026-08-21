@@ -60,7 +60,7 @@ class AlarmFlowInstrumentedTest {
         // Reset rather than assume: the card tests substitute a gate on this
         // same process-singleton container, and a stale fake would quietly
         // turn every posting assertion below into a no-op.
-        container.notificationGate = AndroidNotificationGate(context)
+        container.restoreRealNotificationGate(context)
         // Both cancelAll() and notify() are one-way calls into system_server:
         // they return before the shade has caught up. Waiting for the cancel to
         // land keeps the *previous* test's teardown from arriving after this
@@ -75,7 +75,7 @@ class AlarmFlowInstrumentedTest {
 
     @After
     fun restoreNotificationGate() {
-        container.notificationGate = AndroidNotificationGate(context)
+        container.restoreRealNotificationGate(context)
     }
 
     /**
@@ -195,7 +195,7 @@ class AlarmFlowInstrumentedTest {
      */
     @Test
     fun blockedNotificationsRecordMissedAndPostNothing() = runTest {
-        container.notificationGate = NotificationGate { false }
+        container.blockNotifications()
         val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.EXACT)
         container.notificationRepo.upsert(n)
 
@@ -227,14 +227,14 @@ class AlarmFlowInstrumentedTest {
      */
     @Test
     fun blockedNotificationDoesNotConsumeTheOnceEverApproximateHedge() = runTest {
-        container.notificationGate = NotificationGate { false }
-        container.settingsRepo.delete(APPROXIMATE_HEDGE_SHOWN_KEY)
+        container.blockNotifications()
+        container.settingsRepo.delete(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN)
         val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.APPROXIMATE)
         container.notificationRepo.upsert(n)
 
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        assertNull("the hedge must still be owed to the user", container.settingsRepo.get(APPROXIMATE_HEDGE_SHOWN_KEY))
+        assertNull("the hedge must still be owed to the user", container.settingsRepo.get(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN))
     }
 
     /** True if [notificationId] is still absent from the shade after a short grace period. */
@@ -249,6 +249,5 @@ class AlarmFlowInstrumentedTest {
         // Proving a *negative* can only ever be "still nothing after a while";
         // the full timeout would just be dead time on every such assertion.
         const val ABSENCE_GRACE_MILLIS = 500L
-        const val APPROXIMATE_HEDGE_SHOWN_KEY = "approximate_hedge_shown"
     }
 }

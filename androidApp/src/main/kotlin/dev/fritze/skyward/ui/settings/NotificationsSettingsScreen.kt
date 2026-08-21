@@ -35,7 +35,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.openAppNotificationSettings
 
-/** §13.1/§10.1: channels shortcut, the honesty explainer, and both permission states -- whether reminders can be delivered at all, and whether they can be delivered on time. Quiet hours are per-rule (§9.1), editable via the full RuleEditor (M5) -- shown read-only here. */
+/**
+ * §13.1/§10.1: channels shortcut, the honesty explainer, and both permission
+ * states -- whether reminders can be delivered at all, and whether they can
+ * be delivered on time. Quiet hours are per-rule (§9.1), editable via the
+ * full RuleEditor (M5) -- shown read-only here.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
@@ -60,33 +65,11 @@ fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // First card, above the explainer: with notifications off, nothing the
-            // explainer describes happens at all (§10.1). Coloured as an error only
-            // in that state -- the same card states the healthy case plainly, so the
-            // screen always answers "are my reminders getting through?".
-            Card(
-                Modifier.fillMaxWidth(),
-                colors = if (canPostNotifications) {
-                    CardDefaults.cardColors()
-                } else {
-                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                },
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Notifications", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        if (canPostNotifications) {
-                            "Allowed — reminders will be shown."
-                        } else {
-                            "Blocked — every reminder is dropped and recorded as missed. " +
-                                "Nothing else on this screen matters until this is fixed."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (!canPostNotifications) {
-                        Button(onClick = { openAppNotificationSettings(context) }) { Text("Turn notifications on") }
-                    }
-                }
-            }
+            // explainer describes happens at all (§10.1).
+            NotificationDeliveryCard(
+                canPostNotifications = canPostNotifications,
+                onOpenSettings = { openAppNotificationSettings(context) },
+            )
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -117,6 +100,42 @@ fun NotificationsSettingsScreen(container: AppContainer, onBack: () -> Unit) {
             }
 
             OutlinedButton(onClick = { openAppNotificationSettings(context) }) { Text("Open system notification settings") }
+        }
+    }
+}
+
+/**
+ * Whether reminders reach the user at all. Extracted rather than inlined
+ * above both because the screen's branching was over Sonar's cognitive
+ * complexity limit and because it mirrors Upcoming's `NotificationsBlockedCard`
+ * -- the two screens should describe the same failure the same way. Coloured
+ * as an error only when blocked: the card also states the healthy case plainly,
+ * so the screen always answers "are my reminders getting through?".
+ */
+@Composable
+private fun NotificationDeliveryCard(canPostNotifications: Boolean, onOpenSettings: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = if (canPostNotifications) {
+            CardDefaults.cardColors()
+        } else {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        },
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Notifications", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (canPostNotifications) {
+                    "Allowed — reminders will be shown."
+                } else {
+                    "Blocked — every reminder is dropped and recorded as missed. " +
+                        "Nothing else on this screen matters until this is fixed."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (!canPostNotifications) {
+                Button(onClick = onOpenSettings) { Text("Turn notifications on") }
+            }
         }
     }
 }

@@ -9,9 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
-import dev.fritze.skyward.alarm.AndroidNotificationGate
 import dev.fritze.skyward.alarm.FakeAlarmScheduler
-import dev.fritze.skyward.alarm.NotificationGate
+import dev.fritze.skyward.alarm.blockNotifications
+import dev.fritze.skyward.alarm.restoreRealNotificationGate
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.awaitText
 import kotlinx.coroutines.runBlocking
@@ -41,7 +41,7 @@ class NotificationsBlockedCardTest {
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<SkywardApplication>()
             container = app.container
-            container.notificationGate = NotificationGate { false }
+            container.blockNotifications()
             container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = false)
             container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
         }
@@ -51,7 +51,7 @@ class NotificationsBlockedCardTest {
     // make every later test class believe notifications are off.
     @After
     fun restoreNotificationGate() {
-        container.notificationGate = AndroidNotificationGate(ApplicationProvider.getApplicationContext())
+        container.restoreRealNotificationGate(ApplicationProvider.getApplicationContext())
     }
 
     // Block body, not an expression body: see the note in
@@ -61,8 +61,8 @@ class NotificationsBlockedCardTest {
         runBlocking {
             showUpcoming()
 
-            composeRule.awaitText(BLOCKED_CARD_TITLE)
-            composeRule.onNodeWithText(BLOCKED_CARD_TITLE).assertIsDisplayed()
+            composeRule.awaitText(NOTIFICATIONS_BLOCKED_CARD_TITLE)
+            composeRule.onNodeWithText(NOTIFICATIONS_BLOCKED_CARD_TITLE).assertIsDisplayed()
             composeRule.onNodeWithText("Turn notifications on").assertIsDisplayed()
         }
     }
@@ -72,7 +72,7 @@ class NotificationsBlockedCardTest {
         runBlocking {
             showUpcoming()
 
-            composeRule.awaitText(BLOCKED_CARD_TITLE)
+            composeRule.awaitText(NOTIFICATIONS_BLOCKED_CARD_TITLE)
             composeRule.onAllNodesWithText(EXACT_ALARM_CARD_TITLE).assertCountEquals(0)
             // Dismissing would restore the silent failure the card exists to end.
             composeRule.onAllNodesWithText("Dismiss").assertCountEquals(0)
@@ -85,7 +85,3 @@ class NotificationsBlockedCardTest {
         }
     }
 }
-
-private const val BLOCKED_CARD_TITLE = "Notifications are blocked"
-private const val EXACT_ALARM_CARD_TITLE = "Exact alarms are off"
-private const val EXACT_ALARM_DISMISSED_VERSION_KEY = "exact_alarm_card_dismissed_version"

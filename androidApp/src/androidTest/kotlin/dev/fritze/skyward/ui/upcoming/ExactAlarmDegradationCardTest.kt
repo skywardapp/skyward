@@ -13,9 +13,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.fritze.skyward.SkywardApplication
-import dev.fritze.skyward.alarm.AndroidNotificationGate
 import dev.fritze.skyward.alarm.FakeAlarmScheduler
-import dev.fritze.skyward.alarm.NotificationGate
+import dev.fritze.skyward.alarm.allowNotifications
+import dev.fritze.skyward.alarm.restoreRealNotificationGate
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.awaitText
 import dev.fritze.skyward.ui.awaitTextGone
@@ -45,7 +45,7 @@ class ExactAlarmDegradationCardTest {
             // fatal one first), so this suite has to pin the healthy state
             // rather than inherit whatever the emulator's notification toggle
             // happens to be.
-            container.notificationGate = NotificationGate { true }
+            container.allowNotifications()
             container.settingsRepo.delete(EXACT_ALARM_DISMISSED_VERSION_KEY)
         }
     }
@@ -54,7 +54,7 @@ class ExactAlarmDegradationCardTest {
     // otherwise leak into every test class that runs after this one.
     @After
     fun restoreNotificationGate() {
-        container.notificationGate = AndroidNotificationGate(ApplicationProvider.getApplicationContext())
+        container.restoreRealNotificationGate(ApplicationProvider.getApplicationContext())
     }
 
     // Block bodies, not `= runBlocking { ... }`: an expression body's return
@@ -106,9 +106,6 @@ class ExactAlarmDegradationCardTest {
         }
     }
 }
-
-private const val EXACT_ALARM_CARD_TITLE = "Exact alarms are off"
-private const val EXACT_ALARM_DISMISSED_VERSION_KEY = "exact_alarm_card_dismissed_version"
 
 private fun appVersionCode(context: Context): Long = runCatching {
     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
