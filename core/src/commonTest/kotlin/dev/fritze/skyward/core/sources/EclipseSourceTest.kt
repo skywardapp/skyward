@@ -1,10 +1,14 @@
 package dev.fritze.skyward.core.sources
 
+import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.model.LunarEclipsePayload
 import dev.fritze.skyward.core.model.OccurrencePayload
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
+import io.github.cosinekitty.astronomy.EclipseKind
+import io.github.cosinekitty.astronomy.Observer
+import io.github.cosinekitty.astronomy.searchLocalSolarEclipse
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -13,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.measureTimedValue
@@ -77,11 +82,31 @@ class EclipseSourceTest {
         // exact solve — allow a reasonable margin either side.
         assertTrue(maxDurationSec in 110.0..150.0, "expected max central duration near 138.2s, got $maxDurationSec")
 
-        // Path should trace west-to-east-ish through the published region
-        // (Siberia -> Arctic -> Greenland -> Iceland -> Spain) — every sample
-        // must itself be a real total/annular point (self-consistency, §17.2).
+        // Payload shape: a central-path sample without a positive duration is
+        // a row that should never have been emitted. This is a check on what
+        // the sampler *wrote*, not on where the point is.
         for (sample in payload.centralPath) {
             assertTrue(sample.centralDurationSec != null && sample.centralDurationSec > 0.0)
+        }
+
+        // §17.2's self-consistency requirement — "every PathSample.point must
+        // itself evaluate as TOTAL via local search" — needs an independent
+        // re-evaluation, not a read of the field the sampler already wrote.
+        // This file runs on Android too (commonTest), so it checks a handful
+        // of representative points rather than the whole track; the
+        // fixture-wide comparison against every published GSFC row, for all
+        // three named eclipses, lives in EclipsePathCanonTest (desktopTest).
+        val representative = listOf(payload.centralPath.first(), payload.centralPath[payload.centralPath.size / 2], payload.centralPath.last())
+        for (sample in representative) {
+            val local = searchLocalSolarEclipse(
+                (sample.time - 4.hours).toAstroTime(),
+                Observer(sample.point.latDeg, sample.point.lonDeg, 0.0),
+            )
+            assertEquals(
+                EclipseKind.Total,
+                local.kind,
+                "independent local search at ${sample.time} ${sample.point} says ${local.kind}, not TOTAL",
+            )
         }
     }
 

@@ -10,6 +10,7 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TimeWindow
+import dev.fritze.skyward.core.model.VisibilityResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -162,6 +163,81 @@ class AuroraVisibilityModelTest {
         // threshold, not the THREE_DAY regime's MARGINAL one -- the two
         // regimes must not share a hardcoded qualityAtNearestPoint.
         assertEquals(Quality.GOOD, result.qualityAtNearestPoint)
+    }
+
+    @Test
+    fun qualityAndTravelDistanceAreMonotoneInKp() {
+        // §17.4's "Kp rule monotonicity". A geomagnetic storm getting
+        // stronger can only ever improve a location's prospects, so sweeping
+        // Kp upward must never lower the quality, never turn a visible
+        // location invisible, and never push the travel target further away.
+        // Stated as a property rather than a handful of frozen values because
+        // the failure it guards against — an inverted comparison or a
+        // mis-signed term in `visLat = 66 - 2*Kp` — can leave any individual
+        // sample looking entirely plausible.
+        val southernHemisphere = GeoPoint(-45.87, 170.50) // Dunedin, NZ: exercises abs(gmLat)
+        val places = mapOf(
+            "Tromso" to tromso,
+            "Calgary" to calgary,
+            "Berlin" to berlin,
+            "Munich" to munich,
+            "Dunedin" to southernHemisphere,
+        )
+        // Both windows, because the darkness gate caps quality independently
+        // of Kp: monotonicity has to survive the cap, not just hold above it.
+        val windows = mapOf("dark" to tromsoWinterNight, "daylit" to munichSummerNoon)
+
+        for ((placeName, point) in places) {
+            for ((windowName, window) in windows) {
+                val ctx = VisibilityContext(now = window.start, ovationGrid = null)
+                var previous: VisibilityResult? = null
+                var previousKp = 0.0
+                var kp = 0.0
+                while (kp <= 9.0) {
+                    val result = model.evaluate(threeDayOccurrence(kp, window), loc(point), ctx)
+                    val last = previous
+                    if (last != null) {
+                        val where = "$placeName/$windowName Kp $previousKp -> $kp"
+                        assertTrue(
+                            result.quality >= last.quality,
+                            "$where: quality fell from ${last.quality} to ${result.quality}",
+                        )
+                        assertTrue(
+                            result.visibleAtLocation || !last.visibleAtLocation,
+                            "$where: visible at the lower Kp but not the higher one",
+                        )
+                        val previousTravel = last.travelDistanceKm
+                        val currentTravel = result.travelDistanceKm
+                        if (previousTravel != null && currentTravel != null) {
+                            // 1e-9 absorbs the destination-point trigonometry's
+                            // rounding; the assertion is about direction, not
+                            // about exact distances.
+                            assertTrue(
+                                currentTravel <= previousTravel + 1e-9,
+                                "$where: travel distance grew from $previousTravel km to $currentTravel km",
+                            )
+                        }
+                    }
+                    previous = result
+                    previousKp = kp
+                    kp += 0.25
+                }
+            }
+        }
+    }
+
+    @Test
+    fun aStrongEnoughStormEventuallyReachesEveryLatitudeItShould() {
+        // Guards the degenerate way monotonicity can hold: a model that
+        // returns NONE everywhere is monotone too. Berlin needs Kp 6.9
+        // (frozen above), so it must be NONE well below that and visible
+        // above it.
+        val ctx = VisibilityContext(now = tromsoWinterNight.start, ovationGrid = null)
+        val belowThreshold = model.evaluate(threeDayOccurrence(kp = 5.0, window = tromsoWinterNight), loc(berlin), ctx)
+        val aboveThreshold = model.evaluate(threeDayOccurrence(kp = 8.0, window = tromsoWinterNight), loc(berlin), ctx)
+
+        assertEquals(Quality.NONE, belowThreshold.quality, "Berlin at Kp 5 is below its own kpNeeded of 6.9")
+        assertTrue(aboveThreshold.visibleAtLocation, "Berlin at Kp 8 is past its threshold and should be visible")
     }
 
     private fun uniformGrid(probability: Int): OvationGrid {

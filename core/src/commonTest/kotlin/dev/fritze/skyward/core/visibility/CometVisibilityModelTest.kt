@@ -118,6 +118,149 @@ class CometVisibilityModelTest {
         }
     }
 
+    /**
+     * A synthetic comet, not a real one: `q = 3 au` on a parabolic orbit
+     * keeps it far enough away that its geometry barely moves over a
+     * lunation, and an implausibly bright `m1` keeps it well inside the
+     * magnitude gate throughout. Both are deliberate — they hold every axis
+     * of §17.4's "magnitude/altitude/moon matrix" still except the one under
+     * test, which no real comet's fast-changing geometry would do.
+     */
+    private val slowBrightElements = CometElements(
+        epoch = Instant.parse("2027-03-01T00:00:00Z"),
+        eccentricity = 1.0,
+        perihelionDistanceAu = 3.0,
+        inclinationDeg = 20.0,
+        ascendingNodeDeg = 100.0,
+        argPerihelionDeg = 60.0,
+        tpPerihelion = Instant.parse("2027-03-01T00:00:00Z"),
+    )
+
+    /**
+     * Same trick, tilted into a polar orbit with the argument of perihelion
+     * putting the comet over the *south* ecliptic pole: geocentric
+     * declination stays between -80 deg and -66 deg, which from 52 deg N
+     * never clears the horizon at all.
+     */
+    private val farSouthernElements = slowBrightElements.copy(
+        inclinationDeg = 90.0,
+        ascendingNodeDeg = 0.0,
+        argPerihelionDeg = 270.0,
+    )
+
+    private fun syntheticOccurrence(elements: CometElements, magParams: CometMagParams) = Occurrence(
+        id = "cm:synthetic:test",
+        phenomenon = Phenomenon.COMET,
+        sourceId = "jpl",
+        title = "Synthetic comet",
+        window = TimeWindow(elements.tpPerihelion - 120.days, elements.tpPerihelion + 120.days),
+        // Peak deliberately in the past relative to every `now` below, so the
+        // model evaluates "how does this look tonight" at `now` rather than
+        // jumping to a shared peak date and making all these cases identical.
+        peakTime = elements.tpPerihelion - 400.days,
+        certainty = Certainty.FORECAST,
+        payload = CometPayload(
+            designation = "X/2027 T1",
+            name = "Synthetic",
+            elements = elements,
+            magParams = magParams,
+            perihelionDate = elements.tpPerihelion,
+            peakMag = magParams.m1,
+            peakMagDate = elements.tpPerihelion,
+            magAtIngest = magParams.m1,
+        ),
+        fetchedAt = elements.tpPerihelion - 120.days,
+        expiresAt = null,
+    )
+
+    @Test
+    fun aFarSouthernCometFrom52NorthIsNoneForAReasonTheDetailsSpellOut() {
+        // §17.4: "a far-southern-declination comet evaluated from 52 deg N
+        // returns NONE with a stated reason and null travel fields".
+        val occ = syntheticOccurrence(farSouthernElements, CometMagParams(m1 = -4.0, k1 = 4.0))
+
+        for (dayOffset in listOf(-30, -10, 0, 10, 30, 60)) {
+            val now = farSouthernElements.tpPerihelion + dayOffset.days
+            val result = model.evaluate(occ, loc(GeoPoint(52.0, 7.6)), VisibilityContext(now = now, ovationGrid = null))
+            val details = assertNotNull(result.localDetails as? LocalDetails.CometLocal, "day $dayOffset")
+
+            assertEquals(Quality.NONE, result.quality, "day $dayOffset")
+            assertTrue(!result.visibleAtLocation, "day $dayOffset")
+
+            // The reason has to be *readable*, not merely correct: a bare
+            // NONE would leave the UI (13.3) and the notification copy
+            // (10.5) with nothing to say. These are the fields they render.
+            assertTrue(
+                details.predictedMag <= 6.0,
+                "day $dayOffset: this case must fail on altitude, not brightness — mag was ${details.predictedMag}",
+            )
+            assertTrue(
+                details.maxAltDeg < 0.0,
+                "day $dayOffset: expected a comet that never rises, got maxAlt ${details.maxAltDeg}",
+            )
+            // A night exists here (unlike the permanent-daylight case below),
+            // so the model can say *when* it looked — it just never found the
+            // comet above the horizon during it.
+            assertNotNull(details.maxAltTime, "day $dayOffset")
+            assertNull(details.bestViewingStart, "day $dayOffset")
+            assertNull(details.bestViewingEnd, "day $dayOffset")
+
+            // 8.6: comets are a timing/latitude matter, never a travel one.
+            assertNull(result.nearestVisiblePoint, "day $dayOffset")
+            assertNull(result.travelDistanceKm, "day $dayOffset")
+            assertNull(result.travelBearingDeg, "day $dayOffset")
+            assertNull(result.qualityAtNearestPoint, "day $dayOffset")
+        }
+
+        // And the same comet from the southern hemisphere is a fine sight —
+        // otherwise this test would also pass against a model that returns
+        // NONE for everything.
+        val fromDunedin = model.evaluate(
+            occ,
+            loc(GeoPoint(-45.87, 170.50)),
+            VisibilityContext(now = farSouthernElements.tpPerihelion, ovationGrid = null),
+        )
+        assertTrue(fromDunedin.visibleAtLocation, "the same comet should be visible from 46 deg S")
+    }
+
+    @Test
+    fun aBrightMoonSharingTheCometsSkyCostsOneQualityLevel() {
+        // 8.6's moon term is the axis of the "magnitude/altitude/moon matrix"
+        // nothing asserted. Isolating it needs the other two axes held still,
+        // which is what `slowBrightElements` is for: across all six nights
+        // below the predicted magnitude stays near -0.5 and the maximum
+        // altitude near 70 deg, so both gates and both magnitude/altitude
+        // brackets are identical and the moon is the only thing that moves.
+        //
+        // Three consecutive lunations rather than one pair: a single
+        // coincidence could line up, but a quality that drops on all three
+        // full moons and recovers on all three new moons is the moon term.
+        val occ = syntheticOccurrence(slowBrightElements, CometMagParams(m1 = -4.0, k1 = 4.0))
+        val location = loc(GeoPoint(52.0, 7.6))
+        val newMoonNights = listOf("2027-02-06", "2027-03-08", "2027-04-07")
+        val fullMoonNights = listOf("2027-02-21", "2027-03-22", "2027-04-21")
+
+        val samples = (newMoonNights + fullMoonNights).associateWith { date ->
+            val now = Instant.parse("${date}T22:00:00Z")
+            model.evaluate(occ, location, VisibilityContext(now = now, ovationGrid = null))
+        }
+
+        // The controls: same brackets everywhere, so any quality difference
+        // below cannot be coming from magnitude or altitude.
+        for ((date, result) in samples) {
+            val details = assertNotNull(result.localDetails as? LocalDetails.CometLocal, date)
+            assertTrue(details.predictedMag <= 2.0, "$date: magnitude bracket moved — mag ${details.predictedMag}")
+            assertTrue(details.maxAltDeg >= 25.0, "$date: altitude bracket moved — maxAlt ${details.maxAltDeg}")
+        }
+
+        for (date in newMoonNights) {
+            assertEquals(Quality.EXCELLENT, samples.getValue(date).quality, "$date is a dark night for this comet")
+        }
+        for (date in fullMoonNights) {
+            assertEquals(Quality.GOOD, samples.getValue(date).quality, "$date has a full moon in the comet's sky")
+        }
+    }
+
     @Test
     fun aPermanentDaylightWindowGetsNoneWithNullBestViewing() {
         // Svalbard midsummer: no astronomical night exists at all, so
