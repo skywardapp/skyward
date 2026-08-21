@@ -111,7 +111,11 @@ class RefreshResult(
 }
 
 sealed class Schedule {
-    /** Recompute when horizon/locations/settings change. */
+    /**
+     * Recompute when horizon/locations/settings change — and, because the
+     * horizon is `now .. now + horizonYears` and so moves by itself, once a
+     * day regardless (docs/adr/0009-daily-recompute-of-computed-sources.md).
+     */
     data object OnHorizonChange : Schedule()
     data class Periodic(val interval: Duration) : Schedule()
     /** Aurora: fast when Kp is high. */

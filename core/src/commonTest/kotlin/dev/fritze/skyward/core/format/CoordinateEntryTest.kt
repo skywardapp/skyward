@@ -2,6 +2,7 @@ package dev.fritze.skyward.core.format
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -69,6 +70,18 @@ class CoordinateEntryTest {
         assertTrue("Latitude" in lat, lat)
         val lon = assertNotNull(parseCoordinate("200", CoordinateAxis.LONGITUDE).error)
         assertTrue("Longitude" in lon, lon)
+    }
+
+    @Test
+    fun `a signed zero is a value, not an error`() {
+        // The hemisphere button only appears once the field parses, and "-0"
+        // is a real thing to type on the way to "-0.5". It parses to -0.0,
+        // which compares equal to 0.0 -- so a caller must read the hemisphere
+        // off the typed text, not off this Double.
+        val entry = parseCoordinate("-0", CoordinateAxis.LATITUDE)
+        assertEquals(-0.0, entry.degrees)
+        assertFalse(entry.isError)
+        assertTrue(entry.degrees!! == 0.0, "as a primitive it compares equal to zero, which is the trap")
     }
 
     @Test

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.CoordinateAxis
 import dev.fritze.skyward.core.format.deleteLocationConfirmation
+import dev.fritze.skyward.core.format.formatDegrees
 import dev.fritze.skyward.core.format.parseCoordinate
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SavedLocation
@@ -29,7 +30,6 @@ import dev.fritze.skyward.core.persistence.deleteLocation
 import dev.fritze.skyward.core.rules.locationDeletionImpact
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.common.formatDegrees
 import java.util.UUID
 import kotlin.time.Clock
 
