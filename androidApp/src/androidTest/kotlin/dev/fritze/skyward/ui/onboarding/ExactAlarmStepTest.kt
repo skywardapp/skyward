@@ -43,6 +43,7 @@ class ExactAlarmStepTest {
 
         composeRule.awaitText("Continue")
         composeRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeRule.onNodeWithText("Exact alarms are on", substring = true).assertIsDisplayed()
         // Neither the request button nor the apologetic way out belongs on a
         // screen where there is nothing left to request.
         composeRule.onAllNodesWithText("Enable exact alarms").assertCountEquals(0)
@@ -64,6 +65,7 @@ class ExactAlarmStepTest {
         composeRule.awaitText("Enable exact alarms")
         composeRule.onNodeWithText("Enable exact alarms").assertIsDisplayed()
         composeRule.onNodeWithText("Not now").assertIsDisplayed()
+        composeRule.onNodeWithText("Skyward needs the exact-alarm permission", substring = true).assertIsDisplayed()
         composeRule.onAllNodesWithText("Continue").assertCountEquals(0)
     }
 
@@ -91,6 +93,7 @@ class ExactAlarmStepTest {
 
         composeRule.awaitText("Continue")
         composeRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeRule.onNodeWithText("Exact alarms are on", substring = true).assertIsDisplayed()
         composeRule.onAllNodesWithText("Enable exact alarms").assertCountEquals(0)
         composeRule.onAllNodesWithText("Not now").assertCountEquals(0)
     }
