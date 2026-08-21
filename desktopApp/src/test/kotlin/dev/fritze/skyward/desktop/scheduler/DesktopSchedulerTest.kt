@@ -16,25 +16,39 @@ import dev.fritze.skyward.core.persistence.OccurrenceRepo
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import dev.fritze.skyward.desktop.notify.DesktopNotification
 import dev.fritze.skyward.desktop.notify.DesktopNotifier
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
- * §10.3's in-process scheduler. Uses `runBlocking` rather than `runTest`
- * deliberately: the repositories dispatch their SQL onto `Dispatchers.Default`,
- * so a virtual-time test scheduler would not actually wait for the writes
- * these assertions are about.
+ * §10.3's in-process scheduler, on `runTest`'s virtual clock throughout.
+ *
+ * Both repositories are constructed with this test's own
+ * [StandardTestDispatcher], so their SQL runs on the scheduler `runTest`
+ * controls rather than on `Dispatchers.Default` — without that the writes
+ * these assertions are about land on a real thread pool at a real moment,
+ * and the only way to wait for one is to sleep and hope. Two of the
+ * assertions here are negatives ("it did *not* fire a second time", "a
+ * future reminder waits"), and a negative proven by a real sleep only ever
+ * proves the machine was busy enough not to get there yet.
+ *
+ * With the dispatcher injected, `advanceUntilIdle()` means exactly "run
+ * everything that is ready" and `advanceTimeBy` means exactly "let this much
+ * of the schedule elapse" — no sleeps, no polling, and nothing that gets
+ * slower or flakier on a loaded CI runner.
  */
+@OptIn(ExperimentalCoroutinesApi::class) // advanceUntilIdle/advanceTimeBy
 class DesktopSchedulerTest {
 
     private val now = Instant.parse("2026-08-14T20:00:00Z")
@@ -55,6 +69,12 @@ class DesktopSchedulerTest {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         SkywardDatabase.Schema.create(driver)
         return SkywardDatabase(driver)
+    }
+
+    /** Repos whose SQL runs on [scope]'s scheduler, so `advanceUntilIdle()` covers it. */
+    private fun TestScope.repos(database: SkywardDatabase = newDatabase()): Pair<NotificationRepo, OccurrenceRepo> {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        return NotificationRepo(database, dispatcher) to OccurrenceRepo(database, dispatcher)
     }
 
     private fun notification(id: String, fireAt: Instant, status: NotificationStatus = NotificationStatus.PENDING) =
@@ -86,18 +106,19 @@ class DesktopSchedulerTest {
     )
 
     @Test
-    fun firesADueReminderExactlyOnceAndRecordsIt() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun firesADueReminderExactlyOnceAndRecordsIt() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val notifier = RecordingNotifier()
         notificationRepo.upsert(notification("due", now))
 
-        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), notifier, onActivated = {}, clock = FixedClock(now))
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
         val job = launch { scheduler.run() }
-        awaitCondition { notificationRepo.getById("due")?.status == NotificationStatus.FIRED }
-        // Give the loop a chance to (wrongly) fire it a second time off the
-        // re-emission its own write triggers.
-        delay(200)
+        // Runs the whole loop to quiescence — including the re-emission the
+        // scheduler's own FIRED write triggers, which is where a second,
+        // wrong delivery would come from. Nothing is left in flight when
+        // this returns, so the count below is final rather than merely
+        // current.
+        advanceUntilIdle()
         job.cancel()
 
         assertEquals(1, notifier.posted.size, "expected exactly one delivery, got ${notifier.posted}")
@@ -108,15 +129,20 @@ class DesktopSchedulerTest {
     }
 
     @Test
-    fun doesNotFireSomethingStillInTheFuture() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun doesNotFireSomethingStillInTheFuture() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val notifier = RecordingNotifier()
         notificationRepo.upsert(notification("later", now + 6.hours))
 
-        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), notifier, onActivated = {}, clock = FixedClock(now))
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
         val job: Job = launch { scheduler.run() }
-        delay(300)
+        // Five of the six hours until it is due. `advanceUntilIdle()` would
+        // not do here: the clock is fixed, so the loop re-arms its `delay`
+        // forever and idle never arrives. Advancing a stated amount says
+        // what the assertion means — "with an hour still to go, nothing has
+        // fired" — where the old `delay(300)` said only "not within 300 ms
+        // of real time on this machine".
+        advanceTimeBy(5.hours)
         job.cancel()
 
         assertTrue(notifier.posted.isEmpty(), "a future reminder must wait, got ${notifier.posted}")
@@ -124,28 +150,25 @@ class DesktopSchedulerTest {
     }
 
     @Test
-    fun aDeliveryFailureStillClosesTheReminderOut() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun aDeliveryFailureStillClosesTheReminderOut() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val notifier = RecordingNotifier(succeed = false)
         notificationRepo.upsert(notification("undeliverable", now))
 
-        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), notifier, onActivated = {}, clock = FixedClock(now))
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
         val job = launch { scheduler.run() }
-        awaitCondition { notificationRepo.getById("undeliverable")?.status == NotificationStatus.FIRED }
-        delay(200)
+        advanceUntilIdle()
         job.cancel()
 
         // Reposting on every subsequent DB change would be worse than losing
         // one reminder the desktop refused to show.
         assertEquals(1, notifier.posted.size, "expected one attempt, got ${notifier.posted.size}")
+        assertEquals(NotificationStatus.FIRED, notificationRepo.getById("undeliverable")?.status)
     }
 
     @Test
-    fun startupReportsWhatWasMissedInsteadOfFiringIt() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
-        val occurrenceRepo = OccurrenceRepo(database)
+    fun startupReportsWhatWasMissedInsteadOfFiringIt() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val notifier = RecordingNotifier()
 
         val stale = notification("stale", now - 3.hours)
@@ -163,9 +186,8 @@ class DesktopSchedulerTest {
     }
 
     @Test
-    fun aReminderDiscoveredDuringStartupIsNotDemotedIntoTheMissedPanel() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun aReminderDiscoveredDuringStartupIsNotDemotedIntoTheMissedPanel() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         val notifier = RecordingNotifier()
 
         // A notifyOnFirstSeen row the startup re-plan just created: its fireAt
@@ -173,7 +195,7 @@ class DesktopSchedulerTest {
         // something the user actually missed.
         notificationRepo.upsert(notification("fresh-nowcast", now))
 
-        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), notifier, onActivated = {}, clock = FixedClock(now))
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, notifier, onActivated = {}, clock = FixedClock(now))
         val missed = scheduler.collectMissedWhileAway(now, preexistingIds = emptySet())
 
         assertTrue(missed.isEmpty(), "a just-discovered reminder is news, not history")
@@ -181,24 +203,14 @@ class DesktopSchedulerTest {
     }
 
     @Test
-    fun alreadyFiredHistoryIsLeftAlone() = runBlocking {
-        val database = newDatabase()
-        val notificationRepo = NotificationRepo(database)
+    fun alreadyFiredHistoryIsLeftAlone() = runTest {
+        val (notificationRepo, occurrenceRepo) = repos()
         notificationRepo.upsert(notification("history", now - 5.hours, NotificationStatus.FIRED))
 
-        val scheduler = DesktopScheduler(notificationRepo, OccurrenceRepo(database), RecordingNotifier(), onActivated = {}, clock = FixedClock(now))
+        val scheduler = DesktopScheduler(notificationRepo, occurrenceRepo, RecordingNotifier(), onActivated = {}, clock = FixedClock(now))
         val missed = scheduler.collectMissedWhileAway(now, preexistingIds = setOf("history"))
 
         assertTrue(missed.isEmpty())
         assertEquals(NotificationStatus.FIRED, notificationRepo.getById("history")?.status)
-    }
-
-    /** Polls a real (not virtual) clock, since the writes under test happen on other dispatchers. */
-    private suspend fun awaitCondition(timeout: kotlin.time.Duration = 5.minutes / 60, block: suspend () -> Boolean) {
-        val satisfied = withTimeoutOrNull(timeout) {
-            while (!block()) delay(10)
-            true
-        }
-        assertTrue(satisfied == true, "condition not met within $timeout")
     }
 }

@@ -23,6 +23,23 @@ Both land with the milestones above, not M0.
   segments in the background and stitches them with ffmpeg on stop. Recording
   is best-effort: no device, no `screenrecord`, no ffmpeg → the tests still
   run and the job's result is unchanged.
+- **`mock-notification-daemon.py`** — §17.5's "CI container with a mock
+  notification daemon". Claims `org.freedesktop.Notifications` on the session
+  bus and answers the methods a notifier calls, so `notify-send` succeeds on a
+  headless runner with no desktop environment; every notification it accepts is
+  appended as JSON to `$SKYWARD_MOCK_NOTIFICATION_LOG`, which is how
+  `DesktopNotifierBackendTest` asserts the reminder text really crossed DBus.
+  Pure `jeepney` (`pip install jeepney`) — the one Python DBus implementation
+  needing no compiled bindings, where a real notification daemon would drag in
+  X11 or Wayland. Run it inside a `dbus-run-session`:
+
+  ```sh
+  dbus-run-session -- bash -c \
+    'python3 tools/ci/mock-notification-daemon.py & ./gradlew :desktopApp:test'
+  ```
+
+  Without it that one test skips itself rather than failing, per §17.5's own
+  "or skip-if-no-dbus guard".
 - **`check-reproducible-build.sh`** — §15.4/§17.5b's reproducibility check:
   builds `fossRelease` twice in a clean workspace and asserts the two APKs
   are reproducible — byte-for-byte identical, or (weaker, logged as such)

@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 import dev.fritze.skyward.core.model.Occurrence as OccurrenceModel
 
@@ -20,32 +21,43 @@ import dev.fritze.skyward.core.model.Occurrence as OccurrenceModel
  * (§6.3) is SourceRunner's job, not this repo's (§11: "no business logic
  * in repos").
  */
-class OccurrenceRepo(private val db: SkywardDatabase) {
+class OccurrenceRepo(
+    private val db: SkywardDatabase,
+    /**
+     * The context this repo's SQL runs on. Defaults to [Dispatchers.Default],
+     * which is what production uses; a test that needs the writes to land on a
+     * scheduler it controls (rather than on a real thread pool, at a real
+     * moment) passes its own. §17 injects clocks everywhere for the same reason
+     * — a test that proves a negative with a real sleep only proves that CI was
+     * fast enough that time.
+     */
+    private val sqlContext: CoroutineContext = Dispatchers.Default,
+) {
 
     fun observeAll(): Flow<List<OccurrenceModel>> =
-        db.occurrenceQueries.selectAll().asFlow().mapToList(Dispatchers.Default).map { rows -> rows.map { it.toModel() } }
+        db.occurrenceQueries.selectAll().asFlow().mapToList(sqlContext).map { rows -> rows.map { it.toModel() } }
 
-    suspend fun getAll(): List<OccurrenceModel> = withContext(Dispatchers.Default) {
+    suspend fun getAll(): List<OccurrenceModel> = withContext(sqlContext) {
         db.occurrenceQueries.selectAll().executeAsList().map { it.toModel() }
     }
 
-    suspend fun getById(id: String): OccurrenceModel? = withContext(Dispatchers.Default) {
+    suspend fun getById(id: String): OccurrenceModel? = withContext(sqlContext) {
         db.occurrenceQueries.selectById(id).executeAsOneOrNull()?.toModel()
     }
 
-    suspend fun getBySource(sourceId: String): List<OccurrenceModel> = withContext(Dispatchers.Default) {
+    suspend fun getBySource(sourceId: String): List<OccurrenceModel> = withContext(sqlContext) {
         db.occurrenceQueries.selectBySource(sourceId).executeAsList().map { it.toModel() }
     }
 
-    suspend fun getIdsBySource(sourceId: String): Set<String> = withContext(Dispatchers.Default) {
+    suspend fun getIdsBySource(sourceId: String): Set<String> = withContext(sqlContext) {
         db.occurrenceQueries.selectIdsBySource(sourceId).executeAsList().toSet()
     }
 
-    suspend fun getFirstSeenAt(id: String): Instant? = withContext(Dispatchers.Default) {
+    suspend fun getFirstSeenAt(id: String): Instant? = withContext(sqlContext) {
         db.occurrenceQueries.selectById(id).executeAsOneOrNull()?.first_seen_at?.let(Instant::parse)
     }
 
-    suspend fun upsert(occurrence: OccurrenceModel, firstSeenAt: Instant) = withContext(Dispatchers.Default) {
+    suspend fun upsert(occurrence: OccurrenceModel, firstSeenAt: Instant) = withContext(sqlContext) {
         db.occurrenceQueries.upsert(
             id = occurrence.id,
             phenomenon = occurrence.phenomenon.name,
@@ -62,7 +74,7 @@ class OccurrenceRepo(private val db: SkywardDatabase) {
         )
     }
 
-    suspend fun deleteById(id: String) = withContext(Dispatchers.Default) {
+    suspend fun deleteById(id: String) = withContext(sqlContext) {
         db.occurrenceQueries.deleteById(id)
     }
 

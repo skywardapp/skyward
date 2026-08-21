@@ -57,12 +57,42 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # §17.5's desktop half needs a session bus with something answering
+      # org.freedesktop.Notifications, and a real notify-send to reach it
+      # with. `dbus-run-session` (dbus-x11) provides the bus,
+      # tools/ci/mock-notification-daemon.py stands in for the daemon a
+      # headless runner has no desktop environment to supply, and libnotify's
+      # notify-send is what the app actually spawns (§10.3). Without these
+      # DesktopNotifierBackendTest's end-to-end case skips itself rather than
+      # failing, so this step is what turns it into real coverage.
+      - name: Install the desktop notification test harness
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y dbus-x11 libnotify-bin
+          python3 -m pip install --user jeepney
+
       # commonTest on JVM (which since M6 includes the desktop app's own
       # tests, §17), both flavours assemble, manifest-diff and
       # licence-allowlist checks (§17.5b). Later milestones extend this job
       # rather than replace it — see §17 for the full testing strategy.
+      #
+      # Run under a private session bus with the mock notification daemon on
+      # it. `dbus-run-session` tears the bus down when the command finishes,
+      # which is also how the daemon exits.
       - name: Check (commonTest, lint, manifest parity, dependency licences)
-        run: ./gradlew check --stacktrace
+        env:
+          SKYWARD_MOCK_NOTIFICATION_LOG: ${{ runner.temp }}/mock-notifications.jsonl
+        run: |
+          dbus-run-session -- bash -c '
+            python3 tools/ci/mock-notification-daemon.py > "$RUNNER_TEMP/mock-daemon.log" &
+            for _ in $(seq 1 100); do
+              grep -q ready "$RUNNER_TEMP/mock-daemon.log" && break
+              sleep 0.1
+            done
+            grep -q ready "$RUNNER_TEMP/mock-daemon.log" ||
+              { echo "mock notification daemon never came up:"; cat "$RUNNER_TEMP/mock-daemon.log"; exit 1; }
+            ./gradlew check --stacktrace
+          '
 
       - name: Assemble both Android flavours (debug)
         run: ./gradlew :androidApp:assembleFossDebug :androidApp:assemblePlayDebug --stacktrace
