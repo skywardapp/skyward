@@ -56,6 +56,19 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        deliverNotificationTap(intent)
+    }
+
+    /**
+     * What [onNewIntent] does with a tap that arrives while the app is already
+     * running, and §17.5's seam onto it: an instrumented test cannot drive a
+     * real new-intent delivery through `ActivityScenario`, and starting the
+     * Activity a second time to provoke one leaves a scenario the test can no
+     * longer take to DESTROYED. `launchMode="singleTop"` in the manifest is
+     * what routes a real tap through here rather than onto a second copy of
+     * the app.
+     */
+    internal fun deliverNotificationTap(intent: Intent) {
         occurrenceIdFromLaunchAction(intent.action)?.let {
             tapConsumed = false
             tappedOccurrenceId.value = it

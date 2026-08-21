@@ -10,9 +10,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
-import androidx.test.runner.lifecycle.Stage
 import dev.fritze.skyward.MainActivity
 import dev.fritze.skyward.SkywardApplication
 import dev.fritze.skyward.core.model.Certainty
@@ -26,7 +23,6 @@ import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -58,18 +54,30 @@ class NotificationTapTest {
     @Before
     fun seedOccurrences() {
         runBlocking {
-            // A reminder can only fire after onboarding, and the tap is
-            // deliberately held until it is done -- so this is the state the
-            // feature actually runs in.
+            // A reminder can only fire after onboarding, so this is the state
+            // the feature actually runs in.
             context.container.settingsRepo.setOnboardingDone(true)
             context.container.occurrenceRepo.upsert(supermoon, NOW)
             context.container.occurrenceRepo.upsert(comet, NOW)
         }
     }
 
+    /**
+     * connectedAndroidTest runs every method in one process against one
+     * database, with no orchestrator clearing app data in between (the same
+     * hazard MainActivityUiTest documents), so what this class writes has to
+     * be taken back out again: left behind, the seeded occurrences and a
+     * completed-onboarding flag would decide the outcome of some later
+     * first-run or empty-list test.
+     */
     @After
-    fun closeActivity() {
+    fun restoreSharedState() {
         scenario?.close()
+        runBlocking {
+            context.container.occurrenceRepo.deleteById(supermoon.id)
+            context.container.occurrenceRepo.deleteById(comet.id)
+            context.container.settingsRepo.setOnboardingDone(false)
+        }
     }
 
     @Test
@@ -81,24 +89,45 @@ class NotificationTapTest {
     }
 
     /**
-     * The `singleTop` half of §10.2's tap target: a tap arriving while the app
-     * is already on screen has to re-route the Activity the user is looking at
-     * (via `onNewIntent`), not stack a second copy of the whole app on top of
-     * it -- which is what the same intent does without the manifest's
-     * launchMode, and which leaves a Back press on a duplicate app rather than
-     * on Upcoming.
+     * A tap arriving while the app is already on screen has to re-route the
+     * Activity the user is looking at, not leave them on the screen they were
+     * already looking at. Delivered through [MainActivity.deliverNotificationTap],
+     * the entry point `onNewIntent` uses: sending the real PendingIntent
+     * instead starts the Activity behind ActivityScenario's back, and the
+     * scenario can then no longer take it to DESTROYED (`Activity never
+     * becomes requested state "[DESTROYED]"`) -- a teardown failure that says
+     * nothing about the app.
      */
     @Test
     fun tappingAReminderWhileTheAppIsOpenRoutesTheRunningAppToTheEvent() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.awaitText("Upcoming")
 
-        // send(), not startActivity(): this is exactly what the notification
-        // shade does with the PendingIntent NotificationPoster attaches.
-        openEventPendingIntent(context, supermoon.id).send()
+        scenario!!.onActivity { it.deliverNotificationTap(openEventIntent(supermoon.id)) }
 
         composeRule.awaitText(supermoon.title)
-        assertEquals("expected one MainActivity, not a stacked second copy", 1, liveMainActivities())
+    }
+
+    /**
+     * A tap can barely reach an unfinished onboarding -- there are no
+     * reminders to fire before it -- and if one does, it must not jump the
+     * user out of the welcome flow: `finish()` writes the onboarding flag
+     * before it runs the sources and re-plans, and navigates to Upcoming only
+     * when that returns, so a detail screen opened in between would show
+     * mid-setup and be buried moments later.
+     */
+    @Test
+    fun aTapDuringOnboardingLeavesTheUserInOnboarding() {
+        runBlocking { context.container.settingsRepo.setOnboardingDone(false) }
+
+        scenario = ActivityScenario.launch(openEventIntent(supermoon.id))
+
+        composeRule.awaitText("Welcome to Skyward")
+        composeRule.waitForIdle()
+        assertTrue(
+            "a tap during onboarding opened a detail screen",
+            composeRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(),
+        )
     }
 
     /**
@@ -132,20 +161,6 @@ class NotificationTapTest {
 
     private fun openEventIntent(occurrenceId: String) =
         Intent(context, MainActivity::class.java).setAction(openEventAction(occurrenceId))
-
-    /** MainActivity instances the runtime still holds, destroyed ones aside. */
-    private fun liveMainActivities(): Int {
-        var count = 0
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            val monitor = ActivityLifecycleMonitorRegistry.getInstance()
-            count = Stage.values()
-                .filter { it != Stage.DESTROYED }
-                .flatMap { stage -> monitor.getActivitiesInStage(stage).filterIsInstance<MainActivity>() }
-                .distinct()
-                .size
-        }
-        return count
-    }
 
     private companion object {
         val NOW: Instant = Instant.parse("2026-08-21T00:00:00Z")
