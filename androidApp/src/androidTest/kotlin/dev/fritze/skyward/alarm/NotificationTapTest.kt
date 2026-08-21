@@ -1,6 +1,7 @@
 package dev.fritze.skyward.alarm
 
 import android.content.Intent
+import android.os.SystemClock
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -125,11 +126,25 @@ class NotificationTapTest {
         scenario = ActivityScenario.launch(openEventIntent(supermoon.id))
 
         composeRule.awaitText("Welcome to Skyward")
-        composeRule.waitForIdle()
-        assertTrue(
-            "a tap during onboarding opened a detail screen",
-            composeRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(),
-        )
+        assertStaysOffTheDetailScreen("a tap during onboarding")
+    }
+
+    /**
+     * A notification outlives the row it was posted for: §6.3 drops a
+     * withdrawn FORECAST occurrence at the next fetch, while the reminder
+     * sits in the shade until someone swipes it. Tapping that stale reminder
+     * has to open the app, not a detail screen with nothing behind it -- which
+     * renders "Loading…" and never resolves, because the occurrence it is
+     * waiting for is never coming back.
+     */
+    @Test
+    fun tappingAReminderForAWithdrawnOccurrenceOpensTheAppInstead() {
+        runBlocking { context.container.occurrenceRepo.deleteById(supermoon.id) }
+
+        scenario = ActivityScenario.launch(openEventIntent(supermoon.id))
+
+        composeRule.awaitText("Upcoming")
+        assertStaysOffTheDetailScreen("a tap for a withdrawn occurrence")
     }
 
     /**
@@ -151,20 +166,33 @@ class NotificationTapTest {
         scenario = ActivityScenario.launch(MainActivity::class.java)
 
         composeRule.awaitText("Upcoming")
-        composeRule.waitForIdle()
-        // Upcoming is a top-level destination and has no back arrow; the event
-        // detail screen does. Asserted on that rather than on the absence of
-        // the seeded titles, which Upcoming may legitimately list.
-        assertTrue(
-            "an ordinary launch opened a detail screen",
-            composeRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(),
-        )
+        assertStaysOffTheDetailScreen("an ordinary launch")
+    }
+
+    /**
+     * "Nothing happens" needs a window rather than one sample: the routing
+     * decision reads the database first, so a single assertion could pass
+     * simply by running before it. Watches for the event detail screen's back
+     * arrow, which Upcoming and onboarding both lack -- a surer signal than
+     * the absence of the seeded titles, which Upcoming may legitimately list.
+     */
+    private fun assertStaysOffTheDetailScreen(what: String) {
+        val deadline = SystemClock.uptimeMillis() + SETTLE_MILLIS
+        do {
+            composeRule.waitForIdle()
+            assertTrue(
+                "$what opened a detail screen",
+                composeRule.onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(),
+            )
+        } while (SystemClock.uptimeMillis() < deadline)
     }
 
     private fun openEventIntent(occurrenceId: String) =
         Intent(context, MainActivity::class.java).setAction(openEventAction(occurrenceId))
 
     private companion object {
+        const val SETTLE_MILLIS = 1_000L
+
         val NOW: Instant = Instant.parse("2026-08-21T00:00:00Z")
 
         val supermoon = Occurrence(

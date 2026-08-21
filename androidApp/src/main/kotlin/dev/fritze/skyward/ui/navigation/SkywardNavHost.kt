@@ -54,10 +54,18 @@ fun SkywardNavHost(
     // buried by that navigation seconds later. A tap can barely reach an
     // unfinished onboarding anyway — there are no reminders to fire before it
     // — so it is consumed either way and simply opens the app.
+    //
+    // The occurrence is re-read rather than trusted: a notification outlives
+    // the row it was posted for, since §6.3 drops a withdrawn FORECAST
+    // occurrence at the next fetch while the reminder sits in the shade until
+    // someone swipes it. Routing on the id alone would then open a detail
+    // screen with nothing behind it, which can only ever say "Loading…" —
+    // the same dead end NotificationPoster already avoids when the row is
+    // gone by the time it posts.
     LaunchedEffect(tappedOccurrenceId, onboardingDone) {
-        if (tappedOccurrenceId == null) return@LaunchedEffect
-        if (onboardingDone) {
-            navController.navigate(Routes.eventDetail(tappedOccurrenceId)) { launchSingleTop = true }
+        val occurrenceId = tappedOccurrenceId ?: return@LaunchedEffect
+        if (onboardingDone && container.occurrenceRepo.getById(occurrenceId) != null) {
+            navController.navigate(Routes.eventDetail(occurrenceId)) { launchSingleTop = true }
         }
         onTapConsumed()
     }
