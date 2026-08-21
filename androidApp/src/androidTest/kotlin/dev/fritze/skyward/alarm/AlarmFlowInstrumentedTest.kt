@@ -9,11 +9,18 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dev.fritze.skyward.SkywardApplication
+import dev.fritze.skyward.core.model.Certainty
+import dev.fritze.skyward.core.model.MeteorShowerPayload
 import dev.fritze.skyward.core.model.NotificationStatus
+import dev.fritze.skyward.core.model.Occurrence
+import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.PlannedNotification
 import dev.fritze.skyward.core.model.Precision
+import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -22,6 +29,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -54,7 +62,11 @@ class AlarmFlowInstrumentedTest {
     private val container = context.container
 
     @Before
-    fun clearNotifications() {
+    fun resetGateAndClearNotifications() {
+        // Reset rather than assume: the card tests substitute a gate on this
+        // same process-singleton container, and a stale fake would quietly
+        // turn every posting assertion below into a no-op.
+        container.restoreRealNotificationGate(context)
         // Both cancelAll() and notify() are one-way calls into system_server:
         // they return before the shade has caught up. Waiting for the cancel to
         // land keeps the *previous* test's teardown from arriving after this
@@ -65,6 +77,11 @@ class AlarmFlowInstrumentedTest {
         // show as a confusing failure in the test body instead of here.
         val remaining = awaitNotifications { it.isEmpty() }
         assertTrue("notifications did not clear before the test started", remaining.isEmpty())
+    }
+
+    @After
+    fun restoreNotificationGate() {
+        container.restoreRealNotificationGate(context)
     }
 
     /**
@@ -104,6 +121,29 @@ class AlarmFlowInstrumentedTest {
         firedAt = null,
     )
 
+    /** A shower whose observing window is still open, so §10.4's catch-up applies. */
+    private fun openWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 2.hours, now + 2.hours))
+
+    /** ...and one whose window closed an hour ago, so it is genuinely missed. */
+    private fun closedWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 4.hours, now - 1.hours))
+
+    private fun meteorOccurrence(id: String, window: TimeWindow) = Occurrence(
+        id = id,
+        phenomenon = Phenomenon.METEOR_SHOWER,
+        sourceId = "showers",
+        title = "Perseids",
+        window = window,
+        peakTime = window.start,
+        certainty = Certainty.CERTAIN,
+        payload = MeteorShowerPayload(
+            iauCode = "PER", name = "Perseids", zhr = 100, zhrNote = null,
+            radiantRaDeg = 46.2, radiantDecDeg = 57.4, speedKmS = 59.0, parentBody = "109P/Swift-Tuttle",
+            activityStart = window.start, activityEnd = window.end, moonIlluminationAtPeak = 0.1,
+        ),
+        fetchedAt = window.start,
+        expiresAt = null,
+    )
+
     @Test
     fun exactAlarmRegistersAndReceiverPostsNotification() = runTest {
         container.alarmScheduler = FakeAlarmScheduler(canScheduleExact = true)
@@ -111,7 +151,7 @@ class AlarmFlowInstrumentedTest {
         container.notificationRepo.upsert(n)
 
         val scheduler = container.alarmScheduler as FakeAlarmScheduler
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(listOf(n.id), scheduler.scheduled.map { it.id })
         assertEquals(Precision.EXACT, container.notificationRepo.getById(n.id)?.precision)
         assertEquals(NotificationStatus.REGISTERED, container.notificationRepo.getById(n.id)?.status)
@@ -155,7 +195,7 @@ class AlarmFlowInstrumentedTest {
         val n = freshNotification(Clock.System.now() + 5.minutes, NotificationStatus.PENDING, Precision.EXACT)
         container.notificationRepo.upsert(n)
 
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(listOf(n.id), scheduler.scheduled.map { it.id })
         assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
 
@@ -174,13 +214,13 @@ class AlarmFlowInstrumentedTest {
         val n = freshNotification(Clock.System.now() + 10.minutes, NotificationStatus.PENDING, Precision.EXACT)
         container.notificationRepo.upsert(n)
 
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
         assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
 
         // §10.2: ExactAlarmPermissionReceiver re-syncs once the permission flips.
         scheduler.setCanScheduleExact(true)
         val registered = container.notificationRepo.getById(n.id)!!
-        AlarmSyncer.sync(listOf(registered), scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(listOf(registered), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
 
         assertEquals(Precision.EXACT, container.notificationRepo.getById(n.id)?.precision)
     }
@@ -195,13 +235,109 @@ class AlarmFlowInstrumentedTest {
         // Mirrors BootReceiver.onReceive: every REGISTERED row is idempotently
         // re-registered, since a reboot wipes AlarmManager's alarms but not the DB.
         val all = container.notificationRepo.getAll()
-        AlarmSyncer.sync(all, scheduler, container.notificationRepo, Clock.System.now())
+        AlarmSyncer.sync(all, scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
 
         assertTrue("expected boot re-sync to re-register the row", scheduler.scheduled.any { it.id == n.id })
     }
 
+    @Test
+    fun bootReSyncStillFiresAReminderMissedWhileTheDeviceWasOff() = runTest {
+        // §10.4 on the path that actually loses reminders: the phone was off
+        // across the reminder's fire time, but the event is still under way.
+        // The row must reach AlarmManager (a past trigger time fires at once),
+        // not be written off as MISSED (issue #48).
+        val scheduler = FakeAlarmScheduler(canScheduleExact = true)
+        container.alarmScheduler = scheduler
+        val now = Clock.System.now()
+        val overdue = freshNotification(now - 30.minutes, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(overdue)
+        container.occurrenceRepo.upsert(openWindowOccurrence(overdue.occurrenceId, now), firstSeenAt = now - 1.hours)
+
+        AlarmSyncer.sync(listOf(overdue), scheduler, container.notificationRepo, container.occurrenceRepo, now)
+
+        assertTrue("expected the missed reminder to be registered", scheduler.scheduled.any { it.id == overdue.id })
+        assertEquals(NotificationStatus.REGISTERED, container.notificationRepo.getById(overdue.id)?.status)
+    }
+
+    @Test
+    fun bootReSyncWritesOffAReminderWhoseEventIsOver() = runTest {
+        // The other half of §10.4: once the occurrence's window has closed the
+        // reminder really is stale, and MISSED is where it belongs.
+        val scheduler = FakeAlarmScheduler(canScheduleExact = true)
+        container.alarmScheduler = scheduler
+        val now = Clock.System.now()
+        val stale = freshNotification(now - 3.hours, NotificationStatus.PENDING, Precision.EXACT)
+        container.notificationRepo.upsert(stale)
+        container.occurrenceRepo.upsert(closedWindowOccurrence(stale.occurrenceId, now), firstSeenAt = now - 4.hours)
+
+        AlarmSyncer.sync(listOf(stale), scheduler, container.notificationRepo, container.occurrenceRepo, now)
+
+        assertTrue("expected no alarm for a stale reminder", scheduler.scheduled.none { it.id == stale.id })
+        assertEquals(NotificationStatus.MISSED, container.notificationRepo.getById(stale.id)?.status)
+    }
+
+    /**
+     * §10.1's honesty contract: "never silently dropped". A reminder the OS
+     * refuses to show must not be written into history as a delivery that
+     * happened — issue #52's failure mode, where declining the onboarding
+     * permission prompt made every future reminder vanish while the row
+     * claimed FIRED.
+     */
+    @Test
+    fun blockedNotificationsRecordMissedAndPostNothing() = runTest {
+        container.blockNotifications()
+        val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        val stored = container.notificationRepo.getById(n.id)
+        assertEquals(NotificationStatus.MISSED, stored?.status)
+        assertNull("a reminder nobody saw must not carry a fired timestamp", stored?.firedAt)
+        assertTrue("expected nothing to be posted while notifications are blocked", awaitNoPost(n.id))
+    }
+
+    /** MISSED is terminal (§10.4), so a duplicate alarm must not resurrect it. */
+    @Test
+    fun missedRowIsNotPostedByALateDuplicateAlarm() = runTest {
+        val n = freshNotification(Clock.System.now(), NotificationStatus.MISSED, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        assertEquals(NotificationStatus.MISSED, container.notificationRepo.getById(n.id)?.status)
+        assertTrue("a MISSED row must stay missed", awaitNoPost(n.id))
+    }
+
+    /**
+     * §10.5's approximate hedge appends its "enable exact alarms" sentence on
+     * the first APPROXIMATE notification *ever*. Spending that one chance on a
+     * notification the OS then refused to show would silently lose it, so the
+     * blocked check has to come before the body is rendered.
+     */
+    @Test
+    fun blockedNotificationDoesNotConsumeTheOnceEverApproximateHedge() = runTest {
+        container.blockNotifications()
+        container.settingsRepo.delete(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN)
+        val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.APPROXIMATE)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        assertNull("the hedge must still be owed to the user", container.settingsRepo.get(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN))
+    }
+
+    /** True if [notificationId] is still absent from the shade after a short grace period. */
+    private fun awaitNoPost(notificationId: String): Boolean =
+        awaitNotifications(timeoutMillis = ABSENCE_GRACE_MILLIS) { list -> list.any { it.id == notificationId.hashCode() } }
+            .none { it.id == notificationId.hashCode() }
+
     private companion object {
         const val NOTIFICATION_TIMEOUT_MILLIS = 5_000L
         const val NOTIFICATION_POLL_MILLIS = 50L
+
+        // Proving a *negative* can only ever be "still nothing after a while";
+        // the full timeout would just be dead time on every such assertion.
+        const val ABSENCE_GRACE_MILLIS = 500L
     }
 }

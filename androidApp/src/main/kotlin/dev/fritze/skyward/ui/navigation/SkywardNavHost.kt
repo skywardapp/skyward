@@ -121,6 +121,7 @@ fun SkywardNavHost(
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
+                    container,
                     onLocations = { navController.navigate(Routes.LOCATIONS) },
                     onNotifications = { navController.navigate(Routes.NOTIFICATIONS_SETTINGS) },
                     onSources = { navController.navigate(Routes.SOURCES) },

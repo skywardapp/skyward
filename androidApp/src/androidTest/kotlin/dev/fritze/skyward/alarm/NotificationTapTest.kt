@@ -2,10 +2,8 @@ package dev.fritze.skyward.alarm
 
 import android.content.Intent
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -21,6 +19,7 @@ import dev.fritze.skyward.core.model.MoonEventPayload
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.TimeWindow
+import dev.fritze.skyward.ui.awaitText
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertTrue
@@ -40,7 +39,10 @@ import kotlin.time.Instant
  * or already open.
  *
  * Launches the Activity itself (hence [createEmptyComposeRule]) because the
- * launching intent is the thing under test.
+ * launching intent is the thing under test, and asserts through
+ * [awaitText]: the detail screen only names its occurrence once the database
+ * read behind it emits, which Compose's idling resource knows nothing about,
+ * so `waitForIdle()` alone can return with "Loading…" still on screen.
  */
 @RunWith(AndroidJUnit4::class)
 class NotificationTapTest {
@@ -214,16 +216,3 @@ class NotificationTapTest {
         )
     }
 }
-
-/**
- * The detail screen only names its occurrence once the DB read behind it has
- * emitted -- a read Compose's idling resource knows nothing about -- so
- * `waitForIdle()` alone can return with "Loading…" still on screen.
- */
-private fun ComposeTestRule.awaitText(text: String) {
-    waitUntil(timeoutMillis = TEXT_TIMEOUT_MILLIS) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
-    }
-}
-
-private const val TEXT_TIMEOUT_MILLIS = 10_000L

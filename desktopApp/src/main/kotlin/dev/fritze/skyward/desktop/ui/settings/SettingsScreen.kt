@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.persistence.ThemeChoice
 import dev.fritze.skyward.desktop.autostart.AutostartResult
 import dev.fritze.skyward.desktop.data.DesktopContainer
 import dev.fritze.skyward.desktop.notify.DesktopNotification
@@ -29,7 +30,6 @@ import dev.fritze.skyward.desktop.ui.common.Dropdown
 import dev.fritze.skyward.desktop.ui.common.LabeledRow
 import dev.fritze.skyward.desktop.ui.common.NumberField
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.theme.ThemeChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -175,7 +175,7 @@ private fun HorizonAndAppearanceSection(state: DesktopAppState) {
         }
         LabeledRow("Theme") {
             Dropdown(theme, ThemeChoice.entries, { it.name.lowercase() }) { choice ->
-                state.launch { state.container.settingsRepo.set("theme", choice.name) }
+                state.launch { state.container.settingsRepo.setTheme(choice) }
             }
         }
     }
