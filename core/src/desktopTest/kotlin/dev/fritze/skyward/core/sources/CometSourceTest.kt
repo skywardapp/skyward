@@ -17,6 +17,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** §17.3/§18: the "known bright-comet fixture produces an occurrence with a sane peak date" accept criterion, plus §7.4.3's orbit-anchored-scan stability guarantee. */
@@ -54,6 +56,39 @@ class CometSourceTest {
 
         assertEquals(firstRun.peakMagDate, secondRun.peakMagDate, "§7.4.3: orbit-anchored scan keeps peakMagDate stable across refreshes")
         assertEquals(firstRun.peakMag, secondRun.peakMag)
+    }
+
+    @Test
+    fun peakMagDateIsStableAcrossRefreshesWhilePerihelionIsStillMoreThanNineMonthsOut() = runTest {
+        // The regime §7.4.3's scan-range formula doesn't cover: with `now`
+        // more than 9 months before perihelion, `min(now, tp-9mo)` *is*
+        // `now`, so the range's start -- and with it the phase of a grid
+        // stepped from that start -- moves with every refresh. The peak has
+        // to stay put anyway: a comet bright enough to clear the ingest
+        // floor a year out would otherwise re-plan (and re-fire its already
+        // FIRED "7 days before peak" lead) at every monthly refresh.
+        val tp = now + 400.days
+        val json = sbdbFixture(tp = tp, epoch = now, e = 0.99, q = 0.4, i = 20.0, om = 50.0, w = 80.0, m1 = 4.0, k1 = 10.0, pdes = "C/2026 P1")
+
+        val firstRun = CometSource(mockClient(json)).refresh(refreshRequest(now)).occurrences.single()
+        // Not a whole number of days later: the 30-day schedule (§7.4) fires
+        // whenever the app next runs, so consecutive refreshes land at
+        // arbitrary times of day. A grid stepped from `now` is only stable
+        // for the exact-multiple-of-a-day case that never actually happens.
+        val monthLater = CometSource(mockClient(json))
+            .refresh(refreshRequest(now + 30.days + 7.hours + 13.minutes))
+            .occurrences.single()
+
+        val first = firstRun.payload as CometPayload
+        val second = monthLater.payload as CometPayload
+        assertEquals(first.peakMagDate, second.peakMagDate, "§7.4.3: peakMagDate is stable across refreshes")
+        assertEquals(first.peakMag, second.peakMag)
+        // Identical peakTime is what keeps §6.3 from scoring the refresh
+        // material (5-minute threshold) and re-planning; the window is
+        // grid-derived too, so it must not drift either.
+        assertEquals(firstRun.peakTime, monthLater.peakTime)
+        assertEquals(firstRun.window, monthLater.window)
+        assertTrue(isMaterialChange(firstRun, monthLater).not(), "a refresh that only advanced `now` must not count as a material change (§6.3)")
     }
 
     @Test
