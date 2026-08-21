@@ -26,9 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.data.AppContainer
-import dev.fritze.skyward.ui.common.phenomenonLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

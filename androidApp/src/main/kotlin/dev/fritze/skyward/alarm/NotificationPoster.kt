@@ -60,6 +60,9 @@ object NotificationPoster {
             .setContentTitle(notification.title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            // Tapping opens this occurrence's detail screen; without it the
+            // notification is inert and setAutoCancel below never fires.
+            .setContentIntent(openEventPendingIntent(context, occurrence?.id))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
