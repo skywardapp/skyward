@@ -50,6 +50,7 @@ internal fun upcomingStatesOverTime(
     ovationGrid: OvationGrid?,
     visibilityModels: Map<Phenomenon, VisibilityModel>,
     clock: Clock,
+    liveKpFailed: Boolean = false,
 ): Flow<UpcomingUiState> = flow {
     while (true) {
         val now = clock.now()
@@ -70,6 +71,8 @@ internal fun upcomingStatesOverTime(
                 filter = base.filter,
                 isLoading = false,
                 isRefreshing = base.isRefreshing,
+                hasLocations = base.locations.isNotEmpty(),
+                liveKpFailed = liveKpFailed,
                 now = now,
             ),
         )

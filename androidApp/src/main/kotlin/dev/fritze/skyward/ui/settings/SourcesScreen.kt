@@ -28,8 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.sources.SourceDiagnostics
 import dev.fritze.skyward.data.AppContainer
+import kotlinx.datetime.TimeZone
 
 /** §18/M4: per-source enable toggle + diagnostics (last success, last error). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +39,10 @@ import dev.fritze.skyward.data.AppContainer
 fun SourcesScreen(container: AppContainer, onBack: () -> Unit) {
     val viewModel: SourcesViewModel = viewModel { SourcesViewModel(container) }
     val rows by viewModel.rows.collectAsState()
+    // §5: instants are stored and reasoned about in UTC and converted exactly
+    // once, here at the UI edge. Read per composition rather than remembered —
+    // a device that changes timezone should redraw in the new one.
+    val zone = TimeZone.currentSystemDefault()
 
     Scaffold(
         topBar = {
@@ -50,6 +56,7 @@ fun SourcesScreen(container: AppContainer, onBack: () -> Unit) {
             items(rows, key = { it.id }) { row ->
                 SourceRowCard(
                     row = row,
+                    zone = zone,
                     onToggle = { enabled -> viewModel.setEnabled(row.id, enabled) },
                     onRefreshNow = { viewModel.refreshNow(row.id) },
                 )
@@ -59,14 +66,14 @@ fun SourcesScreen(container: AppContainer, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SourceRowCard(row: SourceRow, onToggle: (Boolean) -> Unit, onRefreshNow: () -> Unit) {
+private fun SourceRowCard(row: SourceRow, zone: TimeZone, onToggle: (Boolean) -> Unit, onRefreshNow: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(row.displayName, style = MaterialTheme.typography.titleMedium)
                 Switch(checked = row.enabled, onCheckedChange = onToggle)
             }
-            Text(diagnosticsSummary(row.diagnostics), style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
+            Text(diagnosticsSummary(row.diagnostics, zone), style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
             if (row.polled && row.enabled) {
                 TextButton(onClick = onRefreshNow) { Text("Refresh now") }
             }
@@ -74,9 +81,15 @@ private fun SourceRowCard(row: SourceRow, onToggle: (Boolean) -> Unit, onRefresh
     }
 }
 
-private fun diagnosticsSummary(diagnostics: SourceDiagnostics?): String {
+/**
+ * `Instant.toString()` renders "2026-08-21T14:03:22.512Z" — a machine's
+ * timestamp, in a timezone the reader is probably not in, to a precision
+ * nothing here needs (#71). Desktop has formatted these in local time since
+ * M6; `core/format`'s formatter is now the one both frontends use.
+ */
+private fun diagnosticsSummary(diagnostics: SourceDiagnostics?, zone: TimeZone): String {
     if (diagnostics == null) return "Not yet run"
     val status = if (diagnostics.ok) "OK" else "Error: ${diagnostics.message ?: "unknown"}"
-    val lastSuccess = diagnostics.lastSuccessAt?.let { "last success $it" } ?: "never succeeded"
+    val lastSuccess = diagnostics.lastSuccessAt?.let { "last success ${formatDateTime(it, zone)}" } ?: "never succeeded"
     return "$status • ${diagnostics.itemCount} item(s) • $lastSuccess"
 }

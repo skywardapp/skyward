@@ -102,7 +102,7 @@ class ExactAlarmDegradationCardTest {
 
     private fun showUpcoming() {
         composeRule.setContent {
-            UpcomingScreen(container = container, onOpenEvent = {})
+            UpcomingScreen(container = container, onOpenEvent = {}, onOpenLocations = {})
         }
     }
 }
