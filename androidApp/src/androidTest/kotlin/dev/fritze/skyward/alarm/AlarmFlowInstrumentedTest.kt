@@ -80,8 +80,13 @@ class AlarmFlowInstrumentedTest {
     }
 
     @After
-    fun restoreNotificationGate() {
+    fun restoreTheSeamsThisSuitePins() {
         container.restoreRealNotificationGate(context)
+        // The scheduler is pinned per test above and owes the same restore for
+        // the same reason: AppContainer lives for the whole instrumentation
+        // process, so a FakeAlarmScheduler left behind would silently swallow
+        // the alarm registration of whichever suite the runner picks next.
+        container.alarmScheduler = AndroidAlarmScheduler(context)
     }
 
     /**
