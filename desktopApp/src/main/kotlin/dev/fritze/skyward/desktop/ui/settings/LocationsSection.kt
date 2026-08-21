@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -20,9 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.CoordinateAxis
+import dev.fritze.skyward.core.format.deleteLocationConfirmation
 import dev.fritze.skyward.core.format.parseCoordinate
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SavedLocation
+import dev.fritze.skyward.core.persistence.deleteLocation
+import dev.fritze.skyward.core.rules.locationDeletionImpact
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
 import dev.fritze.skyward.desktop.ui.common.formatDegrees
@@ -38,7 +42,9 @@ import kotlin.time.Clock
 @Composable
 internal fun LocationsSection(state: DesktopAppState) {
     val locations by state.locations.collectAsState()
+    val rules by state.visibleRules.collectAsState()
     var draft by remember { mutableStateOf<SavedLocation?>(null) }
+    var pendingDelete by remember { mutableStateOf<SavedLocation?>(null) }
 
     SectionCard("Locations") {
         if (locations.isEmpty()) {
@@ -61,21 +67,34 @@ internal fun LocationsSection(state: DesktopAppState) {
                     )
                 }
                 TextButton(onClick = { draft = location }) { Text("Edit") }
-                TextButton(onClick = {
-                    state.launch {
-                        state.container.locationRepo.delete(location.id)
-                        // Deleting the primary would otherwise leave the app
-                        // with none, and screens that default to it (the sky
-                        // chart, the map's home marker) with nothing to pick.
-                        if (location.isPrimary) {
-                            state.container.locationRepo.getAll().firstOrNull()?.let {
-                                state.container.locationRepo.upsert(it.copy(isPrimary = true, modifiedAt = Clock.System.now()))
-                            }
-                        }
-                        state.container.replan()
-                    }
-                }) { Text("Delete") }
+                TextButton(onClick = { pendingDelete = location }) { Text("Delete") }
             }
+        }
+
+        // The delete cancels reminders and rewrites every rule that named this
+        // location; neither is visible afterwards, so it asks first and says
+        // which rules it is about to change.
+        pendingDelete?.let { location ->
+            val copy = deleteLocationConfirmation(location.name, locationDeletionImpact(location.id, rules))
+            AlertDialog(
+                onDismissRequest = { pendingDelete = null },
+                title = { Text(copy.title) },
+                text = { Text(copy.body) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingDelete = null
+                        if (draft?.id == location.id) draft = null
+                        state.launch {
+                            // Promoting a new primary and repairing rule
+                            // references are part of the delete -- core's
+                            // `deleteLocation` does both for either frontend.
+                            deleteLocation(state.container.locationRepo, state.container.ruleRepo, location.id, Clock.System.now())
+                            state.container.replan()
+                        }
+                    }) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            )
         }
 
         val editing = draft

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.deleteRuleConfirmation
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.planner.Planner
 import dev.fritze.skyward.core.rules.Anchor
@@ -286,13 +288,30 @@ private fun EditorActions(state: DesktopAppState, draft: Rule, existing: Boolean
             enabled = canSave && draft.phenomena.isNotEmpty() && draft.name.isNotBlank(),
         ) { Text("Save") }
         if (existing) {
-            OutlinedButton(onClick = {
-                state.launch {
-                    state.container.ruleRepo.delete(draft.id)
-                    state.container.replan()
-                }
-                onClose()
-            }) { Text("Delete") }
+            var confirmDelete by remember { mutableStateOf(false) }
+            OutlinedButton(onClick = { confirmDelete = true }) { Text("Delete") }
+            // Android has always confirmed this; desktop deleted the rule and
+            // cancelled its reminders on one click. Same action, same
+            // consequence, so now the same dialog copy from `:core`.
+            if (confirmDelete) {
+                val copy = deleteRuleConfirmation(draft.name)
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = false },
+                    title = { Text(copy.title) },
+                    text = { Text(copy.body) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmDelete = false
+                            state.launch {
+                                state.container.ruleRepo.delete(draft.id)
+                                state.container.replan()
+                            }
+                            onClose()
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+                )
+            }
         }
     }
 }
