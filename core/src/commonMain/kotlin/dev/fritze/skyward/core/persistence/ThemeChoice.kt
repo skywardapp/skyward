@@ -20,7 +20,10 @@ enum class ThemeChoice {
     ;
 
     companion object {
-        /** Tolerant of case so a hand-edited settings file or an older writer still parses; anything unrecognised falls back to [SYSTEM]. */
+        /**
+         * Tolerant of case so a hand-edited settings file or an older writer
+         * still parses; anything unrecognised falls back to [SYSTEM].
+         */
         fun parse(raw: String?): ThemeChoice = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: SYSTEM
     }
 }
