@@ -22,10 +22,9 @@ import kotlin.time.Instant
  * vs CERTAIN) tracks "how precisely can the app promise this timing," not
  * "is this real."
  *
- * The bbox payload-size optimization for >=2 nearby saved locations
- * (§7.7's third bullet) is not implemented -- it is a bandwidth nicety, not
- * a correctness requirement, and `status=open&days=30` plus the category
- * filter already keeps responses small.
+ * Requests are narrowed with a `bbox` when the saved locations form a tight
+ * enough cluster (§7.7's third bullet); see [eonetBbox], which owns that
+ * decision and EONET's nonstandard axis order.
  */
 class EonetSource(private val httpClient: HttpClient = createHttpClient()) : EventSource {
     override val id = "eonet"
@@ -36,7 +35,8 @@ class EonetSource(private val httpClient: HttpClient = createHttpClient()) : Eve
 
     override suspend fun refresh(req: RefreshRequest): RefreshResult {
         val categories = req.settings.params["categories"]?.takeUnless { it.isBlank() } ?: DEFAULT_CATEGORIES
-        val events = parseEonetEvents(httpClient.getText(eventsUrl(categories)))
+        val bbox = eonetBbox(req.locations, req.derivedThresholds)
+        val events = parseEonetEvents(httpClient.getText(eventsUrl(categories, bbox)))
         val occurrences = events.map { buildOccurrence(it, req.now) }
 
         return RefreshResult(
@@ -73,8 +73,14 @@ class EonetSource(private val httpClient: HttpClient = createHttpClient()) : Eve
         )
     }
 
-    private fun eventsUrl(categories: String): String =
-        "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=30&category=${categories.encodeURLQueryComponent()}"
+    private fun eventsUrl(categories: String, bbox: EonetBbox?): String {
+        val base = "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=30" +
+            "&category=${categories.encodeURLQueryComponent()}"
+        // The bbox value is only digits, '-', '.' and ',', all legal in a
+        // query value, so it needs no escaping (unlike the user-configurable
+        // category list).
+        return if (bbox == null) base else base + "&bbox=${bbox.toQueryValue()}"
+    }
 
     private companion object {
         const val DEFAULT_CATEGORIES = "volcanoes,severeStorms,wildfires"

@@ -1,6 +1,8 @@
 package dev.fritze.skyward.core.sources
 
 import dev.fritze.skyward.core.model.Certainty
+import dev.fritze.skyward.core.model.GeoPoint
+import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.model.TimeWindow
 import io.ktor.client.HttpClient
@@ -9,6 +11,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
@@ -72,31 +75,112 @@ class EonetSourceTest {
 
     @Test
     fun defaultCategoriesAreUsedWhenNoSettingIsPresent() = runTest {
-        var requestedUrl: String? = null
-        val engine = MockEngine { request ->
-            requestedUrl = request.url.toString()
-            respond("""{"events":[]}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-        }
-        val client = HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+        var requestedUrl: Url? = null
+        val client = urlCapturingClient { requestedUrl = it }
 
         EonetSource(client).refresh(refreshRequest())
 
-        val url = assertNotNull(requestedUrl)
-        assertTrue(url.contains("volcanoes"))
-        assertTrue(url.contains("wildfires"))
+        val categories = assertNotNull(assertNotNull(requestedUrl).parameters["category"])
+        assertTrue(categories.contains("volcanoes"))
+        assertTrue(categories.contains("wildfires"))
     }
+
+    @Test
+    fun clusteredSavedLocationsNarrowTheRequestWithABbox() = runTest {
+        var requestedUrl: Url? = null
+        val client = urlCapturingClient { requestedUrl = it }
+        val locations = listOf(savedLocation(0, 52.52, 13.405), savedLocation(1, 53.55, 9.99))
+
+        EonetSource(client).refresh(refreshRequest(locations = locations, maxTravelKm = 500.0))
+
+        val expected = assertNotNull(eonetBbox(locations, boundedThresholds(500.0)))
+        assertEquals(expected.toQueryValue(), assertNotNull(requestedUrl).parameters["bbox"])
+    }
+
+    @Test
+    fun scatteredSavedLocationsLeaveTheRequestUnnarrowed() = runTest {
+        var requestedUrl: Url? = null
+        val client = urlCapturingClient { requestedUrl = it }
+
+        EonetSource(client).refresh(
+            refreshRequest(
+                locations = listOf(savedLocation(0, 52.52, 13.405), savedLocation(1, -33.87, 151.21)),
+                maxTravelKm = 500.0,
+            ),
+        )
+
+        assertEquals(null, assertNotNull(requestedUrl).parameters["bbox"], "a globe-spanning bbox saves nothing")
+    }
+
+    @Test
+    fun aRuleThatCanMatchAtAnyDistanceLeavesTheRequestUnnarrowed() = runTest {
+        // The gate that EonetBboxTest pins in the helper, asserted at the
+        // boundary that actually builds the URL: a travel radius alone is
+        // not enough (ADR 0008).
+        var requestedUrl: Url? = null
+        val client = urlCapturingClient { requestedUrl = it }
+
+        EonetSource(client).refresh(
+            RefreshRequest(
+                now = now,
+                horizon = TimeWindow(now, now + 365.days),
+                locations = listOf(savedLocation(0, 52.52, 13.405), savedLocation(1, 53.55, 9.99)),
+                state = emptyMap(),
+                settings = SourceSettings(),
+                derivedThresholds = DerivedThresholds(
+                    minKpOfInterest = null,
+                    maxCometMag = null,
+                    maxTravelKm = 500.0,
+                    terrestrialRulesAreTravelBounded = false,
+                ),
+            ),
+        )
+
+        assertEquals(null, assertNotNull(requestedUrl).parameters["bbox"])
+    }
+
+    private fun urlCapturingClient(record: (Url) -> Unit): HttpClient {
+        val engine = MockEngine { request ->
+            record(request.url)
+            respond("""{"events":[]}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        return HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+    }
+
+    private fun savedLocation(index: Int, latDeg: Double, lonDeg: Double) = SavedLocation(
+        id = "loc-$index",
+        name = "Location $index",
+        point = GeoPoint(latDeg, lonDeg),
+        isPrimary = index == 0,
+        createdAt = now,
+        modifiedAt = now,
+    )
 
     private fun mockClient(json: String): HttpClient {
         val engine = MockEngine { respond(json, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
         return HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
     }
 
-    private fun refreshRequest() = RefreshRequest(
+    private fun refreshRequest(
+        locations: List<SavedLocation> = emptyList(),
+        maxTravelKm: Double? = null,
+    ) = RefreshRequest(
         now = now,
         horizon = TimeWindow(now, now + 365.days),
-        locations = emptyList(),
+        locations = locations,
         state = emptyMap(),
         settings = SourceSettings(),
-        derivedThresholds = DerivedThresholds(minKpOfInterest = null, maxCometMag = null, maxTravelKm = null),
+        derivedThresholds = if (maxTravelKm == null) {
+            DerivedThresholds(minKpOfInterest = null, maxCometMag = null, maxTravelKm = null)
+        } else {
+            boundedThresholds(maxTravelKm)
+        },
+    )
+
+    private fun boundedThresholds(maxTravelKm: Double) = DerivedThresholds(
+        minKpOfInterest = null,
+        maxCometMag = null,
+        maxTravelKm = maxTravelKm,
+        terrestrialRulesAreTravelBounded = true,
     )
 }
