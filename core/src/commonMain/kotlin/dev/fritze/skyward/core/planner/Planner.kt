@@ -108,7 +108,7 @@ object Planner {
         val candidates = mutableListOf<Candidate>()
         for (m in matches) {
             val anchorTime = when (m.rule.schedule.anchor) {
-                // ADR 0010: one anchor per occurrence, not per location.
+                // ADR 0013: one anchor per occurrence, not per location.
                 Anchor.BEST_VIEWING -> bestViewingAnchors[m.occ.id]
                 else -> resolveAnchor(m.rule.schedule.anchor, m.occ, m.visres)
             }
@@ -247,7 +247,7 @@ object Planner {
     private fun NotificationStatus.isTerminalButNotFired() = this == NotificationStatus.CANCELLED || this == NotificationStatus.MISSED
 
     /**
-     * ADR 0010. §9.3's dedup key is `(occurrenceId, anchorTime, lead)`
+     * ADR 0013. §9.3's dedup key is `(occurrenceId, anchorTime, lead)`
      * expressly so "Home" and "Office" 10 km apart produce one
      * notification. A BEST_VIEWING anchor breaks that on its own, because
      * §9.1 resolves it from *each location's* `bestViewingStart`, and two

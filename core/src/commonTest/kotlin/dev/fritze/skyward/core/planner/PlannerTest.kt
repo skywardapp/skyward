@@ -174,7 +174,7 @@ class PlannerTest {
         // §9.3's whole point: "Home" and "Office" 10 km apart produce one
         // notification. Each location solves its own dusk, so their
         // bestViewingStart values differ by a minute or two -- which used to
-        // be enough to split the key and buzz twice per lead (ADR 0010).
+        // be enough to split the key and buzz twice per lead (ADR 0013).
         val home = loc("home", "Home")
         val office = loc("office", "Office")
         val shower = showerOcc()

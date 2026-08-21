@@ -1,4 +1,4 @@
-# ADR 0010: the BEST_VIEWING anchor is resolved once per occurrence, not per location
+# ADR 0013: the BEST_VIEWING anchor is resolved once per occurrence, not per location
 
 **Status:** Accepted (resolves a tension between §9.1 and §9.3)
 
