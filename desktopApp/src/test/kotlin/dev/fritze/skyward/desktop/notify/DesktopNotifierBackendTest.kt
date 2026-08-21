@@ -139,10 +139,28 @@ class DesktopNotifierBackendTest {
     fun theRealNotifySendDeliversToARunningNotificationDaemon() {
         // The one test that needs a session bus. `SKYWARD_MOCK_NOTIFICATION_LOG`
         // is set by the CI step that starts tools/ci/mock-notification-daemon.py
-        // inside `dbus-run-session`; without it there is nothing on the bus to
-        // deliver to and this is a skip, not a failure (§17.5).
-        val daemonLog = System.getenv("SKYWARD_MOCK_NOTIFICATION_LOG")?.let(::File) ?: return
-        if (!onPath("notify-send")) return
+        // inside `dbus-run-session`; on a developer machine without one there
+        // is nothing on the bus to deliver to and this is a skip, not a
+        // failure (§17.5's own "or skip-if-no-dbus guard").
+        //
+        // On CI it is a failure, because CI is where the harness is set up and
+        // a skip-guard nobody can see fire is how §17.5's requirement quietly
+        // stops being met: the job would stay green whether the harness
+        // worked, the daemon never claimed the bus name, or the environment
+        // never reached the test JVM at all. `ci.yml` is the only workflow
+        // that runs this module's tests — `android-ui-tests.yml` runs
+        // connectedAndroidTest and nothing else — so there is no job where
+        // CI is set and the harness legitimately absent.
+        val daemonLog = System.getenv("SKYWARD_MOCK_NOTIFICATION_LOG")?.let(::File)
+        val notifySendPresent = onPath("notify-send")
+        if (daemonLog == null || !notifySendPresent) {
+            assertFalse(
+                System.getenv("CI") == "true",
+                "on CI this must not skip: SKYWARD_MOCK_NOTIFICATION_LOG=${System.getenv("SKYWARD_MOCK_NOTIFICATION_LOG")}, " +
+                    "notify-send on PATH=$notifySendPresent — see the notification-harness step in ci.yml",
+            )
+            return
+        }
 
         val before = if (daemonLog.exists()) daemonLog.readLines().size else 0
         assertTrue(
