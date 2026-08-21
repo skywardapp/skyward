@@ -13,7 +13,7 @@ import kotlin.time.Instant
  *
  * §17.3's golden test over a real captured response is `desktopTest`'s
  * `EonetFixtureTest`, reading the file `tools/fixtures/fetch-eonet.sh`
- * writes. See `docs/adr/0009-fixture-files-and-jvm-only-golden-tests.md`.
+ * writes. See `docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md`.
  */
 class EonetParsingTest {
 

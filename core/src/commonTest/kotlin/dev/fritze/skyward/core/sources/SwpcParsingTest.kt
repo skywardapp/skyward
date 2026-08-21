@@ -14,7 +14,7 @@ import kotlin.time.Instant
  * §17.3's golden tests over real captured responses (including a full-size
  * OVATION grid) are `desktopTest`'s `SwpcFixtureTest`, reading the files
  * `tools/fixtures/fetch-swpc.sh` writes. See
- * `docs/adr/0009-fixture-files-and-jvm-only-golden-tests.md` for the split.
+ * `docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md` for the split.
  */
 class SwpcParsingTest {
 

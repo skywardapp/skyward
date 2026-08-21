@@ -1,4 +1,4 @@
-# ADR 0009: Captured-response fixtures are files, and the tests that read them are JVM-only
+# ADR 0010: Captured-response fixtures are files, and the tests that read them are JVM-only
 
 **Status:** Accepted (implements §17.3's fixture files; records one narrow
 deviation from CLAUDE.md's "domain tests live in `commonTest`")

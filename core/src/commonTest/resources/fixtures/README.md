@@ -35,4 +35,4 @@ table above and in the comment header of each file.
 
 `core/src/desktopTest/.../testing/Fixtures.kt`, via the `*FixtureTest`
 classes. They are read from `desktopTest` rather than `commonTest` — see
-[`docs/adr/0009-fixture-files-and-jvm-only-golden-tests.md`](../../../../../docs/adr/0009-fixture-files-and-jvm-only-golden-tests.md).
+[`docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md`](../../../../../docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md).

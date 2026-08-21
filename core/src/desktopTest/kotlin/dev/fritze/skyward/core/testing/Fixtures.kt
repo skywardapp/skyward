@@ -6,7 +6,7 @@ package dev.fritze.skyward.core.testing
  *
  * They live in `commonTest`'s resources (where §17.3 puts them) but are read
  * from `desktopTest`, which is the source set that can reach a classloader --
- * see `docs/adr/0009-fixture-files-and-jvm-only-golden-tests.md` for why the
+ * see `docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md` for why the
  * golden tests that consume them are JVM-only while the parsers they exercise
  * stay in `commonMain`.
  *

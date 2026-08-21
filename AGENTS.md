@@ -134,7 +134,7 @@ because that is the startup path a packaging mistake actually breaks (ADR
 
 - Domain tests live in `:core` `commonTest` and run on both JVM and Android.
   The one deliberate exception is the golden tests that read fixture *files*:
-  they live in `desktopTest` and are JVM-only (ADR 0009).
+  they live in `desktopTest` and are JVM-only (ADR 0010).
 - Astronomy and parser tests run against checked-in fixtures (golden GSFC
   eclipse rows, captured SWPC/EONET/JPL responses, JPL Horizons ephemerides) —
   §17.1–17.3b. Regenerate fixtures with the `tools/fixtures/` fetchers, never
