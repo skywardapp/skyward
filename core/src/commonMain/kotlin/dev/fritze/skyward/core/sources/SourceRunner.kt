@@ -49,10 +49,13 @@ class SourceRunner(
     /**
      * Runs every enabled source whose `next_run_at` is due, plus every
      * source in [force] regardless of due-ness (pull-to-refresh, §13.2).
-     * COMPUTED sources ([Schedule.OnHorizonChange]) never become due on
-     * their own after a successful run — callers reacting to a horizon,
-     * location, or settings change are expected to pass their ids in
-     * [force] (a failed run still schedules its own backoff retry, though).
+     *
+     * A source that has never run has no `next_run_at` and is due
+     * immediately, so the first periodic pass after an install populates
+     * everything; [force] is for reacting to a change *now* (onboarding
+     * finishing, a settings edit, pull-to-refresh), not for bootstrapping.
+     * [Schedule.OnHorizonChange] sources re-run daily — see
+     * docs/adr/0009-daily-recompute-of-computed-sources.md.
      */
     suspend fun runDue(now: Instant, force: Set<String> = emptySet()): Unit = runMutex.withLock {
         val horizon = TimeWindow(now, now + (settingsRepo.getHorizonYears() * 365).days)
@@ -76,8 +79,14 @@ class SourceRunner(
         sourceStateRepo.getValue(sourceId, RUNNER_KEY_DIAGNOSTICS)?.decodeToString()
             ?.let { persistenceJson.decodeFromString(SourceDiagnostics.serializer(), it) }
 
+    /**
+     * No `next_run_at` means this source has never completed a run: it is due
+     * now. Reading the absent key as "not due" instead left every source on a
+     * fresh install waiting for something to [force] it — for the POLLED ones
+     * (§7.3-§7.5) nothing on the periodic path ever did.
+     */
     private suspend fun isDue(sourceId: String, now: Instant): Boolean {
-        val raw = sourceStateRepo.getValue(sourceId, RUNNER_KEY_NEXT_RUN_AT) ?: return false
+        val raw = sourceStateRepo.getValue(sourceId, RUNNER_KEY_NEXT_RUN_AT) ?: return true
         return Instant.parse(raw.decodeToString()) <= now
     }
 
@@ -116,7 +125,15 @@ class SourceRunner(
         for (occ in result.occurrences) {
             val previous = occurrenceRepo.getById(occ.id)
             val firstSeenAt = occurrenceRepo.getFirstSeenAt(occ.id) ?: occ.fetchedAt
-            occurrenceRepo.upsert(occ, firstSeenAt = firstSeenAt)
+            // `visibility_cache.data_version` is keyed on `fetched_at` (§11), so
+            // rewriting the row with a fresh timestamp discards every cached
+            // verdict for it. A COMPUTED source returns the same deterministic
+            // rows on every run, so doing that unconditionally meant the cache
+            // never once hit for eclipses, showers, moon events or conjunctions
+            // (issue #49). An occurrence that came back byte-identical was not
+            // meaningfully re-fetched: leave the row, and its cache, alone.
+            val unchanged = previous != null && previous == occ.copy(fetchedAt = previous.fetchedAt)
+            if (!unchanged) occurrenceRepo.upsert(occ, firstSeenAt = firstSeenAt)
             freshIds += occ.id
             if (previous == null || isMaterialChange(previous, occ)) anyMaterial = true
         }
@@ -143,12 +160,8 @@ class SourceRunner(
         persistRunnerState(sourceId, now, now + delay, backoffCount, diagnostics)
     }
 
-    private suspend fun persistRunnerState(sourceId: String, now: Instant, nextRunAt: Instant?, backoffCount: Int, diagnostics: SourceDiagnostics) {
-        if (nextRunAt != null) {
-            sourceStateRepo.upsert(sourceId, RUNNER_KEY_NEXT_RUN_AT, nextRunAt.toString().encodeToByteArray(), now)
-        } else {
-            sourceStateRepo.delete(sourceId, RUNNER_KEY_NEXT_RUN_AT)
-        }
+    private suspend fun persistRunnerState(sourceId: String, now: Instant, nextRunAt: Instant, backoffCount: Int, diagnostics: SourceDiagnostics) {
+        sourceStateRepo.upsert(sourceId, RUNNER_KEY_NEXT_RUN_AT, nextRunAt.toString().encodeToByteArray(), now)
         sourceStateRepo.upsert(sourceId, RUNNER_KEY_BACKOFF_COUNT, backoffCount.toString().encodeToByteArray(), now)
         val diagnosticsWithSuccess = if (diagnostics.ok) diagnostics.copy(lastSuccessAt = now) else diagnostics
         sourceStateRepo.upsert(
@@ -164,9 +177,16 @@ class SourceRunner(
         return (stored ?: SourceSettings()).copy(enabled = settingsRepo.isSourceEnabled(sourceId))
     }
 
-    /** Event-driven sources (`OnHorizonChange`) return `null` — see [runDue]'s own doc. */
-    private fun nextRunAtFor(schedule: Schedule, now: Instant): Instant? = when (schedule) {
-        is Schedule.OnHorizonChange -> null
+    /**
+     * The horizon is `now .. now + horizonYears`, so it moves on its own: an
+     * `OnHorizonChange` source has a genuinely different window to answer for
+     * once a day, and none worth recomputing in between (its far edge is
+     * years out; §7.1.2's default is 3). Recomputing them on every 15-minute
+     * pass instead was what starved the POLLED sources behind them —
+     * docs/adr/0009-daily-recompute-of-computed-sources.md.
+     */
+    private fun nextRunAtFor(schedule: Schedule, now: Instant): Instant = when (schedule) {
+        is Schedule.OnHorizonChange -> now + HORIZON_RECHECK_INTERVAL
         is Schedule.Periodic -> now + schedule.interval
         is Schedule.Tiered -> now + schedule.idle
     }
@@ -176,6 +196,7 @@ class SourceRunner(
         const val RUNNER_KEY_NEXT_RUN_AT = "_runner.next_run_at"
         const val RUNNER_KEY_BACKOFF_COUNT = "_runner.backoff_count"
         const val RUNNER_KEY_DIAGNOSTICS = "_runner.diagnostics"
+        val HORIZON_RECHECK_INTERVAL = 1.days
         val BASE_BACKOFF = 15.minutes
         const val MAX_BACKOFF_STEPS = 7 // 15min * 2^7 = 32h, already past the 24h cap
     }
