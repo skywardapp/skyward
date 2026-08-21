@@ -88,7 +88,10 @@ object NotificationPoster {
     private fun NotificationStatus.isTerminal() =
         this == NotificationStatus.CANCELLED || this == NotificationStatus.FIRED || this == NotificationStatus.MISSED
 
-    /** Internal, not private: §17.5's instrumented test asserts on this exact key, and a
-     *  duplicated literal there could drift from the one actually written. */
+    /**
+     * Internal, not private: §17.5's instrumented test asserts on this exact
+     * key, and a duplicated literal there could drift from the one actually
+     * written.
+     */
     internal const val KEY_APPROXIMATE_HEDGE_SHOWN = "approximate_hedge_shown"
 }
