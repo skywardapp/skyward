@@ -48,6 +48,7 @@ import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.common.openAppNotificationSettings
 import dev.fritze.skyward.ui.common.phenomenonLabel
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -64,16 +65,21 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val versionCode = remember(context) { appVersionCode(context) }
     var showExactAlarmCard by remember { mutableStateOf(false) }
+    var notificationsBlocked by remember { mutableStateOf(false) }
 
-    fun refreshExactAlarmCard() {
+    fun refreshPermissionCards() {
         scope.launch {
+            notificationsBlocked = !container.notificationGate.canPost()
             val dismissedVersion = container.settingsRepo.getExactAlarmCardDismissedVersion()
             showExactAlarmCard = !container.alarmScheduler.canScheduleExact() && dismissedVersion != versionCode
         }
     }
 
+    // Both permissions are changed in a *different* Activity (the system
+    // settings screens the cards link to), so resume is the only moment we
+    // can learn they moved.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        refreshExactAlarmCard()
+        refreshPermissionCards()
     }
 
     Scaffold(
@@ -82,7 +88,15 @@ fun UpcomingScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (showExactAlarmCard) {
+            // One problem at a time, the fatal one first: while nothing can be
+            // delivered at all, offering to improve delivery *precision* is
+            // noise. The exact-alarm card comes back once notifications do.
+            if (notificationsBlocked) {
+                NotificationsBlockedCard(
+                    onOpenSettings = { openAppNotificationSettings(context) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            } else if (showExactAlarmCard) {
                 Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Exact alarms are off", style = MaterialTheme.typography.titleSmall)
@@ -161,6 +175,31 @@ private fun appVersionCode(context: Context): Long = runCatching {
         packageInfo.versionCode.toLong()
     }
 }.getOrDefault(0L)
+
+/**
+ * §10.1's honesty contract, at its most literal: with notifications blocked
+ * every reminder the app plans is dropped, so the app has to say so where
+ * the user actually looks. Unlike the exact-alarm card this one has no
+ * "Dismiss" — dismissing it would restore exactly the silent failure the
+ * card exists to end. It disappears the moment notifications are re-enabled.
+ */
+@Composable
+private fun NotificationsBlockedCard(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Notifications are blocked", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Skyward can't reach you. Every reminder is dropped and recorded as missed, no " +
+                    "matter how your rules and locations are set up.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(onClick = onOpenSettings) { Text("Turn notifications on") }
+        }
+    }
+}
 
 @Composable
 private fun FilterRow(

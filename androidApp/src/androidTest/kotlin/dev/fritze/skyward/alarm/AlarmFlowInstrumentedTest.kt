@@ -13,7 +13,9 @@ import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.PlannedNotification
 import dev.fritze.skyward.core.model.Precision
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -54,7 +56,11 @@ class AlarmFlowInstrumentedTest {
     private val container = context.container
 
     @Before
-    fun clearNotifications() {
+    fun resetGateAndClearNotifications() {
+        // Reset rather than assume: the card tests substitute a gate on this
+        // same process-singleton container, and a stale fake would quietly
+        // turn every posting assertion below into a no-op.
+        container.restoreRealNotificationGate(context)
         // Both cancelAll() and notify() are one-way calls into system_server:
         // they return before the shade has caught up. Waiting for the cancel to
         // land keeps the *previous* test's teardown from arriving after this
@@ -65,6 +71,11 @@ class AlarmFlowInstrumentedTest {
         // show as a confusing failure in the test body instead of here.
         val remaining = awaitNotifications { it.isEmpty() }
         assertTrue("notifications did not clear before the test started", remaining.isEmpty())
+    }
+
+    @After
+    fun restoreNotificationGate() {
+        container.restoreRealNotificationGate(context)
     }
 
     /**
@@ -175,8 +186,68 @@ class AlarmFlowInstrumentedTest {
         assertTrue("expected boot re-sync to re-register the row", scheduler.scheduled.any { it.id == n.id })
     }
 
+    /**
+     * §10.1's honesty contract: "never silently dropped". A reminder the OS
+     * refuses to show must not be written into history as a delivery that
+     * happened — issue #52's failure mode, where declining the onboarding
+     * permission prompt made every future reminder vanish while the row
+     * claimed FIRED.
+     */
+    @Test
+    fun blockedNotificationsRecordMissedAndPostNothing() = runTest {
+        container.blockNotifications()
+        val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        val stored = container.notificationRepo.getById(n.id)
+        assertEquals(NotificationStatus.MISSED, stored?.status)
+        assertNull("a reminder nobody saw must not carry a fired timestamp", stored?.firedAt)
+        assertTrue("expected nothing to be posted while notifications are blocked", awaitNoPost(n.id))
+    }
+
+    /** MISSED is terminal (§10.4), so a duplicate alarm must not resurrect it. */
+    @Test
+    fun missedRowIsNotPostedByALateDuplicateAlarm() = runTest {
+        val n = freshNotification(Clock.System.now(), NotificationStatus.MISSED, Precision.EXACT)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        assertEquals(NotificationStatus.MISSED, container.notificationRepo.getById(n.id)?.status)
+        assertTrue("a MISSED row must stay missed", awaitNoPost(n.id))
+    }
+
+    /**
+     * §10.5's approximate hedge appends its "enable exact alarms" sentence on
+     * the first APPROXIMATE notification *ever*. Spending that one chance on a
+     * notification the OS then refused to show would silently lose it, so the
+     * blocked check has to come before the body is rendered.
+     */
+    @Test
+    fun blockedNotificationDoesNotConsumeTheOnceEverApproximateHedge() = runTest {
+        container.blockNotifications()
+        container.settingsRepo.delete(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN)
+        val n = freshNotification(Clock.System.now(), NotificationStatus.REGISTERED, Precision.APPROXIMATE)
+        container.notificationRepo.upsert(n)
+
+        NotificationPoster.postNotificationFor(context, container, n.id)
+
+        assertNull("the hedge must still be owed to the user", container.settingsRepo.get(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN))
+    }
+
+    /** True if [notificationId] is still absent from the shade after a short grace period. */
+    private fun awaitNoPost(notificationId: String): Boolean =
+        awaitNotifications(timeoutMillis = ABSENCE_GRACE_MILLIS) { list -> list.any { it.id == notificationId.hashCode() } }
+            .none { it.id == notificationId.hashCode() }
+
     private companion object {
         const val NOTIFICATION_TIMEOUT_MILLIS = 5_000L
         const val NOTIFICATION_POLL_MILLIS = 50L
+
+        // Proving a *negative* can only ever be "still nothing after a while";
+        // the full timeout would just be dead time on every such assertion.
+        const val ABSENCE_GRACE_MILLIS = 500L
     }
 }
