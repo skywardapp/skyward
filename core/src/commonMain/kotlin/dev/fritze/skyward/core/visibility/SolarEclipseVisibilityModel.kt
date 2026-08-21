@@ -23,7 +23,7 @@ import kotlin.time.Instant
 /**
  * §8.2. Travel target for TOTAL/ANNULAR eclipses is the central path (people
  * travel for totality); for PARTIAL-only eclipses it's the nearest point
- * reaching 80% obscuration.
+ * reaching 80% obscuration with the sun still above the horizon.
  */
 class SolarEclipseVisibilityModel : VisibilityModel {
     override val phenomenon = Phenomenon.SOLAR_ECLIPSE
@@ -148,11 +148,17 @@ class SolarEclipseVisibilityModel : VisibilityModel {
     }
 
     /**
-     * Nearest point reaching [minObscuration], searched along the geodesic
-     * from [loc] toward [target] (the point of greatest eclipse) by
-     * bisection (§8.2: "8 steps of bisection along the geodesic"). Returns
-     * `null` if even [target] itself never reaches [minObscuration] — no
-     * point on Earth does, for this eclipse.
+     * Nearest point reaching [minObscuration] *with the sun above the
+     * horizon at local peak*, searched along the geodesic from [loc] toward
+     * [target] (the point of greatest eclipse) by bisection (§8.2: "8 steps
+     * of bisection along the geodesic"). Returns `null` if no point along
+     * that geodesic — [target] included — satisfies it.
+     *
+     * The altitude half of the predicate is what makes the travel target a
+     * place the eclipse can actually be *seen*: §8.2 rates a deep partial
+     * with the sun down as NONE, so a target chosen on obscuration alone
+     * could sit past the terminator and promise a 90 % eclipse that happens
+     * below the horizon.
      */
     private fun nearestObscurationAtLeast(
         loc: GeoPoint,
@@ -161,8 +167,8 @@ class SolarEclipseVisibilityModel : VisibilityModel {
         searchStart: Time,
         window: ClosedRange<Instant>,
     ): GeoPoint? {
-        fun obscurationAt(p: GeoPoint): Double =
-            runCatching { searchLocalSolarEclipse(searchStart, Observer(p.latDeg, p.lonDeg, 0.0)) }
+        fun isTravelWorthy(p: GeoPoint): Boolean {
+            val local = runCatching { searchLocalSolarEclipse(searchStart, Observer(p.latDeg, p.lonDeg, 0.0)) }
                 .getOrNull()
                 // A probe far from this eclipse can find no local eclipse at
                 // all *for this event* (peak below horizon there) and
@@ -170,18 +176,28 @@ class SolarEclipseVisibilityModel : VisibilityModel {
                 // solar eclipse instead -- possibly months away. Reject
                 // anything whose peak falls outside this occurrence's own
                 // window so bisection never chases a different eclipse.
-                ?.takeIf { it.peak.time.toInstant() in window }
-                ?.obscuration ?: 0.0
+                ?.takeIf { it.peak.time.toInstant() in window } ?: return false
+            return local.obscuration >= minObscuration && local.peak.altitude > 0.0
+        }
 
-        if (obscurationAt(target) < minObscuration) return null
+        if (!isTravelWorthy(target)) return null
+        // The bisection below only converges on the *nearest* qualifying
+        // point while `loc` itself fails the predicate. The caller
+        // guarantees that (it searches only when local quality is below
+        // GOOD, and GOOD is exactly this predicate) -- but the guarantee
+        // used to be obscuration-only, which a location just past the
+        // terminator satisfied while rating NONE, collapsing the search
+        // onto `loc` and advertising "travel 0 km" for an eclipse that
+        // happens locally at night. Re-check rather than assume.
+        if (isTravelWorthy(loc)) return null
 
         val distanceKm = haversineDistanceKm(loc, target)
         val bearingDeg = initialBearingDeg(loc, target)
-        var lo = 0.0 // below minObscuration (loc itself, by construction of the caller)
-        var hi = 1.0 // at or above minObscuration (target)
+        var lo = 0.0 // fails the predicate (loc itself, re-checked above)
+        var hi = 1.0 // satisfies it (target)
         repeat(BISECTION_ITERATIONS) {
             val mid = (lo + hi) / 2.0
-            if (obscurationAt(destinationPoint(loc, distanceKm * mid, bearingDeg)) >= minObscuration) {
+            if (isTravelWorthy(destinationPoint(loc, distanceKm * mid, bearingDeg))) {
                 hi = mid
             } else {
                 lo = mid

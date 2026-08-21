@@ -48,7 +48,7 @@ fun WhileYouWereAwayBanner(state: DesktopAppState) {
             ) {
                 Text(
                     // Inline English plural, deliberately: see
-                    // docs/adr/0013-english-only-ui-strings.md.
+                    // docs/adr/0014-english-only-ui-strings.md.
                     "While you were away — ${missed.size} reminder${if (missed.size == 1) "" else "s"} came due",
                     style = MaterialTheme.typography.titleSmall,
                 )

@@ -3,6 +3,7 @@ package dev.fritze.skyward.core.planner
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.LocalDetails
+import dev.fritze.skyward.core.model.MeteorShowerPayload
 import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
@@ -19,6 +20,8 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.QuietHours
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.sendsNoReminders
+import dev.fritze.skyward.core.visibility.VisibilityContext
+import dev.fritze.skyward.core.visibility.VisibilityModel
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,6 +30,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class PlannerTest {
@@ -40,22 +44,66 @@ class PlannerTest {
         createdAt = now, modifiedAt = now,
     )
 
-    private fun rule(id: String, leads: List<kotlin.time.Duration> = listOf(1.days), quietHours: QuietHours? = null, notifyOnFirstSeen: Boolean = false) = Rule(
-        id = id, name = id, enabled = true, phenomena = setOf(Phenomenon.SOLAR_ECLIPSE),
+    private fun rule(
+        id: String,
+        leads: List<kotlin.time.Duration> = listOf(1.days),
+        quietHours: QuietHours? = null,
+        notifyOnFirstSeen: Boolean = false,
+        phenomenon: Phenomenon = Phenomenon.SOLAR_ECLIPSE,
+        anchor: Anchor = Anchor.PEAK,
+    ) = Rule(
+        id = id, name = id, enabled = true, phenomena = setOf(phenomenon),
         locationIds = null, condition = Cond.VisibleAtLocation(Quality.MARGINAL),
-        schedule = NotifySchedule(leads, Anchor.PEAK, notifyOnFirstSeen, quietHours),
+        schedule = NotifySchedule(leads, anchor, notifyOnFirstSeen, quietHours),
         createdAt = now, modifiedAt = now,
     )
 
-    private fun occ(id: String = "se:test", peakTime: Instant = peak, windowEnd: Instant = peakTime + 3.hours, certainty: Certainty = Certainty.CERTAIN) = Occurrence(
+    private fun occ(
+        id: String = "se:test",
+        peakTime: Instant = peak,
+        windowEnd: Instant = peakTime + 3.hours,
+        certainty: Certainty = Certainty.CERTAIN,
+        expiresAt: Instant? = null,
+    ) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "Eclipse",
         window = TimeWindow(peakTime - 3.hours, windowEnd), peakTime = peakTime, certainty = certainty,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = now, expiresAt = null,
+        fetchedAt = now, expiresAt = expiresAt,
     )
+
+    /** Stands in for a real visibility model in [Planner.computeMatches] tests. */
+    private class AlwaysVisibleModel : VisibilityModel {
+        override val phenomenon = Phenomenon.SOLAR_ECLIPSE
+        override fun evaluate(occ: Occurrence, loc: SavedLocation, ctx: VisibilityContext) =
+            VisibilityResult(true, Quality.EXCELLENT, null, null, null, null, null)
+    }
 
     private fun visres(quality: Quality) = VisibilityResult(
         visibleAtLocation = quality != Quality.NONE, quality = quality, localDetails = null,
+        nearestVisiblePoint = null, travelDistanceKm = null, travelBearingDeg = null, qualityAtNearestPoint = null,
+    )
+
+    /** §7.2 shower occurrence, for the BEST_VIEWING anchor cases. */
+    private fun showerOcc(peakTime: Instant = peak) = Occurrence(
+        id = "ms:2026:PER", phenomenon = Phenomenon.METEOR_SHOWER, sourceId = "showers", title = "Perseids",
+        window = TimeWindow(peakTime - 2.days, peakTime + 2.days), peakTime = peakTime, certainty = Certainty.CERTAIN,
+        payload = MeteorShowerPayload(
+            iauCode = "PER", name = "Perseids", zhr = 100, zhrNote = null,
+            radiantRaDeg = 46.2, radiantDecDeg = 57.4, speedKmS = 59.0, parentBody = "109P/Swift-Tuttle",
+            activityStart = peakTime - 20.days, activityEnd = peakTime + 12.days, moonIlluminationAtPeak = 0.05,
+        ),
+        fetchedAt = now, expiresAt = null,
+    )
+
+    private fun showerVisres(quality: Quality, bestViewingStart: Instant) = VisibilityResult(
+        visibleAtLocation = quality != Quality.NONE, quality = quality,
+        localDetails = LocalDetails.MeteorLocal(
+            bestViewingStart = bestViewingStart,
+            bestViewingEnd = bestViewingStart + 5.hours,
+            maxRadiantAltDeg = 62.0,
+            moonIllumination = 0.05,
+            moonUpDuringBest = false,
+        ),
         nearestVisiblePoint = null, travelDistanceKm = null, travelBearingDeg = null, qualityAtNearestPoint = null,
     )
 
@@ -80,6 +128,101 @@ class PlannerTest {
         val notification = desired.first()
         assertEquals(ruleA.id, notification.ruleId, "expected the first matching rule")
         assertEquals(cabin.id, notification.locationId, "expected the best-quality location")
+    }
+
+    @Test
+    fun anExpiredForecastOccurrenceMatchesNoRules() {
+        // §5: the last OVATION nowcast and its 3-hour slots stay in the DB
+        // while SWPC is unreachable -- SourceRunner only withdraws
+        // occurrences on a *successful* refresh (§6.2 backs off up to 24 h).
+        // Expiry is the only thing standing between hours-old forecast data
+        // and a notification presenting it as current.
+        val home = loc("home", "Home")
+        val fresh = occ(id = "se:fresh", certainty = Certainty.FORECAST, expiresAt = now + 2.hours)
+        val expired = occ(id = "se:expired", certainty = Certainty.FORECAST, expiresAt = now - 1.hours)
+        // Expiry is inclusive: at exactly `expiresAt` the row is no longer current.
+        val expiringExactlyNow = occ(id = "se:on-the-boundary", certainty = Certainty.FORECAST, expiresAt = now)
+
+        val matches = Planner.computeMatches(
+            listOf(fresh, expired, expiringExactlyNow),
+            listOf(home),
+            listOf(rule("r")),
+            mapOf(Phenomenon.SOLAR_ECLIPSE to AlwaysVisibleModel()),
+            VisibilityContext(now = now, ovationGrid = null),
+        )
+
+        assertEquals(listOf("se:fresh"), matches.map { it.occ.id })
+    }
+
+    @Test
+    fun anEphemerisOccurrenceWithNoExpiryNeverExpires() {
+        // §5: "null for ephemeris events, which never go stale" -- an
+        // eclipse decades out must not be filtered as expired.
+        val home = loc("home", "Home")
+
+        val matches = Planner.computeMatches(
+            listOf(occ(expiresAt = null)),
+            listOf(home),
+            listOf(rule("r")),
+            mapOf(Phenomenon.SOLAR_ECLIPSE to AlwaysVisibleModel()),
+            VisibilityContext(now = now, ovationGrid = null),
+        )
+
+        assertEquals(1, matches.size)
+    }
+
+    @Test
+    fun aBestViewingAnchorDedupsAcrossNearbyLocationsInsteadOfBuzzingTwice() {
+        // §9.3's whole point: "Home" and "Office" 10 km apart produce one
+        // notification. Each location solves its own dusk, so their
+        // bestViewingStart values differ by a minute or two -- which used to
+        // be enough to split the key and buzz twice per lead (ADR 0013).
+        val home = loc("home", "Home")
+        val office = loc("office", "Office")
+        val shower = showerOcc()
+        val r = rule("major-showers", leads = listOf(3.days, 6.hours), phenomenon = Phenomenon.METEOR_SHOWER, anchor = Anchor.BEST_VIEWING)
+        val homeBest = Instant.parse("2026-01-31T21:14:00Z")
+        val officeBest = homeBest + 78.seconds
+
+        val matches = listOf(
+            Match(r, shower, home, showerVisres(Quality.GOOD, homeBest)),
+            Match(r, shower, office, showerVisres(Quality.EXCELLENT, officeBest)),
+        )
+
+        val desired = Planner.desiredNotifications(matches, now, utc)
+
+        assertEquals(2, desired.size, "expected one notification per lead, not per location")
+        // Anchored on the best-quality location -- the same one whose
+        // viewing window the body quotes (§9.3), so the fire time and the
+        // copy can't disagree.
+        assertEquals(setOf(officeBest - 3.days, officeBest - 6.hours), desired.map { it.fireAt }.toSet())
+        assertEquals(setOf(office.id), desired.map { it.locationId }.toSet())
+        assertEquals(
+            setOf("ms:2026:PER|${officeBest.epochSeconds}|${3.days.inWholeSeconds}", "ms:2026:PER|${officeBest.epochSeconds}|${6.hours.inWholeSeconds}"),
+            desired.map { it.id }.toSet(),
+        )
+    }
+
+    @Test
+    fun aBestViewingRuleStillDedupsAgainstAPeakRuleWhenTheAnchorFallsBackToPeak() {
+        // §9.1: BEST_VIEWING falls back to PEAK when there's no viewing
+        // window. The fallback must keep landing on the *same* key a
+        // PEAK-anchored rule produces -- one notification, listing the
+        // first matching rule (§9.3).
+        val home = loc("home", "Home")
+        val shower = showerOcc()
+        val peakRule = rule("peak-rule", phenomenon = Phenomenon.METEOR_SHOWER)
+        val bestViewingRule = rule("best-viewing-rule", phenomenon = Phenomenon.METEOR_SHOWER, anchor = Anchor.BEST_VIEWING)
+        val noWindow = showerVisres(Quality.GOOD, peak).copy(localDetails = null)
+
+        val desired = Planner.desiredNotifications(
+            listOf(Match(peakRule, shower, home, noWindow), Match(bestViewingRule, shower, home, noWindow)),
+            now,
+            utc,
+        )
+
+        assertEquals(1, desired.size)
+        assertEquals(peakRule.id, desired.first().ruleId, "expected the first matching rule")
     }
 
     @Test
