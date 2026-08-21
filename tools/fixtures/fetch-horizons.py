@@ -1,182 +1,291 @@
 #!/usr/bin/env python3
-"""§17.3b fixture fetcher: JPL Horizons state vectors for the Kepler propagator test.
+"""Capture JPL Horizons comet ephemerides as the §17.3b oracle fixture.
 
-Unlike its sibling fetchers this one does not capture bytes verbatim, because
-Horizons does not serve a machine format for these: its `VECTORS` output is a
-human-formatted table wrapped in a banner. Reproducing that table's parser
-inside the test would be testing the wrong thing, so the capture is distilled
-here, once, into the small JSON the test reads --
-`core/src/commonTest/resources/fixtures/jpl_horizons_comet_vectors.json`.
+§17.3b wants "positions + T-mag, daily over one year" for four comets
+spanning the eccentricity regimes, checked in and compared against the
+universal-variable propagator (§7.4.2). This writes two files into
+`core/src/commonTest/resources/fixtures/`:
 
-Two calls per comet, both public JPL APIs:
-  * https://ssd-api.jpl.nasa.gov/sbdb.api      -> osculating elements (the
-    propagator's input: e, q, i, om, w, tp)
-  * https://ssd.jpl.nasa.gov/api/horizons.api  -> heliocentric ecliptic J2000
-    position vectors (the expected output), CENTER=500@10, REF_PLANE=ECLIPTIC,
-    REF_SYSTEM=J2000, OUT_UNITS=AU-D
+  jpl_horizons_comet_elements.csv      one osculating solution per comet
+  jpl_horizons_comet_ephemerides.csv   one row per comet per day
 
-The four comets span the eccentricity and perihelion regimes §17.3b names:
-short-period elliptical, near-parabolic, genuinely hyperbolic, and a deep
-perihelion. Each is sampled monthly across its perihelion passage, where a
-two-body propagator is under the most strain.
+Everything the propagator is asked to reproduce is captured **geometrically**,
+so the comparison is like for like:
 
-A refresh is a review, not a rubber stamp. Horizons refits orbit solutions,
-so the numbers move between captures; what must not move is the agreement
-with the propagator, which the test asserts. Read the diff.
+  - `r` and the heliocentric ecliptic position come from a VECTORS call
+    centred on the Sun (`500@10`, ECLIPTIC/J2000) — the same frame
+    `heliocentricPosition` returns.
+  - `delta` and RA/Dec come from a VECTORS call centred on the Earth
+    (`500@399`, FRAME/ICRF) with `VEC_CORR='NONE'`. Horizons' *observer*
+    RA/Dec (quantity 1) is astrometric — light-time and stellar aberration
+    corrected — which the propagator does not model; comparing against it
+    would spend a fifth of §17.3b's 0.05° budget on a correction that is not
+    the propagator's job. The geometric vector is what the app computes.
+  - T-mag comes from an OBSERVER call, because it is the one quantity
+    VECTORS does not carry. Horizons computes it as
+    `M1 + 5*log10(delta) + k1*log10(r)`, the same formula as
+    `apparentMagnitude` (ADR 0004), so the comparison is a geometry check —
+    exactly as §17.3b says.
 
-Usage: tools/fixtures/fetch-horizons.py [--out PATH]
+**Elements and times.** The osculating elements are taken from Horizons at
+each comet's perihelion, and the ephemeris window is that date ±182 days, so
+two-body propagation is anchored in the middle of the span it is checked
+over. Both the ephemeris timestamps and `Tp` are Julian dates in **TDB**, and
+both are converted to `Instant` by the app's own rule (JD 2440587.5 = Unix
+epoch, 86400 s/day, §7.4.1). Converting them the same way means the ~69 s
+TDB-UTC offset cancels out of `t - tp`, which is the only thing the
+propagator uses them for. The OBSERVER rows are timestamped in UT rather than
+TDB and are joined on calendar date; T-mag moves by ~0.01 mag/day for these
+comets, so the 69 s is worth ~1e-5 mag.
+
+Ephemerides courtesy of the Jet Propulsion Laboratory, California Institute
+of Technology (US Government work, public domain — §16).
+
+Per AGENTS.md, fixtures are regenerated with this script rather than edited
+by hand:
+
+    python3 tools/fixtures/fetch-horizons.py
 """
 
-from __future__ import annotations
-
-import argparse
-import datetime
-import json
+import csv
+import io
+import math
 import re
 import sys
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
+API = "https://ssd.jpl.nasa.gov/api/horizons.api"
 USER_AGENT = "Skyward/1.0 (+https://github.com/skywardapp/skyward; fixture capture)"
-SBDB_API = "https://ssd-api.jpl.nasa.gov/sbdb.api"
-HORIZONS_API = "https://ssd.jpl.nasa.gov/api/horizons.api"
 
-# (label, designation, first sample, last sample). The sample windows straddle
-# each comet's perihelion, where a two-body propagator is under the most
-# strain; STEP_SIZE is 30d.
-#
-# Both APIs are addressed by designation rather than by Horizons record
-# number: the record number changes when a solution is refit (2P/Encke has
-# moved more than once), and a stale one silently returns a different body.
+ELEMENTS_OUTPUT = "core/src/commonTest/resources/fixtures/jpl_horizons_comet_elements.csv"
+EPHEMERIDES_OUTPUT = "core/src/commonTest/resources/fixtures/jpl_horizons_comet_ephemerides.csv"
+
+# §17.3b: "four comets spanning the eccentricity regimes — one short-period
+# elliptical, one near-parabolic (e < 1 but > 0.99), one genuinely hyperbolic
+# (e > 1.02, i.e. an interstellar object), one with perihelion inside 0.5 au".
+# `CAP` picks the apparition nearest the ephemeris start, which is what makes
+# a designation like `2P` unambiguous.
 COMETS = [
-    ("2P/Encke", "2P", "2023-08-23", "2024-01-20"),
-    ("C/2020 F3 (NEOWISE)", "C/2020 F3", "2020-06-03", "2020-10-01"),
-    ("2I/Borisov (C/2019 Q4)", "2I", "2019-10-01", "2020-01-29"),
-    ("96P/Machholz 1", "96P", "2017-09-27", "2018-01-25"),
+    # (fixture key, Horizons COMMAND, display name, perihelion date, why it is here)
+    ("encke", "DES=2P;CAP", "2P/Encke", "2023-10-22", "short-period elliptical (e=0.85; also q<0.5 au)"),
+    ("neowise", "DES=C/2020 F3;CAP", "C/2020 F3 (NEOWISE)", "2020-07-03", "near-parabolic (e=0.999)"),
+    ("borisov", "DES=2I;CAP", "2I/Borisov (C/2019 Q4)", "2019-12-08", "genuinely hyperbolic (e=3.36)"),
+    ("machholz", "DES=96P;CAP", "96P/Machholz 1", "2017-10-27", "deep perihelion (q=0.12 au)"),
 ]
 
-# §7.4.1: "JD 2440587.5 = Unix epoch" -- the same conversion the parser uses.
-UNIX_EPOCH_JD = 2440587.5
-SECONDS_PER_DAY = 86400.0
-
-VECTOR_LINE = re.compile(
-    r"^\s*X\s*=\s*(?P<x>[-+0-9.Ee]+)\s+Y\s*=\s*(?P<y>[-+0-9.Ee]+)\s+Z\s*=\s*(?P<z>[-+0-9.Ee]+)"
-)
-EPOCH_LINE = re.compile(r"^\s*\d+\.\d+\s*=\s*A\.D\.\s*(?P<stamp>[0-9]{4}-[A-Za-z]{3}-[0-9]{2} [0-9:.]+)")
-
-MONTHS = {m: i + 1 for i, m in enumerate(
-    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-)}
+WINDOW_DAYS = 182
+SOE = re.compile(r"\$\$SOE(.*?)\$\$EOE", re.S)
+MAG_PARAMS = re.compile(r"M1=\s*([-\d.]+).*?k1=\s*([-\d.]+)", re.S)
 
 
-def get(url: str, params: dict[str, str]) -> str:
-    request = urllib.request.Request(
-        f"{url}?{urllib.parse.urlencode(params)}", headers={"User-Agent": USER_AGENT}
+def horizons(**params) -> str:
+    query = urllib.parse.urlencode({"format": "text", **params})
+    request = urllib.request.Request(f"{API}?{query}", headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=120) as response:
+        text = response.read().decode("utf-8", errors="replace")
+    if "$$SOE" not in text and params.get("MAKE_EPHEM") != "NO":
+        raise RuntimeError(f"Horizons returned no ephemeris for {params.get('COMMAND')}:\n{text[:800]}")
+    return text
+
+
+def body(text: str):
+    match = SOE.search(text)
+    if not match:
+        raise RuntimeError("no $$SOE block")
+    return [line for line in match.group(1).splitlines() if line.strip()]
+
+
+def shift_days(iso_date: str, days: int) -> str:
+    """Calendar arithmetic without importing datetime just for this."""
+    import datetime
+
+    d = datetime.date.fromisoformat(iso_date) + datetime.timedelta(days=days)
+    return d.isoformat()
+
+
+def jd_to_iso(jd: float) -> str:
+    """The app's own rule (§7.4.1): JD 2440587.5 is the Unix epoch, 86400 s/day."""
+    import datetime
+
+    seconds = (jd - 2440587.5) * 86400.0
+    stamp = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(seconds=seconds)
+    return stamp.strftime("%Y-%m-%dT%H:%M:%S.") + f"{stamp.microsecond // 1000:03d}Z"
+
+
+def fetch_elements(command: str, perihelion: str) -> dict:
+    text = horizons(
+        COMMAND=f"'{command}'", OBJ_DATA="NO", MAKE_EPHEM="YES", EPHEM_TYPE="ELEMENTS",
+        CENTER="'500@10'", REF_PLANE="'ECLIPTIC'", REF_SYSTEM="'ICRF'", OUT_UNITS="'AU-D'",
+        START_TIME=f"'{perihelion}'", STOP_TIME=f"'{shift_days(perihelion, 1)}'", STEP_SIZE="'1d'",
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return response.read().decode("utf-8")
+    lines = body(text)
+    # Two rows come back (start and stop); the first is the osculating
+    # solution at the requested epoch, which is the one to propagate from.
+    block = " ".join(lines[:5])
+    def value(key):
+        match = re.search(rf"\b{key}\s*=\s*([-\d.E+]+)", block)
+        if not match:
+            raise RuntimeError(f"no {key} in:\n{block}")
+        return float(match.group(1))
 
-
-def elements(designation: str) -> dict[str, float | str]:
-    """The osculating elements the propagator takes as input."""
-    payload = json.loads(get(SBDB_API, {"sstr": designation, "full-prec": "true"}))
-    by_name = {e["name"]: e for e in payload["orbit"]["elements"]}
     return {
-        "eccentricity": float(by_name["e"]["value"]),
-        "perihelionDistanceAu": float(by_name["q"]["value"]),
-        "inclinationDeg": float(by_name["i"]["value"]),
-        "ascendingNodeDeg": float(by_name["om"]["value"]),
-        "argPerihelionDeg": float(by_name["w"]["value"]),
-        # Stored as an instant, not a Julian date: the test feeds it straight
-        # to CometElements, and a JD in the fixture would put a conversion
-        # between the capture and the thing under test.
-        "tp": julian_date_to_iso(float(by_name["tp"]["value"])),
+        "eccentricity": value("EC"),
+        "perihelion_distance_au": value("QR"),
+        "inclination_deg": value("IN"),
+        "ascending_node_deg": value("OM"),
+        "arg_perihelion_deg": value("W"),
+        "tp_jd_tdb": value("Tp"),
     }
 
 
-def julian_date_to_iso(jd: float) -> str:
-    seconds = round((jd - UNIX_EPOCH_JD) * SECONDS_PER_DAY, 3)
-    stamp = datetime.datetime.fromtimestamp(seconds, tz=datetime.timezone.utc)
-    return stamp.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+def fetch_heliocentric(command: str, start: str, stop: str) -> dict:
+    text = horizons(
+        COMMAND=f"'{command}'", OBJ_DATA="NO", MAKE_EPHEM="YES", EPHEM_TYPE="VECTORS",
+        CENTER="'500@10'", REF_PLANE="'ECLIPTIC'", REF_SYSTEM="'ICRF'", VEC_CORR="'NONE'",
+        OUT_UNITS="'AU-D'", VEC_TABLE="'1'", CSV_FORMAT="'YES'",
+        START_TIME=f"'{start}'", STOP_TIME=f"'{stop}'", STEP_SIZE="'1d'",
+    )
+    rows = {}
+    for line in body(text):
+        parts = [p.strip() for p in line.split(",")]
+        jd = float(parts[0])
+        x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
+        rows[round(jd, 6)] = (x, y, z)
+    return rows
 
 
-def vectors(designation: str, start: str, stop: str) -> list[dict[str, object]]:
-    """Heliocentric ecliptic J2000 positions, one per 30 days, from the $$SOE block."""
-    text = get(HORIZONS_API, {
-        "format": "text",
-        # ";CAP" picks the apparition closest to the requested window, which
-        # is what makes a designation usable as a Horizons COMMAND for a
-        # multi-apparition periodic comet.
-        "COMMAND": f"'DES={designation};CAP'",
-        "OBJ_DATA": "NO",
-        "MAKE_EPHEM": "YES",
-        "EPHEM_TYPE": "VECTORS",
-        "CENTER": "500@10",
-        "REF_PLANE": "ECLIPTIC",
-        "REF_SYSTEM": "J2000",
-        "OUT_UNITS": "AU-D",
-        "VEC_TABLE": "1",
-        "START_TIME": start,
-        "STOP_TIME": stop,
-        "STEP_SIZE": "30d",
-    })
-    if "$$SOE" not in text:
-        raise SystemExit(f"Horizons returned no ephemeris block for {designation}:\n{text[:600]}")
-
-    body = text.split("$$SOE", 1)[1].split("$$EOE", 1)[0]
-    points: list[dict[str, object]] = []
-    pending: str | None = None
-    for line in body.splitlines():
-        epoch = EPOCH_LINE.match(line)
-        if epoch:
-            pending = iso(epoch.group("stamp"))
-            continue
-        vector = VECTOR_LINE.match(line)
-        if vector and pending:
-            points.append({
-                "time": pending,
-                "x": float(vector.group("x")),
-                "y": float(vector.group("y")),
-                "z": float(vector.group("z")),
-            })
-            pending = None
-    if not points:
-        raise SystemExit(f"parsed no vectors for {designation} -- has the table format changed?")
-    return points
+def fetch_geocentric(command: str, start: str, stop: str) -> dict:
+    text = horizons(
+        COMMAND=f"'{command}'", OBJ_DATA="NO", MAKE_EPHEM="YES", EPHEM_TYPE="VECTORS",
+        CENTER="'500@399'", REF_PLANE="'FRAME'", REF_SYSTEM="'ICRF'", VEC_CORR="'NONE'",
+        OUT_UNITS="'AU-D'", VEC_TABLE="'1'", CSV_FORMAT="'YES'",
+        START_TIME=f"'{start}'", STOP_TIME=f"'{stop}'", STEP_SIZE="'1d'",
+    )
+    rows = {}
+    for line in body(text):
+        parts = [p.strip() for p in line.split(",")]
+        jd = float(parts[0])
+        x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
+        delta = math.sqrt(x * x + y * y + z * z)
+        ra = math.degrees(math.atan2(y, x)) % 360.0
+        dec = math.degrees(math.asin(z / delta))
+        rows[round(jd, 6)] = (delta, ra, dec)
+    return rows
 
 
-def iso(stamp: str) -> str:
-    """'2023-Aug-23 00:00:00.0000' -> '2023-08-23T00:00:00Z' (Horizons emits TDB; the ~70 s
-    offset from UTC is far below this test's tolerance and is ignored, as the test's own
-    comment records)."""
-    date, time = stamp.split(" ")
-    year, month, day = date.split("-")
-    return f"{year}-{MONTHS[month]:02d}-{day}T{time.split('.')[0]}Z"
+def fetch_tmag(command: str, start: str, stop: str):
+    text = horizons(
+        COMMAND=f"'{command}'", OBJ_DATA="YES", MAKE_EPHEM="YES", EPHEM_TYPE="OBSERVER",
+        CENTER="'500@399'", QUANTITIES="'9'", ANG_FORMAT="'DEG'", CSV_FORMAT="'YES'",
+        START_TIME=f"'{start}'", STOP_TIME=f"'{stop}'", STEP_SIZE="'1d'",
+    )
+    match = MAG_PARAMS.search(text)
+    if not match:
+        raise RuntimeError(f"no M1/k1 in the header for {command}")
+    m1, k1 = float(match.group(1)), float(match.group(2))
+
+    by_date = {}
+    for line in body(text):
+        parts = [p.strip() for p in line.split(",")]
+        # "2023-Oct-20 00:00" -> "2023-10-20"
+        stamp = parts[0].split()[0]
+        year, month, day = stamp.split("-")
+        month_number = "JanFebMarAprMayJunJulAugSepOctNovDec".index(month) // 3 + 1
+        date = f"{year}-{month_number:02d}-{int(day):02d}"
+        tmag = parts[3]
+        if tmag and tmag != "n.a.":
+            by_date[date] = float(tmag)
+    return m1, k1, by_date
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path("core/src/commonTest/resources/fixtures/jpl_horizons_comet_vectors.json"),
-    )
-    args = parser.parse_args()
+    element_rows = []
+    ephemeris_rows = []
 
-    captured = []
-    for label, designation, start, stop in COMETS:
-        print(f"[fetch-horizons] {label}: elements from SBDB, vectors from Horizons", file=sys.stderr)
-        entry: dict[str, object] = {"name": label, "designation": designation}
-        entry.update(elements(designation))
-        entry["points"] = vectors(designation, start, stop)
-        captured.append(entry)
+    for key, command, name, perihelion, rationale in COMETS:
+        start = shift_days(perihelion, -WINDOW_DAYS)
+        stop = shift_days(perihelion, WINDOW_DAYS)
+        print(f"fetching {name} ({start}..{stop})", file=sys.stderr)
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"comets": captured}, indent=2) + "\n", encoding="utf-8")
-    print(f"[fetch-horizons] wrote {args.out}", file=sys.stderr)
+        elements = fetch_elements(command, perihelion)
+        helio = fetch_heliocentric(command, start, stop)
+        geo = fetch_geocentric(command, start, stop)
+        m1, k1, tmag_by_date = fetch_tmag(command, start, stop)
+
+        element_rows.append({
+            "comet": key,
+            "name": name,
+            "regime": rationale,
+            "horizons_command": command,
+            "elements_epoch_utc": perihelion,
+            "eccentricity": repr(elements["eccentricity"]),
+            "perihelion_distance_au": repr(elements["perihelion_distance_au"]),
+            "inclination_deg": repr(elements["inclination_deg"]),
+            "ascending_node_deg": repr(elements["ascending_node_deg"]),
+            "arg_perihelion_deg": repr(elements["arg_perihelion_deg"]),
+            "tp_utc": jd_to_iso(elements["tp_jd_tdb"]),
+            "m1": repr(m1),
+            "k1": repr(k1),
+        })
+
+        kept = 0
+        for jd in sorted(helio):
+            if jd not in geo:
+                continue
+            x, y, z = helio[jd]
+            delta, ra, dec = geo[jd]
+            iso = jd_to_iso(jd)
+            tmag = tmag_by_date.get(iso[:10])
+            if tmag is None:
+                continue
+            ephemeris_rows.append({
+                "comet": key,
+                "time_utc": iso,
+                "helio_x_au": f"{x:.9f}",
+                "helio_y_au": f"{y:.9f}",
+                "helio_z_au": f"{z:.9f}",
+                "r_au": f"{math.sqrt(x * x + y * y + z * z):.9f}",
+                "delta_au": f"{delta:.9f}",
+                "ra_deg": f"{ra:.6f}",
+                "dec_deg": f"{dec:.6f}",
+                "tmag": f"{tmag:.3f}",
+            })
+            kept += 1
+        print(f"  {kept} daily samples", file=sys.stderr)
+
+    write(ELEMENTS_OUTPUT, element_rows, (
+        "# Osculating elements at perihelion for the §17.3b comets, from JPL Horizons.\n"
+        "# Ephemerides courtesy of the Jet Propulsion Laboratory, California Institute of\n"
+        "# Technology (US Government work, public domain).\n"
+        "# `tp_utc` is Horizons' Tp (a Julian date in TDB) converted by the app's own rule\n"
+        "# (JD 2440587.5 = Unix epoch), the same conversion time_utc below uses, so the\n"
+        "# TDB-UTC offset cancels out of the (t - tp) the propagator actually uses.\n"
+        "# Regenerate with tools/fixtures/fetch-horizons.py — do not edit by hand.\n"
+    ))
+    write(EPHEMERIDES_OUTPUT, ephemeris_rows, (
+        "# Daily JPL Horizons ephemerides, perihelion ±182 days, for the §17.3b comets.\n"
+        "# Ephemerides courtesy of the Jet Propulsion Laboratory, California Institute of\n"
+        "# Technology (US Government work, public domain).\n"
+        "# Positions, delta and RA/Dec are geometric (VEC_CORR='NONE'): no light-time or\n"
+        "# aberration correction, matching what the propagator computes. helio_* is\n"
+        "# ecliptic J2000; ra/dec come from the geocentric ICRF/J2000 equatorial vector.\n"
+        "# tmag is Horizons' own total magnitude, M1 + 5*log10(delta) + k1*log10(r).\n"
+        "# Regenerate with tools/fixtures/fetch-horizons.py — do not edit by hand.\n"
+    ))
     return 0
 
 
+def write(path: str, rows: list, header: str) -> None:
+    buffer = io.StringIO()
+    buffer.write(header)
+    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()), lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(buffer.getvalue())
+    print(f"wrote {len(rows)} rows to {path}", file=sys.stderr)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

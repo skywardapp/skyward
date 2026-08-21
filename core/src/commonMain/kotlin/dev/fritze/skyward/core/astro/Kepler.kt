@@ -40,6 +40,117 @@ internal fun stumpff(z: Double): Pair<Double, Double> = when {
 }
 
 /**
+ * The universal anomaly `x` solving §7.4.2's universal Kepler equation, with
+ * the iteration count that found it.
+ *
+ * Split out of [heliocentricPosition] so §17.3b's "converges in < 30
+ * iterations" can be asserted as the count it is, rather than inferred from
+ * the solver merely not giving up — which is all a non-null position tells
+ * you, and which would still hold at exactly the 30-iteration cap.
+ */
+internal data class UniversalAnomaly(val x: Double, val iterations: Int)
+
+/**
+ * Solves the universal Kepler equation, referenced to perihelion passage.
+ * Null if it does not converge within [KEPLER_MAX_ITERATIONS].
+ *
+ * Safeguarded Newton-Raphson (Newton where it behaves, bisection where it
+ * doesn't), which the equation's own shape makes both possible and cheap:
+ *
+ *   f(x)  = (1 - alpha*q) x^3 c3(z) + q*x - GAUSS_K*dt = 0,   z = alpha*x^2
+ *   f'(x) = (1 - alpha*q) x^2 c2(z) + q
+ *
+ * `f'(x)` is the heliocentric radius at `x`, so it is strictly positive for
+ * every conic: `f` is strictly increasing and the root is unique. That also
+ * hands us a bracket for free. Since `f'(x) >= q` everywhere,
+ * `f(x) >= q*x - GAUSS_K*dt`, so `x = GAUSS_K*dt/q` already has `f >= 0` —
+ * it is a *bound*, not just a guess, and `[0, GAUSS_K*dt/q]` (reversed for
+ * negative dt) brackets the root with no search.
+ *
+ * Plain Newton from that bound is what this used to do, and it is not
+ * enough. `f'` oscillates between `q` and `2(1 - alpha*q)/alpha + q` along an
+ * elliptical orbit, and where it touches the bottom of that range a Newton
+ * step is `f/q` — huge when `q` is small. For 2P/Encke (q = 0.34 au) the
+ * bound overshoots the root by a factor of six and the iteration needs 26
+ * steps near perihelion and fails outright at dt = +-182 days, where
+ * §7.4.2's contract then drops the comet with a diagnostic: a real comet
+ * silently missing from a scan that routinely reaches years either side of
+ * perihelion (§7.4.3). Bisecting whenever a Newton step would leave the
+ * bracket, or is not at least halving it, removes that failure mode without
+ * costing anything in the well-behaved case: Encke now needs 6 iterations at
+ * worst across that same year, and §17.3b's whole eccentricity sweep tops
+ * out at 18 — in its most extreme corner, a steeply hyperbolic orbit a
+ * decade from perihelion, where the first few steps are bisections of a very
+ * wide bracket.
+ */
+internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): UniversalAnomaly? {
+    // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for hyperbolas — no branch.
+    val alpha = (1.0 - e) / q
+
+    fun f(x: Double): Pair<Double, Double> {
+        val z = alpha * x * x
+        val (c2, c3) = stumpff(z)
+        val oneMinusAlphaQ = 1.0 - alpha * q
+        val value = oneMinusAlphaQ * x * x * x * c3 + q * x - GAUSS_K * dtDays
+        val derivative = oneMinusAlphaQ * x * x * c2 + q
+        return value to derivative
+    }
+
+    // x = 0 is the root exactly at perihelion passage; f(0) = 0 there.
+    if (dtDays == 0.0) return UniversalAnomaly(0.0, 0)
+
+    val bound = GAUSS_K * dtDays / q
+    var low = minOf(0.0, bound)
+    var high = maxOf(0.0, bound)
+
+    // Start from the bound rather than the midpoint: for the near-parabolic
+    // and hyperbolic orbits where q is close to r it is already very nearly
+    // the root, and the safeguard below costs one bisection when it isn't.
+    var x = bound
+    var (value, derivative) = f(x)
+    var step = high - low
+    var previousStep = step
+
+    for (iteration in 0 until KEPLER_MAX_ITERATIONS) {
+        if (abs(value) < KEPLER_TOLERANCE) return UniversalAnomaly(x, iteration)
+
+        val newtonStep = value / derivative
+        val newtonWouldLeaveBracket = ((x - high) * derivative - value) * ((x - low) * derivative - value) > 0.0
+        val newtonIsTooSlow = abs(2.0 * value) > abs(previousStep * derivative)
+        // Far out on a hyperbola the Stumpff functions overflow: c2 and c3
+        // are built from cosh/sinh of sqrt(-alpha)*|x|, which for an orbit
+        // like e=3, q=0.12 au ten years from perihelion is sinh(2000). Both
+        // f and f' become infinite — with the right *signs*, so the bracket
+        // is still sound and bisection still works, but their ratio is NaN
+        // and a Newton step from it would poison x for good.
+        previousStep = step
+        if (!newtonStep.isFinite() || newtonWouldLeaveBracket || newtonIsTooSlow) {
+            step = 0.5 * (high - low)
+            x = low + step
+        } else {
+            step = newtonStep
+            x -= step
+        }
+        // A vanishing step is an equally valid convergence signal as a small
+        // residual: f(x) sums terms of very different magnitude (the Stumpff
+        // cubic term vs. GAUSS_K*dt), so for some regimes (near-parabolic
+        // orbits at large |dt|, i.e. alpha ~ 0 with dt in the thousands of
+        // days — see KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans)
+        // floating-point cancellation keeps |f(x)| a couple of ULPs above
+        // KEPLER_TOLERANCE forever even once x itself has stopped moving.
+        if (abs(step) < 1e-12 * maxOf(1.0, abs(x))) return UniversalAnomaly(x, iteration + 1)
+
+        val next = f(x)
+        value = next.first
+        derivative = next.second
+        // f is strictly increasing, so the sign of f(x) says which side of
+        // the root x fell on and the bracket only ever narrows.
+        if (value < 0.0) low = x else high = x
+    }
+    return null
+}
+
+/**
  * Heliocentric position, J2000 ecliptic, AU — valid for any eccentricity via
  * the universal-variable (Stumpff) formulation (§7.4.2), which avoids the
  * per-conic branching (and the discontinuities at e=1 it causes) that a
@@ -55,59 +166,9 @@ fun heliocentricPosition(el: CometElements, t: Instant): Vec3? {
     val dt = (t - el.tpPerihelion).inWholeSeconds / 86400.0 // days since perihelion passage
     val q = el.perihelionDistanceAu
     val e = el.eccentricity
-    // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for hyperbolas — no branch.
     val alpha = (1.0 - e) / q
 
-    // Universal Kepler's equation, referenced to perihelion passage (r0 = q,
-    // radial velocity = 0 at perihelion, which is what collapses the general
-    // state-vector form of the equation down to just x, q, alpha, and dt):
-    //   f(x) = (1 - alpha*q) x^3 c3(z) + q*x - GAUSS_K*dt = 0,   z = alpha*x^2
-    //   f'(x) = (1 - alpha*q) x^2 c2(z) + q                      (this is also r(x), the radius)
-    fun f(x: Double): Pair<Double, Double> {
-        val z = alpha * x * x
-        val (c2, c3) = stumpff(z)
-        val oneMinusAlphaQ = 1.0 - alpha * q
-        val value = oneMinusAlphaQ * x * x * x * c3 + q * x - GAUSS_K * dt
-        val derivative = oneMinusAlphaQ * x * x * c2 + q
-        return value to derivative
-    }
-
-    // Seed: exactly one Newton-Raphson step from x=0, using f(0) = -GAUSS_K*dt
-    // and f'(0) = q (both independent of alpha, since z=alpha*x^2=0 there) —
-    // i.e. x = 0 - f(0)/f'(0) = GAUSS_K*dt/q. Dimensionally consistent (AU^(1/2))
-    // and, unlike a per-conic-branch seed, needs no special case for alpha's
-    // sign or magnitude: it's derived from the equation itself, not a
-    // conic-specific approximation, so it holds equally for elliptical,
-    // parabolic, and hyperbolic orbits. A prior `GAUSS_K*dt*sqrt(abs(alpha))`
-    // seed (dimensionally AU, not AU^(1/2)) failed to converge for
-    // near-parabolic orbits (alpha ~ 0) at large |dt| — see
-    // KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans.
-    var x = GAUSS_K * dt / q
-
-    var converged = false
-    for (iteration in 0 until KEPLER_MAX_ITERATIONS) {
-        val (value, derivative) = f(x)
-        if (abs(value) < KEPLER_TOLERANCE) {
-            converged = true
-            break
-        }
-        if (derivative == 0.0) return null
-        val step = value / derivative
-        x -= step
-        // A vanishing Newton step is an equally valid convergence signal as a
-        // small residual: f(x) sums terms of very different magnitude (the
-        // Stumpff cubic term vs. GAUSS_K*dt), so for some regimes (observed:
-        // near-parabolic orbits at large |dt|, i.e. alpha ~ 0 with dt in the
-        // thousands of days — see
-        // KeplerTest.convergesForNearParabolicOrbitsAcrossLongTimeSpans)
-        // floating-point cancellation keeps |f(x)| a couple of ULPs above
-        // KEPLER_TOLERANCE forever even once x itself has stopped moving.
-        if (abs(step) < 1e-12 * maxOf(1.0, abs(x))) {
-            converged = true
-            break
-        }
-    }
-    if (!converged) return null
+    val x = solveUniversalAnomaly(q, e, dt)?.x ?: return null
 
     val z = alpha * x * x
     val (c2, c3) = stumpff(z)
