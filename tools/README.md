@@ -23,6 +23,18 @@ Not part of the app; scripts that run at build/dev time, not on-device.
     ```
 
     Rewrites the file in place; review the diff before committing it.
+  - **`fetch-jpl-horizons-comet-ephemerides.py`** — §17.3b's oracle. For each
+    of the four comets §17.3b names, captures Horizons' osculating elements at
+    perihelion plus daily geometric ephemerides over perihelion ±182 days
+    (heliocentric position and `r`, geocentric `delta`, RA/Dec, and Horizons'
+    own T-mag) into `jpl_horizons_comet_elements.csv` and
+    `jpl_horizons_comet_ephemerides.csv`. Positions are captured with
+    `VEC_CORR='NONE'`, i.e. without light-time or aberration correction, so
+    they are the same quantity the propagator computes.
+
+    ```sh
+    python3 tools/fetch-jpl-horizons-comet-ephemerides.py
+    ```
 
 Both land with the milestones above, not M0.
 

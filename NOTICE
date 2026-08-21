@@ -85,14 +85,17 @@ NASA/JPL Horizons ephemerides
 Source:    https://ssd-api.jpl.nasa.gov/doc/horizons.html
 License:   US Government work, public domain
 Bundled:   Test fixtures only (§17.3b) — not fetched at runtime by the app
-Notes:     Courtesy credit in test sources.
+Notes:     Courtesy credit in test sources. Captured by
+           tools/fetch-jpl-horizons-comet-ephemerides.py, which sends a
+           descriptive User-Agent per JPL's request.
 
 ================================================================================
 NASA GSFC Five Millennium Canon of Solar/Lunar Eclipses (Espenak & Meeus)
 ================================================================================
 Source:    https://eclipse.gsfc.nasa.gov/SEpubs/5MKSE.html
+           Umbral-path tables: https://eclipse.gsfc.nasa.gov/SEpath/
 License:   Free with acknowledgment
-Bundled:   Test fixtures only (§17.1) — not fetched at runtime by the app
+Bundled:   Test fixtures only (§17.1/§17.2) — not fetched at runtime by the app
 Notes:     "Eclipse predictions courtesy of Fred Espenak and Jean Meeus,
            NASA/GSFC."
 
