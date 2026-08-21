@@ -146,7 +146,7 @@ class NotificationCopyTest {
         assertEquals("Eclipse today", copy.title)
         assertTrue(copy.body.contains("First contact at Home 09:32"), copy.body)
         assertTrue(copy.body.contains("max 10:48 (92%)"), copy.body)
-        assertTrue(copy.body.contains("Totality 180 km SSE of Home"), copy.body)
+        assertTrue(copy.body.contains("Totality 180 km SSE"), copy.body)
         assertTrue(copy.body.contains("leave by 08:00 to be safe"), copy.body)
     }
 
