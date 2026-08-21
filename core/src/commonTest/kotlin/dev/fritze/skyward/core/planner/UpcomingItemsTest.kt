@@ -34,11 +34,11 @@ class UpcomingItemsTest {
             VisibilityResult(quality != Quality.NONE, quality, null, null, null, null, null)
     }
 
-    private fun occ(id: String, peakTime: Instant) = Occurrence(
+    private fun occ(id: String, peakTime: Instant, certainty: Certainty = Certainty.CERTAIN, expiresAt: Instant? = null) = Occurrence(
         id = id, phenomenon = Phenomenon.SOLAR_ECLIPSE, sourceId = "eclipse", title = "t $id",
-        window = TimeWindow(peakTime - 1.hours, peakTime + 1.hours), peakTime = peakTime, certainty = Certainty.CERTAIN,
+        window = TimeWindow(peakTime - 1.hours, peakTime + 1.hours), peakTime = peakTime, certainty = certainty,
         payload = SolarEclipsePayload(SolarEclipseKind.TOTAL, GeoPoint(0.0, 0.0), peakTime, emptyList(), 1.0),
-        fetchedAt = now, expiresAt = null,
+        fetchedAt = now, expiresAt = expiresAt,
     )
 
     private fun rule(minQuality: Quality) = Rule(
@@ -60,6 +60,24 @@ class UpcomingItemsTest {
         // Both occurrences evaluate to GOOD >= MARGINAL, so both match the rule.
         assertEquals(2, items.size)
         assertTrue(items.all { it.matchedRuleNames == listOf("My rule") })
+    }
+
+    @Test
+    fun anExpiredForecastIsExcludedFromBothScopes() {
+        // §5/§13.2: a stale forecast is last-known data. ALL drops the
+        // "matches a rule" restriction, not the "still current" one -- and
+        // EXCELLENT quality doesn't earn an expired row a "notable anyway"
+        // slot either.
+        val live = occ("live", now + 1.days, Certainty.FORECAST, expiresAt = now + 2.hours)
+        val expired = occ("expired", now + 1.days, Certainty.FORECAST, expiresAt = now - 1.hours)
+        val ctx = VisibilityContext(now, null)
+        val models = mapOf(Phenomenon.SOLAR_ECLIPSE to FixedQualityModel(Quality.EXCELLENT))
+        val rules = listOf(rule(Quality.MARGINAL))
+
+        for (scope in UpcomingScope.entries) {
+            val items = computeUpcomingItems(listOf(live, expired), listOf(home), rules, models, ctx, UpcomingFilter(scope))
+            assertEquals(listOf("live"), items.map { it.occurrence.id }, "scope $scope")
+        }
     }
 
     @Test

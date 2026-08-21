@@ -43,3 +43,22 @@ data class Occurrence(
         }
     }
 }
+
+/**
+ * §5: whether this occurrence's data has gone stale as of [now] — an
+ * aurora NOWCAST ~2 h after it was issued, a THREE_DAY slot once the next
+ * forecast supersedes it, a comet record 45 days after fetch, an EONET
+ * event 3 days. Ephemeris events carry a null `expiresAt` and never
+ * expire.
+ *
+ * Past that instant the row is last-known data, not current data, and the
+ * §9 pipeline must stop treating it as a live prediction. Withdrawal by
+ * re-fetch (`SourceRunner.upsertOccurrences`) only happens on a
+ * *successful* refresh, so while a source is unreachable — SWPC down,
+ * backing off up to 24 h (§6.2) — expiry is the only staleness backstop
+ * there is.
+ */
+fun Occurrence.hasExpiredAt(now: Instant): Boolean {
+    val expiresAt = expiresAt ?: return false
+    return expiresAt <= now
+}
