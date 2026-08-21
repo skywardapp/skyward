@@ -18,11 +18,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.sources.SourceDiagnostics
 import dev.fritze.skyward.core.sources.SourceKind
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.common.formatDateTime
 
 private data class SourceRow(
     val id: String,

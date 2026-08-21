@@ -21,7 +21,7 @@ class BootReceiver : BroadcastReceiver() {
         container.applicationScope.launch {
             try {
                 val reconciled = container.notificationRepo.getAll()
-                AlarmSyncer.sync(reconciled, container.alarmScheduler, container.notificationRepo, Clock.System.now())
+                AlarmSyncer.sync(reconciled, container.alarmScheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
             } finally {
                 pendingResult.finish()
             }

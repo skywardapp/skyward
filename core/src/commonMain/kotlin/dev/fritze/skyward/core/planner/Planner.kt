@@ -76,12 +76,21 @@ object Planner {
      * §9.3/§10.4: expand each match's schedule into candidate fire times,
      * dedup by `(occurrenceId, anchorTime, lead-or-"first")`, and render the
      * winning (rule, location) pair into a [PlannedNotification] via §10.5's
-     * `core/format` templates. A lead computed in the past is dropped, not
-     * fired (§7.4.3).
+     * `core/format` templates.
+     *
+     * Candidates whose `fireAt` is already in the past are **kept** here and
+     * filtered in [reconcile], not dropped on the spot. §7.4.3 and §10.4 draw
+     * their line between "computed in the past" (drop) and "genuinely
+     * scheduled, then missed" (fire immediately if still within the
+     * occurrence's window) — and only [reconcile] knows which of the two a
+     * given key is, because only it has seen what was planned before.
+     * Dropping past leads here made §10.4's catch-up unreachable in the
+     * composed pipeline: the row fell out of the desired set and reconcile
+     * cancelled it (issue #48).
      *
      * The BEST_VIEWING anchor is resolved once per occurrence rather than
      * per match, so nearby locations can't split the dedup key — see ADR
-     * 0009 and [bestViewingAnchorsByOccurrence].
+     * 0010 and [bestViewingAnchorsByOccurrence].
      */
     fun desiredNotifications(matches: List<Match>, now: Instant, deviceZone: TimeZone): List<PlannedNotification> {
         data class Candidate(
@@ -99,7 +108,7 @@ object Planner {
         val candidates = mutableListOf<Candidate>()
         for (m in matches) {
             val anchorTime = when (m.rule.schedule.anchor) {
-                // ADR 0009: one anchor per occurrence, not per location.
+                // ADR 0010: one anchor per occurrence, not per location.
                 Anchor.BEST_VIEWING -> bestViewingAnchors[m.occ.id]
                 else -> resolveAnchor(m.rule.schedule.anchor, m.occ, m.visres)
             }
@@ -107,7 +116,6 @@ object Planner {
                 for (lead in m.rule.schedule.leads) {
                     val rawFireAt = anchorTime - lead
                     val fireAt = applyQuietHours(rawFireAt, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
-                    if (fireAt < now) continue // §7.4.3: a lead computed in the past is dropped, not fired
                     val key = "${m.occ.id}|${anchorTime.epochSeconds}|${lead.inWholeSeconds}"
                     candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt, leadUntilAnchor = lead)
                 }
@@ -151,8 +159,12 @@ object Planner {
      * §10.4 reconciliation: insert new desired rows as PENDING; a row no
      * longer desired is CANCELLED unless it's already terminal (FIRED/
      * MISSED/CANCELLED, kept as history); a row whose `fireAt` passed while
-     * still PENDING/REGISTERED (device off) fires immediately if the
-     * occurrence's window still contains `now`, else MISSED.
+     * still PENDING/REGISTERED (device off) fires immediately if it is still
+     * desired and the occurrence's window still contains `now`, else MISSED.
+     *
+     * Every row in [previous] comes back exactly once: callers persist the
+     * result by upserting it, so a row silently dropped here would linger in
+     * the database in whatever state it was already in.
      */
     fun reconcile(
         previous: List<PlannedNotification>,
@@ -160,47 +172,82 @@ object Planner {
         now: Instant,
         occurrencesById: Map<String, Occurrence>,
     ): List<PlannedNotification> {
-        val previousById = previous.associateBy { it.id }
-        val desiredIds = desired.map { it.id }.toSet()
+        val desiredById = desired.associateBy { it.id }
         val result = mutableListOf<PlannedNotification>()
 
-        for (d in desired) {
-            val prev = previousById[d.id]
+        for (p in previous) {
+            val d = desiredById[p.id]
             result += when {
-                prev == null -> d
-                prev.status == NotificationStatus.FIRED -> prev // permanent history
-                prev.status.isTerminalButNotFired() -> d // re-desired after cancellation/miss: treat as fresh
-                prev.fireAt < now -> {
-                    val occ = occurrencesById[d.occurrenceId]
-                    if (occ != null && now <= occ.window.end) {
-                        prev.copy(fireAt = now) // device-off catch-up: fire immediately
-                    } else {
-                        prev.copy(status = NotificationStatus.MISSED)
-                    }
-                }
-                // Same dedup key, still pending, still in the future, but the
-                // desired fire time moved (e.g. device timezone change shifts
-                // a quiet-hours deferral) -- the key doesn't encode `fireAt`,
-                // so without this the stale time would stick forever.
-                prev.fireAt != d.fireAt -> prev.copy(fireAt = d.fireAt)
-                else -> prev // unchanged: still pending, still in the future
+                p.status == NotificationStatus.FIRED -> p // permanent history
+                // Re-desired after a cancellation/miss: treat as fresh — but
+                // only while the fresh row is still in the future. Resurrecting
+                // a MISSED row onto a fire time that has already passed would
+                // fire it on the next pass, which is exactly what §7.4.3 forbids.
+                p.status.isTerminalButNotFired() -> if (d != null && now <= d.fireAt) d else p
+                p.fireAt < now -> catchUpOrMiss(p, stillDesired = d != null, now, occurrencesById)
+                d == null -> p.copy(status = NotificationStatus.CANCELLED)
+                // Same dedup key, still pending, but the desired fire time moved
+                // (e.g. device timezone change shifts a quiet-hours deferral, or
+                // §6.3 refined the anchor) -- the key doesn't encode `fireAt`, so
+                // without this the stale time would stick forever. A drift *into
+                // the past* is not propagated: that recomputed lead was in the
+                // past the moment it was computed, and §7.4.3 says such a lead is
+                // dropped rather than queued -- pushing it into the row would
+                // hand it to the catch-up branch above on the next pass and fire
+                // it. Dropping an already-queued row means cancelling it.
+                d.fireAt != p.fireAt -> if (now <= d.fireAt) p.copy(fireAt = d.fireAt) else p.copy(status = NotificationStatus.CANCELLED)
+                else -> p // unchanged
             }
         }
 
-        for (p in previous) {
-            if (p.id !in desiredIds && (p.status == NotificationStatus.PENDING || p.status == NotificationStatus.REGISTERED)) {
-                result += p.copy(status = NotificationStatus.CANCELLED)
-            } else if (p.id !in desiredIds) {
-                result += p // FIRED/MISSED/CANCELLED already terminal
-            }
+        val previousIds = previous.mapTo(mutableSetOf()) { it.id }
+        for (d in desired) {
+            // §7.4.3: "a lead whose computed fire_at is already in the past at
+            // plan time must be dropped, not queued" — never planned, so §10.4's
+            // catch-up does not apply to it. `notifyOnFirstSeen` rows fire at
+            // `now` and so are never caught by this.
+            if (d.id in previousIds || d.fireAt < now) continue
+            result += d
         }
         return result
+    }
+
+    /**
+     * §10.4: "A notification whose `fire_at` passed while unregistered (device
+     * off) fires immediately on next planner run if still within
+     * `occurrence.window`, else marked MISSED."
+     *
+     * "Fires immediately" is expressed by leaving the row PENDING/REGISTERED
+     * with its original past `fireAt` rather than rewriting it to `now`: every
+     * consumer already treats a schedulable row with `fireAt <= now` as due
+     * (`DesktopScheduler.run`, and `AlarmManager`/`WorkManager` on Android,
+     * which run a trigger time in the past at once). Keeping the original time
+     * also keeps the row honest about when the reminder was *due*, which is
+     * what history and §10.3's "While you were away" panel show — and it keeps
+     * the pass idempotent, so §17.6's determinism guard still sees a zero-diff
+     * second run.
+     *
+     * [stillDesired] is false when this pass no longer wants the row at all
+     * (the rule was disabled or edited, the occurrence was withdrawn, the
+     * forecast no longer matches). Such a row must not fire — but it was
+     * genuinely scheduled and its moment has passed, so MISSED is the honest
+     * history entry, not CANCELLED.
+     */
+    private fun catchUpOrMiss(
+        p: PlannedNotification,
+        stillDesired: Boolean,
+        now: Instant,
+        occurrencesById: Map<String, Occurrence>,
+    ): PlannedNotification {
+        val occ = occurrencesById[p.occurrenceId]
+        val fireNow = stillDesired && occ != null && now <= occ.window.end
+        return if (fireNow) p else p.copy(status = NotificationStatus.MISSED)
     }
 
     private fun NotificationStatus.isTerminalButNotFired() = this == NotificationStatus.CANCELLED || this == NotificationStatus.MISSED
 
     /**
-     * ADR 0009. §9.3's dedup key is `(occurrenceId, anchorTime, lead)`
+     * ADR 0010. §9.3's dedup key is `(occurrenceId, anchorTime, lead)`
      * expressly so "Home" and "Office" 10 km apart produce one
      * notification. A BEST_VIEWING anchor breaks that on its own, because
      * §9.1 resolves it from *each location's* `bestViewingStart`, and two
