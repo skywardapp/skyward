@@ -19,7 +19,6 @@ import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.core.rules.Cond
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.rules.approximateLocalDateTime
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.roundToInt
@@ -260,9 +259,9 @@ private fun Double.roundToKm(): Int = roundToInt()
 private fun Double.oneDecimal(): String = ((this * 10).roundToInt() / 10.0).toString()
 private fun Double.toPercent(): Int = (this * 100).roundToInt()
 
-// `hhmm` and `monthAbbreviation` are DateTimeFormat.kt's, shared with the two
-// frontends. The *shape* here stays notification-specific: §10.5 writes dates
-// as "Jan 5, 2026" while the screens write "5 Jan 2026".
+// Notification times are longitude-approximated rather than zone-converted: a
+// notification is rendered for a saved location, which carries no tz database
+// entry (§10.5).
 private fun hhmm(instant: Instant, location: SavedLocation): String = approximateLocalDateTime(instant, location.point.lonDeg).hhmm()
 private fun hhmmUtc(instant: Instant): String = instant.toLocalDateTime(TimeZone.UTC).hhmm()
 

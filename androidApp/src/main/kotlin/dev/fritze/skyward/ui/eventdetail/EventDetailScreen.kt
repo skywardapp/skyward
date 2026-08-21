@@ -1,20 +1,27 @@
 package dev.fritze.skyward.ui.eventdetail
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -28,27 +35,50 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.COMET_DEVIATION_CAVEAT
+import dev.fritze.skyward.core.format.certaintyLabel
+import dev.fritze.skyward.core.format.cometElementsLine
+import dev.fritze.skyward.core.format.cometMagnitudeLine
 import dev.fritze.skyward.core.format.compassOf
+import dev.fritze.skyward.core.format.formatDateTime
+import dev.fritze.skyward.core.format.formatDistanceKm
+import dev.fritze.skyward.core.format.formatRelative
+import dev.fritze.skyward.core.format.localDetailLines
+import dev.fritze.skyward.core.format.phenomenonLabel
+import dev.fritze.skyward.core.format.qualityLabel
+import dev.fritze.skyward.core.format.relativeChangeAfter
 import dev.fritze.skyward.core.model.CometPayload
 import dev.fritze.skyward.core.model.LocalDetails
+import dev.fritze.skyward.core.model.Occurrence
+import dev.fritze.skyward.core.model.OccurrencePayload
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.common.qualityColor
 import dev.fritze.skyward.ui.rules.formatLead
+import kotlinx.coroutines.delay
+import kotlinx.datetime.TimeZone
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,31 +86,40 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
     val viewModel: EventDetailViewModel = viewModel { EventDetailViewModel(container, occurrenceId) }
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    // §5: the one place an Instant becomes a wall-clock time on this screen.
+    val zone = remember { TimeZone.currentSystemDefault() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.occurrence?.title.orEmpty()) },
+                title = { Text(state.occurrence?.title ?: "Event") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
             )
         },
     ) { padding ->
         val occurrence = state.occurrence
         if (occurrence == null) {
-            LoadingContent(padding)
+            NoOccurrenceContent(padding, isLoading = state.isLoading)
             return@Scaffold
         }
 
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(state.perLocation, key = { it.first.id }) { (location, visres) ->
-                LocationCard(location, visres)
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item { DetailHeader(occurrence, zone) }
+            if (!state.hasSavedLocations) {
+                item {
+                    Text("Add a saved location in Settings to see local circumstances.", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                items(state.perLocation, key = { it.first.id }) { (location, visres) ->
+                    LocationCard(location, visres, zone)
+                }
             }
-            item { PayloadExtras(occurrence.payload, state.perLocation.firstOrNull()?.second, context) }
+            item { PayloadExtras(occurrence.payload, state.perLocation.firstOrNull()?.second, zone, context) }
             item {
                 EventDetailActions(
                     state.isMuted,
                     onToggleMute = viewModel::toggleMute,
-                    onShare = { shareOccurrence(context, occurrence.title, state.perLocation) },
+                    onShare = { shareOccurrence(context, occurrence, state.perLocation, zone) },
                     extraReminderLead = state.extraReminderLead,
                     onSetExtraReminder = viewModel::setExtraReminder,
                     onRemoveExtraReminder = viewModel::removeExtraReminder,
@@ -90,16 +129,77 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
     }
 }
 
+/**
+ * A detail route outlives the row it points at: an aurora nowcast expires
+ * (§7.3), a source is switched off, the horizon window moves on. Saying so is
+ * the difference between a dead end and an explanation — the desktop pane has
+ * always drawn this distinction, Android showed "Loading…" either way.
+ */
 @Composable
-private fun LoadingContent(padding: androidx.compose.foundation.layout.PaddingValues) {
-    Column(Modifier.fillMaxSize().padding(padding)) { Text("Loading…", Modifier.padding(16.dp)) }
+private fun NoOccurrenceContent(padding: PaddingValues, isLoading: Boolean) {
+    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        if (isLoading) {
+            CircularProgressIndicator()
+        } else {
+            Text(
+                "This event is no longer in the horizon window.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(32.dp),
+            )
+        }
+    }
+}
+
+/**
+ * §13.3's header: what this is, how certain it is, and — the whole point of
+ * opening the screen — when it happens. The countdown is the same
+ * `formatRelative` the desktop pane and the timeline use; the date beside it
+ * is what someone planning around an eclipse actually needs, and what the
+ * Upcoming card's "In 3 weeks" cannot give them (§13.2).
+ */
+@Composable
+private fun DetailHeader(occurrence: Occurrence, zone: TimeZone) {
+    val anchor = occurrence.peakTime ?: occurrence.window.start
+    val now by tickingNow(anchor)
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            "${phenomenonLabel(occurrence.phenomenon)} · ${certaintyLabel(occurrence.certainty)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text("${formatDateTime(anchor, zone)} — ${formatRelative(now, anchor)}", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Window ${formatDateTime(occurrence.window.start, zone)} → ${formatDateTime(occurrence.window.end, zone)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The countdown above is a function of *now* as much as of the database, and
+ * nothing else on this screen re-emits when it changes (the view-model only
+ * wakes for repository emissions). Rather than polling, sleep until the exact
+ * instant the label can read differently — the same shape as §13.2's
+ * `UpcomingTicker`, one label wide.
+ */
+@Composable
+private fun tickingNow(anchor: Instant): State<Instant> = produceState(Clock.System.now(), anchor) {
+    while (true) {
+        val now = Clock.System.now()
+        value = now
+        // The floor keeps a boundary that is already upon us (or a clock that
+        // stepped backwards) from spinning.
+        delay((relativeChangeAfter(now, anchor) - now).coerceAtLeast(1.seconds))
+    }
 }
 
 /** The comet-compliance block and/or EONET link, depending on which payload type this occurrence carries. */
 @Composable
-private fun PayloadExtras(payload: dev.fritze.skyward.core.model.OccurrencePayload, primaryVisres: VisibilityResult?, context: android.content.Context) {
+private fun PayloadExtras(payload: OccurrencePayload, primaryVisres: VisibilityResult?, zone: TimeZone, context: Context) {
     if (payload is CometPayload) {
-        CometComplianceBlock(payload, primaryVisres)
+        CometComplianceBlock(payload, primaryVisres, zone)
     }
     if (payload is TerrestrialPayload) {
         OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }) {
@@ -184,52 +284,58 @@ private fun String.toPositiveHoursOrNull(): Double? = toDoubleOrNull()?.takeIf {
 
 @Composable
 private fun Row2(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
-    androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
 
+/**
+ * §13.3's times table for one saved location — the same lines the desktop
+ * pane draws, from the same `core/format` helpers.
+ */
 @Composable
-private fun LocationCard(location: SavedLocation, visres: VisibilityResult) {
+private fun LocationCard(location: SavedLocation, visres: VisibilityResult, zone: TimeZone) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(location.name, style = MaterialTheme.typography.titleMedium)
-            Text("Quality: ${visres.quality}", style = MaterialTheme.typography.bodyMedium)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(qualityColor(visres.quality)))
+                Text(location.name, style = MaterialTheme.typography.titleMedium)
+                Text(qualityLabel(visres.quality), style = MaterialTheme.typography.labelLarge, color = qualityColor(visres.quality))
+            }
             Text(if (visres.visibleAtLocation) "Visible from here" else "Not visible from here", style = MaterialTheme.typography.bodyMedium)
             val travelKm = visres.travelDistanceKm
             if (travelKm != null) {
                 Text(
-                    "Travel guidance: ${travelKm.toInt()} km ${compassOf(visres.travelBearingDeg)} (reaches ${visres.qualityAtNearestPoint})",
+                    "≈${formatDistanceKm(travelKm)} ${compassOf(visres.travelBearingDeg)} reaches " +
+                        (visres.qualityAtNearestPoint?.let { qualityLabel(it).lowercase() } ?: "better conditions"),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            localDetailsSummary(visres.localDetails)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            localDetailLines(visres.localDetails, zone).forEach {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
-private fun localDetailsSummary(details: LocalDetails?): String? = when (details) {
-    is LocalDetails.SolarEclipseLocal -> "Max obscuration ${(details.maxObscuration * 100).toInt()}%, sun altitude ${details.sunAltAtPeakDeg.toInt()}°"
-    is LocalDetails.LunarEclipseLocal -> "Moon altitude at mid-eclipse ${details.moonAltAtMidDeg.toInt()}°"
-    is LocalDetails.MeteorLocal -> "Radiant up to ${details.maxRadiantAltDeg.toInt()}°, Moon illumination ${(details.moonIllumination * 100).toInt()}%"
-    is LocalDetails.AuroraLocal -> "Geomagnetic latitude ${details.geomagneticLatDeg.toInt()}°, Kp needed ${details.kpNeeded}"
-    is LocalDetails.CometLocal -> null // shown in the compliance block instead
-    is LocalDetails.GenericLocal -> details.note
-    null -> null
-}
-
+/**
+ * §7.4.4: the deviation caveat is mandatory, not optional — the same block
+ * the desktop pane renders.
+ */
 @Composable
-private fun CometComplianceBlock(payload: CometPayload, visres: VisibilityResult?) {
+private fun CometComplianceBlock(payload: CometPayload, visres: VisibilityResult?, zone: TimeZone) {
     val details = visres?.localDetails as? LocalDetails.CometLocal
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Comet forecast (§7.4.4)", style = MaterialTheme.typography.titleSmall)
-            Text("Predicted magnitude: ${details?.predictedMag ?: payload.peakMag}", style = MaterialTheme.typography.bodyMedium)
-            Text("From JPL elements as of ${details?.elementEpoch ?: payload.elements.epoch}", style = MaterialTheme.typography.bodySmall)
-            if (details != null) {
-                Text("Highest at ${details.maxAltDeg.toInt()}°" + (details.maxAltTime?.let { " around $it" } ?: ""), style = MaterialTheme.typography.bodyMedium)
-            }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Comet forecast", style = MaterialTheme.typography.titleSmall)
+            Text(cometMagnitudeLine(payload, details, zone), style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Comets frequently deviate from prediction — treat this as a rough guide, not a guarantee.",
+                cometElementsLine(payload, details),
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                COMET_DEVIATION_CAVEAT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val context = LocalContext.current
             TextButton(onClick = {
@@ -240,12 +346,25 @@ private fun CometComplianceBlock(payload: CometPayload, visres: VisibilityResult
     }
 }
 
-private fun shareOccurrence(context: android.content.Context, title: String, perLocation: List<Pair<SavedLocation, VisibilityResult>>) {
-    val lines = perLocation.joinToString("\n") { (loc, visres) -> "${loc.name}: ${visres.quality}" }
+/**
+ * §13.3's "share as text": what someone would have to type out otherwise —
+ * when it is, and how it looks from where.
+ */
+private fun shareOccurrence(
+    context: Context,
+    occurrence: Occurrence,
+    perLocation: List<Pair<SavedLocation, VisibilityResult>>,
+    zone: TimeZone,
+) {
+    val anchor = occurrence.peakTime ?: occurrence.window.start
+    val lines = perLocation.joinToString("\n") { (location, visres) -> "${location.name}: ${qualityLabel(visres.quality)}" }
+    val body = listOf(occurrence.title, formatDateTime(anchor, zone), lines)
+        .filter { it.isNotEmpty() }
+        .joinToString("\n\n")
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, title)
-        putExtra(Intent.EXTRA_TEXT, "$title\n\n$lines")
+        putExtra(Intent.EXTRA_SUBJECT, occurrence.title)
+        putExtra(Intent.EXTRA_TEXT, body)
     }
-    context.startActivity(Intent.createChooser(intent, title))
+    context.startActivity(Intent.createChooser(intent, occurrence.title))
 }

@@ -1,4 +1,4 @@
-# ADR 0009: The Natural Earth binary is generated into the desktop target's resources, not `commonMain`
+# ADR 0010: The Natural Earth binary is generated into the desktop target's resources, not `commonMain`
 
 **Status:** Accepted
 
@@ -39,10 +39,21 @@ record of which was intended.
 ## Decision
 
 Keep generating `natural-earth.bin` into `desktopMain`'s resources, and record
-the deviation here. When Android grows a map view (v1.1, §18), move the
-`srcDir` wiring to `commonMain` in the same change — the binary format, the
-conversion task and the reader are all platform-neutral already, so the move
-is a one-line edit and nothing else has to follow it.
+the deviation here.
+
+When Android grows a map view (v1.1, §18), **two** things move to
+`commonMain` together, and neither is useful without the other: the
+`srcDir` wiring in `core/build.gradle.kts`, and the reader
+(`core/map/NaturalEarthMap.kt`), which is a `desktopMain` file for the same
+reason the resource is. Moving only the resource would package half a
+megabyte into the APK with no code able to read it; moving only the reader
+would leave it looking for a resource that is not there.
+
+Both are platform-neutral already — the binary format, the conversion task
+and the parser use nothing JVM-specific beyond `getResourceAsStream`, which
+is the one call the move has to replace with a `expect`/`actual` resource
+read (§15.3 keeps `commonMain` off platform APIs). That is the whole of the
+work; nothing about the format or the map rendering follows.
 
 ## Consequences
 
