@@ -21,15 +21,16 @@ noise.
 | `gsfc_solar_eclipses_2020_2040.csv` | NASA GSFC *Five Millennium Canon of Solar Eclipses*, [`eclipse.gsfc.nasa.gov/SEcat5/SE2001-2100.html`](https://eclipse.gsfc.nasa.gov/SEcat5/SE2001-2100.html) | transcribed by hand — see below |
 | `gsfc_lunar_eclipses_2020_2040.csv` | NASA GSFC *Five Millennium Canon of Lunar Eclipses*, [`eclipse.gsfc.nasa.gov/LEcat5/LE2001-2100.html`](https://eclipse.gsfc.nasa.gov/LEcat5/LE2001-2100.html) | transcribed by hand — see below |
 | `gsfc_local_solar_circumstances_named_eclipses.csv` | GSFC per-eclipse local-circumstances pages for the named eclipses | transcribed by hand — see below |
+| `gsfc_central_paths_named_eclipses.csv` | NASA GSFC umbral-path tables for the same three named eclipses, [`eclipse.gsfc.nasa.gov/SEpath/`](https://eclipse.gsfc.nasa.gov/SEpath/) | transcribed by hand — see below |
 
 ## Why the GSFC rows have no fetcher
 
 They are published as HTML canon tables meant for people, not as an API. A
 scraper over someone else's table markup is a worse provenance story than a
 recorded URL plus a transcription date: it looks automated, and it breaks
-silently the first time the page is restyled. These three files are small,
-change only when the covered date range does, and carry their source in the
-table above and in the comment header of each file.
+silently the first time the page is restyled. These files are small, change
+only when the covered date range does, and carry their source in the table
+above and in the comment header of each file.
 
 ## What reads them
 

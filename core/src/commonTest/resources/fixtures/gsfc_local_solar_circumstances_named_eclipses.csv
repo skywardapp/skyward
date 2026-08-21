@@ -1,10 +1,25 @@
-# NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc) extract for named spot-check eclipses
+# Local circumstances for the §17.1 named spot-check eclipses, three cities each.
 # Eclipse predictions courtesy of Fred Espenak and Jean Meeus, NASA/GSFC.
-eclipse_date,city,latitude_deg,longitude_deg,expected_local_kind,first_contact_utc,max_utc,last_contact_utc,begins_flag,max_flag,ends_flag,source
-2026-08-12,Chicago IL,41.8500,-87.6500,PARTIAL,2026-08-12T17:17:00Z,2026-08-12T17:28:00Z,2026-08-12T17:38:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2026-08-12,London England,51.5000,-0.1667,PARTIAL,2026-08-12T17:17:00Z,2026-08-12T18:13:00Z,2026-08-12T19:06:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2026-08-12,New York NY,40.7167,-74.0167,PARTIAL,2026-08-12T17:07:00Z,2026-08-12T17:54:00Z,2026-08-12T18:38:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2027-08-02,Berlin Germany,52.5000,13.3667,PARTIAL,2027-08-02T08:17:00Z,2027-08-02T09:14:00Z,2027-08-02T10:12:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2027-08-02,London England,51.5000,-0.1667,PARTIAL,2027-08-02T08:03:00Z,2027-08-02T09:00:00Z,2027-08-02T09:59:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2027-08-02,Paris France,48.8667,2.3333,PARTIAL,2027-08-02T08:00:00Z,2027-08-02T09:01:00Z,2027-08-02T10:05:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
-2028-07-22,Sydney Australia,-33.8667,151.2167,TOTAL,2028-07-22T02:40:00Z,2028-07-22T04:01:00Z,2028-07-22T05:14:00Z,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+#
+# The 2026/2027 rows and Sydney come from NASA GSFC's "Solar Eclipse Visibility
+# from Major Cities" (SEcirc) catalogues. That catalogue covers ten cities
+# worldwide, and Sydney is the only one the 2028 track reaches, so §17.1's
+# third-city-per-eclipse requirement is met for 2028 from Wikipedia's
+# "Solar eclipse of July 22, 2028" city table, which cites the same
+# Espenak/GSFC predictions — the same provenance EclipseSourceTest already
+# relies on for that eclipse's published figures.
+#
+# `last_contact_utc` is blank where the source publishes no un-truncated value:
+# that table's third column is the end of *totality*, not last contact, so the
+# rows carry the totality duration instead and the test asserts on that.
+# `totality_duration_sec` is blank where the eclipse is only partial there.
+eclipse_date,city,latitude_deg,longitude_deg,expected_local_kind,first_contact_utc,max_utc,last_contact_utc,totality_duration_sec,begins_flag,max_flag,ends_flag,source
+2026-08-12,Chicago IL,41.8500,-87.6500,PARTIAL,2026-08-12T17:17:00Z,2026-08-12T17:28:00Z,2026-08-12T17:38:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2026-08-12,London England,51.5000,-0.1667,PARTIAL,2026-08-12T17:17:00Z,2026-08-12T18:13:00Z,2026-08-12T19:06:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2026-08-12,New York NY,40.7167,-74.0167,PARTIAL,2026-08-12T17:07:00Z,2026-08-12T17:54:00Z,2026-08-12T18:38:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2027-08-02,Berlin Germany,52.5000,13.3667,PARTIAL,2027-08-02T08:17:00Z,2027-08-02T09:14:00Z,2027-08-02T10:12:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2027-08-02,London England,51.5000,-0.1667,PARTIAL,2027-08-02T08:03:00Z,2027-08-02T09:00:00Z,2027-08-02T09:59:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2027-08-02,Paris France,48.8667,2.3333,PARTIAL,2027-08-02T08:00:00Z,2027-08-02T09:01:00Z,2027-08-02T10:05:00Z,,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc)
+2028-07-22,Sydney Australia,-33.8667,151.2167,TOTAL,2028-07-22T02:40:00Z,2028-07-22T04:01:00Z,2028-07-22T05:14:00Z,229,,,,NASA GSFC Solar Eclipse Visibility from Major Cities (SEcirc); totality 3m49s per Wikipedia "Solar eclipse of July 22, 2028"
+2028-07-22,Kununurra Australia,-15.7736,128.7386,TOTAL,2028-07-22T01:27:52Z,2028-07-22T03:01:13Z,,174,,,,Wikipedia "Solar eclipse of July 22, 2028" (Espenak/GSFC); AWST UTC+8
+2028-07-22,Bourke Australia,-30.0906,145.9350,TOTAL,2028-07-22T02:27:17Z,2028-07-22T03:52:11Z,,245,,,,Wikipedia "Solar eclipse of July 22, 2028" (Espenak/GSFC); AEST UTC+10

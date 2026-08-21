@@ -50,6 +50,15 @@ class EclipsePathRenderingTest {
      * per 2-minute bucket, which at shadow speed is another ~100 km of
      * along-track granularity. 300 km therefore says "this city is on the
      * track" without asserting a precision the sampling does not claim.
+     *
+     * Note this is a *city*-to-nearest-sample bound, which is a looser thing
+     * than §17.2's 50 km centreline tolerance: a city near the track is not a
+     * point on the centreline, and the nearest *sample* is not the nearest
+     * point of the path. §17.2's tolerance is asserted where it belongs, in
+     * `EclipsePathCanonTest`, against every published centreline point of all
+     * three named eclipses and measured to the polyline rather than to a
+     * vertex. What this file is for is the M6 rendering question — does the
+     * drawn track go over the right places on screen.
      */
     private val toleranceKm = 300.0
 

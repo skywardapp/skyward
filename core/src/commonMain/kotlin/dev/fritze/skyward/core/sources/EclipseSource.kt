@@ -271,6 +271,12 @@ class EclipseSource : EventSource {
         // latitude (eclipse.latitude is already known from the global search)
         // — scanning the full -85..85 band for every eclipse is ~9,900
         // searchLocalSolarEclipse calls per eclipse for no benefit.
+        // The +-85 clamp keeps the scan out of the grid's polar singularity,
+        // at the cost of not tracing the polar cap of a path that reaches it
+        // (2026-08-12 tops out at 89.1 N, so its track above 85 N is a hole).
+        // docs/adr/0013-eclipse-path-sample-spacing.md records the effect on
+        // sample spacing and why raising it is a deliberate §7.1.3 decision
+        // rather than a tweak.
         val latMin = (eclipse.latitude - LAT_BAND_DEG).coerceAtLeast(-85.0)
         val latMax = (eclipse.latitude + LAT_BAND_DEG).coerceAtMost(85.0)
         var lat = latMin

@@ -9,8 +9,9 @@ Not part of the app; scripts that run at build/dev time, not on-device.
 - **Fixture fetchers** (§17.1–17.3b) — capture real HTTP responses (SWPC,
   EONET, JPL SBDB/Horizons) into `core/src/commonTest/resources/fixtures/`
   for the golden tests. See [`fixtures/README.md`](fixtures/README.md). The
-  GSFC eclipse canon rows are the exception: they are transcribed from
-  published HTML canon tables rather than fetched, and
+  GSFC eclipse canon rows — including the §17.2 centreline table,
+  `gsfc_central_paths_named_eclipses.csv` — are the exception: they are
+  transcribed from published HTML canon tables rather than fetched, and
   `core/src/commonTest/resources/fixtures/README.md` records where each came
   from.
 
@@ -24,6 +25,24 @@ Not part of the app; scripts that run at build/dev time, not on-device.
   segments in the background and stitches them with ffmpeg on stop. Recording
   is best-effort: no device, no `screenrecord`, no ffmpeg → the tests still
   run and the job's result is unchanged.
+- **`mock-notification-daemon.py`** — §17.5's "CI container with a mock
+  notification daemon". Claims `org.freedesktop.Notifications` on the session
+  bus and answers the methods a notifier calls, so `notify-send` succeeds on a
+  headless runner with no desktop environment; every notification it accepts is
+  appended as JSON to `$SKYWARD_MOCK_NOTIFICATION_LOG`, which is how
+  `DesktopNotifierBackendTest` asserts the reminder text really crossed DBus.
+  Pure `jeepney` (`pip install jeepney`) — the one Python DBus implementation
+  needing no compiled bindings, where a real notification daemon would drag in
+  X11 or Wayland. Run it inside a `dbus-run-session`:
+
+  ```sh
+  dbus-run-session -- bash -c \
+    'python3 tools/ci/mock-notification-daemon.py & ./gradlew :desktopApp:test'
+  ```
+
+  Locally, without it that one test skips itself rather than failing, per
+  §17.5's own "or skip-if-no-dbus guard". In CI, the test requires the
+  harness and fails when it is unavailable.
 - **`check-reproducible-build.sh`** — §15.4/§17.5b's reproducibility check:
   builds `fossRelease` twice in a clean workspace and asserts the two APKs
   are reproducible — byte-for-byte identical, or (weaker, logged as such)
