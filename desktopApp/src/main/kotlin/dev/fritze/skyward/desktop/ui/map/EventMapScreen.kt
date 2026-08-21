@@ -44,11 +44,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import dev.fritze.skyward.core.format.formatDayAndMonth
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
-import dev.fritze.skyward.desktop.ui.common.formatDayAndMonth
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import dev.fritze.skyward.desktop.ui.theme.phenomenonColor
 import kotlin.math.roundToInt

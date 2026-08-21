@@ -62,13 +62,6 @@ fun qualityColor(quality: Quality): Color = when (quality) {
     Quality.EXCELLENT -> Color(0xFF6FE3A8)
 }
 
-fun qualityLabel(quality: Quality): String = when (quality) {
-    Quality.NONE -> "Not visible"
-    Quality.MARGINAL -> "Marginal"
-    Quality.GOOD -> "Good"
-    Quality.EXCELLENT -> "Excellent"
-}
-
 /** Lane colors for the timeline (§14.2) and layer colors on the map (§14.1). */
 fun phenomenonColor(phenomenon: Phenomenon): Color = when (phenomenon) {
     Phenomenon.SOLAR_ECLIPSE -> Color(0xFFFFC65C)
