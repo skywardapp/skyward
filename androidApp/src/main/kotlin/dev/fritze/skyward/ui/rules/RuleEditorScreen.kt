@@ -219,7 +219,10 @@ private class RuleDraftState {
     fun isSaveable(violations: List<String>): Boolean = loaded && name.isNotBlank() && phenomena.isNotEmpty() && violations.isEmpty()
 
     private companion object {
-        /** Stand-in id and timestamps, so a dirty-check compares the user's edits and nothing else. */
+        /**
+         * Stand-in id and timestamps, so a dirty-check compares the user's
+         * edits and nothing else.
+         */
         const val SNAPSHOT_ID = "snapshot"
         val SNAPSHOT_TIME: Instant = Instant.fromEpochSeconds(0)
     }
