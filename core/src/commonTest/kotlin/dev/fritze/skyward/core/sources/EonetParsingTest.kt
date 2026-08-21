@@ -5,11 +5,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Instant
 
+/**
+ * The EONET parser's edge cases: geometry kinds, centroids, closed events,
+ * and the per-event skips §19 R3 requires. Every input here is *synthetic* --
+ * a polygon geometry with a hand-checkable centroid, an event missing its id
+ * -- because a real capture cannot be relied on to contain any of them.
+ *
+ * §17.3's golden test over a real captured response is `desktopTest`'s
+ * `EonetFixtureTest`, reading the file `tools/fixtures/fetch-eonet.sh`
+ * writes. See `docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md`.
+ */
 class EonetParsingTest {
 
     @Test
     fun parsesAPointGeometryEventUsingItsLastGeometryEntry() {
-        val events = parseEonetEvents(POINT_EVENT_FIXTURE)
+        val events = parseEonetEvents(POINT_EVENT_SAMPLE)
         assertEquals(1, events.size)
         val event = events[0]
         assertEquals("EONET_1234", event.eonetId)
@@ -26,7 +36,7 @@ class EonetParsingTest {
 
     @Test
     fun polygonGeometryUsesTheArithmeticCentroidOfTheOuterRing() {
-        val events = parseEonetEvents(POLYGON_EVENT_FIXTURE)
+        val events = parseEonetEvents(POLYGON_EVENT_SAMPLE)
         assertEquals(1, events.size)
         val point = events[0].latestGeometry
         // Square ring (0,0)-(0,2)-(2,2)-(2,0) -> centroid (1,1) [lon,lat].
@@ -36,19 +46,19 @@ class EonetParsingTest {
 
     @Test
     fun closedEventParsesTheClosedDate() {
-        val events = parseEonetEvents(CLOSED_EVENT_FIXTURE)
+        val events = parseEonetEvents(CLOSED_EVENT_SAMPLE)
         assertEquals(Instant.parse("2026-08-05T00:00:00Z"), events[0].closed)
     }
 
     @Test
     fun eventsWithNoCategoryOrNoGeometryAreSkipped() {
-        val fixture = """
+        val sample = """
             {"events":[
               {"id":"EONET_1","title":"No category","link":"x","categories":[],"geometry":[{"date":"2026-08-01T00:00:00Z","type":"Point","coordinates":[1,2]}]},
               {"id":"EONET_2","title":"No geometry","link":"x","categories":[{"id":"volcanoes","title":"Volcanoes"}],"geometry":[]}
             ]}
         """.trimIndent()
-        assertEquals(0, parseEonetEvents(fixture).size)
+        assertEquals(0, parseEonetEvents(sample).size)
     }
 
     @Test
@@ -60,7 +70,7 @@ class EonetParsingTest {
     fun oneEventMissingARequiredFieldDoesNotDiscardTheOtherValidEvents() {
         // §19 R3: one malformed element in the array must not fail the whole
         // response -- each event is decoded independently.
-        val fixture = """
+        val sample = """
             {"events":[
               {"id":"EONET_GOOD","title":"Valid event","link":"x",
                "categories":[{"id":"wildfires","title":"Wildfires"}],
@@ -71,14 +81,14 @@ class EonetParsingTest {
             ]}
         """.trimIndent()
 
-        val events = parseEonetEvents(fixture)
+        val events = parseEonetEvents(sample)
 
         assertEquals(1, events.size)
         assertEquals("EONET_GOOD", events[0].eonetId)
     }
 
     private companion object {
-        val POINT_EVENT_FIXTURE = """
+        val POINT_EVENT_SAMPLE = """
             {"title":"EONET Events","events":[
               {"id":"EONET_1234","title":"Wildfire near somewhere","link":"https://eonet.gsfc.nasa.gov/api/v3/events/EONET_1234",
                "categories":[{"id":"wildfires","title":"Wildfires"}],
@@ -89,7 +99,7 @@ class EonetParsingTest {
             ]}
         """.trimIndent()
 
-        val POLYGON_EVENT_FIXTURE = """
+        val POLYGON_EVENT_SAMPLE = """
             {"events":[
               {"id":"EONET_5678","title":"Flood","link":"x",
                "categories":[{"id":"floods","title":"Floods"}],
@@ -99,7 +109,7 @@ class EonetParsingTest {
             ]}
         """.trimIndent()
 
-        val CLOSED_EVENT_FIXTURE = """
+        val CLOSED_EVENT_SAMPLE = """
             {"events":[
               {"id":"EONET_9999","title":"Storm","link":"x","closed":"2026-08-05T00:00:00Z",
                "categories":[{"id":"severeStorms","title":"Severe Storms"}],

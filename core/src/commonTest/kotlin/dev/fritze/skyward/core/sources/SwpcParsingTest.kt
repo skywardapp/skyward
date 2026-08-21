@@ -6,18 +6,21 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /**
- * §17.3: golden-sample parser tests. Fixture JSON is embedded as checked-in
- * string constants (below) rather than loaded from `commonTest/resources/`
- * -- these parsers are pure functions of a `String`, so a resource-loading
- * `expect/actual` (§16's `ShowersResource` pattern) would add real KMP
- * plumbing (and an AGP androidMain-resource-duplication trap, per that
- * file's own comment) for no benefit over embedding here.
+ * The SWPC parsers' edge cases: column reordering, malformed rows, both row
+ * encodings, and the exact OVATION byte layout. Every input here is
+ * *synthetic* -- written to provoke a specific failure, which a real capture
+ * cannot be relied on to contain.
+ *
+ * §17.3's golden tests over real captured responses (including a full-size
+ * OVATION grid) are `desktopTest`'s `SwpcFixtureTest`, reading the files
+ * `tools/fixtures/fetch-swpc.sh` writes. See
+ * `docs/adr/0010-fixture-files-and-jvm-only-golden-tests.md` for the split.
  */
 class SwpcParsingTest {
 
     @Test
     fun parsesTheProductsHeaderRowsShapeWithStringValues() {
-        val slots = parseSwpcKpForecast(KP_FORECAST_FIXTURE)
+        val slots = parseSwpcKpForecast(KP_FORECAST_SAMPLE)
         assertEquals(4, slots.size)
         assertEquals(Instant.parse("2026-08-12T12:00:00Z"), slots[0].time)
         assertEquals(5.33, slots[0].kp)
@@ -27,7 +30,7 @@ class SwpcParsingTest {
 
     @Test
     fun columnOrderIsResolvedByHeaderNotPosition() {
-        // Same data, "kp" and "observed" columns swapped relative to the main fixture.
+        // Same data, "kp" and "observed" columns swapped relative to the sample above.
         val reordered = """
             [["time_tag","observed","kp","noaa_scale"],
              ["2026-08-12 12:00:00","predicted","5.33","G1"]]
@@ -55,6 +58,43 @@ class SwpcParsingTest {
     }
 
     @Test
+    fun theObjectRowShapeParsesToTheSameSlots() {
+        // SWPC also serves this file as plain objects with a numeric `kp`
+        // (the shape the checked-in capture has). Same slots, no header row.
+        val objects = """
+            [{"time_tag":"2026-08-12T12:00:00","kp":5.33,"observed":"predicted","noaa_scale":"G1"},
+             {"time_tag":"2026-08-12T15:00:00","kp":6.00,"observed":"observed","noaa_scale":null}]
+        """.trimIndent()
+        val slots = parseSwpcKpForecast(objects)
+        assertEquals(2, slots.size)
+        assertEquals(Instant.parse("2026-08-12T12:00:00Z"), slots[0].time)
+        assertEquals(5.33, slots[0].kp)
+        assertEquals("predicted", slots[0].state)
+        assertEquals("observed", slots[1].state)
+    }
+
+    @Test
+    fun anObjectRowWithNoStateReportsNoStateRatherThanTheStringNull() {
+        val objects = """[{"time_tag":"2026-08-12T12:00:00","kp":5.33,"observed":null}]"""
+        assertEquals(null, parseSwpcKpForecast(objects).single().state)
+        assertEquals(null, parseSwpcKpForecast("""[{"time_tag":"2026-08-12T12:00:00","kp":5.33}]""").single().state)
+    }
+
+    @Test
+    fun malformedObjectRowsAreSkippedNotFatal() {
+        val objects = """
+            [{"time_tag":"2026-08-12T12:00:00","kp":5.33},
+             {"time_tag":"not-a-time","kp":5.33},
+             {"time_tag":"2026-08-12T15:00:00"},
+             {"time_tag":"2026-08-12T18:00:00","kp":"NaN"},
+             {"time_tag":"2026-08-12T21:00:00","kp":6.00}]
+        """.trimIndent()
+        val slots = parseSwpcKpForecast(objects)
+        assertEquals(2, slots.size, "only the two well-formed rows should survive")
+        assertEquals(6.00, slots[1].kp)
+    }
+
+    @Test
     fun emptyOrHeaderOnlyInputProducesNoSlots() {
         assertEquals(0, parseSwpcKpForecast("[]").size)
         assertEquals(0, parseSwpcKpForecast("""[["time_tag","kp","observed","noaa_scale"]]""").size)
@@ -62,7 +102,7 @@ class SwpcParsingTest {
 
     @Test
     fun parsesTheOvationJsonObjectShapeIntoTheExpectedByteLayout() {
-        val parsed = parseOvationGridJson(OVATION_FIXTURE)
+        val parsed = parseOvationGridJson(OVATION_SAMPLE)
         assertEquals(Instant.parse("2026-08-12T21:50:00Z"), parsed.observationTime)
         assertEquals(Instant.parse("2026-08-12T21:55:00Z"), parsed.forecastTime)
         assertEquals(360 * 181, parsed.probBytes.size)
@@ -104,7 +144,7 @@ class SwpcParsingTest {
     }
 
     private companion object {
-        val KP_FORECAST_FIXTURE = """
+        val KP_FORECAST_SAMPLE = """
             [["time_tag","kp","observed","noaa_scale"],
              ["2026-08-12 12:00:00","5.33","predicted","G1"],
              ["2026-08-12 15:00:00","6.00","predicted","G2"],
@@ -113,9 +153,10 @@ class SwpcParsingTest {
         """.trimIndent()
 
         // Six coordinate triples: both longitude ends (wrap boundary), both
-        // latitude poles, and two interior points -- enough to exercise the
-        // exact `(lon*181)+(lat+90)` layout without shipping a ~65k-entry fixture.
-        val OVATION_FIXTURE = """
+        // latitude poles, and two interior points -- the exact
+        // `(lon*181)+(lat+90)` layout, addressable by hand. The full 65160-cell
+        // grid is covered by the captured fixture in SwpcFixtureTest.
+        val OVATION_SAMPLE = """
             {"Observation Time":"2026-08-12 21:50:00","Forecast Time":"2026-08-12 21:55:00",
              "coordinates":[
                [0,-90,12],
