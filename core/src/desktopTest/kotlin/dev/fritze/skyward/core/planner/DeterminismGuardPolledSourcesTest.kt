@@ -110,10 +110,14 @@ class DeterminismGuardPolledSourcesTest {
         // case this guard needs to exercise (AuroraSource.kt's own comment
         // on `buildNowcastOccurrence`).
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        SkywardDatabase.Schema.create(driver)
-        val stateRepo = SourceStateRepo(SkywardDatabase(driver))
-        for ((key, value) in auroraResult.newState) stateRepo.upsert(AuroraSource.SOURCE_ID, key, value, now)
-        val ovationGrid = AuroraSource.loadOvationGrid(stateRepo)
+        val ovationGrid = try {
+            SkywardDatabase.Schema.create(driver)
+            val stateRepo = SourceStateRepo(SkywardDatabase(driver))
+            for ((key, value) in auroraResult.newState) stateRepo.upsert(AuroraSource.SOURCE_ID, key, value, now)
+            AuroraSource.loadOvationGrid(stateRepo)
+        } finally {
+            driver.close()
+        }
 
         val occurrences = computedOccurrences + auroraResult.occurrences + cometResult.occurrences + eonetResult.occurrences
         val ctx = VisibilityContext(now = now, ovationGrid = ovationGrid)
