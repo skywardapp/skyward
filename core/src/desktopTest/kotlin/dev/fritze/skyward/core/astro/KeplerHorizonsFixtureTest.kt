@@ -35,13 +35,16 @@ import kotlin.time.Instant
  * correction that is not the propagator's job.
  *
  * The tolerances are tighter than §17.3b's, not looser: see the constants
- * at the bottom for the measured residuals. What makes that possible is
- * where the elements come from. Propagating today's osculating solution back
- * across several apparitions accumulates every perturbation the two-body
- * model omits, which is why an earlier version of this test needed a 5 %
- * position tolerance; taking Horizons' solution osculating **at each comet's
- * perihelion** and checking it over that perihelion ±182 days measures the
- * propagator instead of measuring how stale its inputs were.
+ * at the bottom for the measured residuals, and
+ * `docs/adr/0014-kepler-oracle-tolerances-tighter-than-spec-floor.md` for why
+ * that's the right thing to assert instead of just the spec's own floor.
+ * What makes it possible is where the elements come from. Propagating
+ * today's osculating solution back across several apparitions accumulates
+ * every perturbation the two-body model omits, which is why an earlier
+ * version of this test needed a 5 % position tolerance; taking Horizons'
+ * solution osculating **at each comet's perihelion** and checking it over
+ * that perihelion ±182 days measures the propagator instead of measuring
+ * how stale its inputs were.
  *
  * That is also the limit of what this file claims. It bounds the propagator
  * over half a year either side of an element epoch. It does not bound the
