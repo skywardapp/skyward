@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.model.Phenomenon
@@ -170,7 +174,10 @@ private fun RuleRow(state: DesktopAppState, rule: Rule, isSelected: Boolean, onE
                     )
                 }
             }
+            // The card itself opens the editor, so the switch keeps its own
+            // action and gains a name instead of the row becoming toggleable.
             Switch(
+                modifier = Modifier.semantics { contentDescription = "Enable ${rule.name}" },
                 checked = rule.enabled,
                 onCheckedChange = { enabled ->
                     state.launch {
@@ -337,8 +344,16 @@ private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) 
                 Dropdown(schedule.anchor, Anchor.entries, { it.describe() }) { onChange(schedule.copy(anchor = it)) }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(schedule.notifyOnFirstSeen, { onChange(schedule.copy(notifyOnFirstSeen = it)) })
+            Row(
+                Modifier.toggleable(
+                    value = schedule.notifyOnFirstSeen,
+                    onValueChange = { onChange(schedule.copy(notifyOnFirstSeen = it)) },
+                    role = Role.Switch,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(schedule.notifyOnFirstSeen, onCheckedChange = null)
                 Text("Notify as soon as it first matches")
             }
 
@@ -373,9 +388,12 @@ private fun LeadChips(schedule: NotifySchedule, onChange: (NotifySchedule) -> Un
 private fun QuietHoursRow(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {
     val quiet = schedule.quietHours
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Named rather than toggleable-as-a-row: the row continues into the
+        // from/to number fields, which must stay separately reachable.
         Switch(
             checked = quiet != null,
             onCheckedChange = { on -> onChange(schedule.copy(quietHours = if (on) DEFAULT_QUIET_HOURS else null)) },
+            modifier = Modifier.semantics { contentDescription = "Quiet hours" },
         )
         Text("Quiet hours")
         if (quiet != null) {

@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
@@ -246,6 +248,14 @@ private fun TimelineCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
+                // A canvas is one opaque node to a screen reader — it has no
+                // children to describe it (#79). Naming it at least says what
+                // is on screen and how much of it; the list beside it, and the
+                // detail pane a selection opens, remain the readable route to
+                // the events themselves.
+                .semantics {
+                    contentDescription = "Timeline of ${drawItems.size} events across ${lanes.size} phenomenon lanes"
+                }
                 // Reading the size here rather than assigning it inside the draw
                 // lambda: writing snapshot state during draw schedules another
                 // frame from within a frame, which is a recomposition loop

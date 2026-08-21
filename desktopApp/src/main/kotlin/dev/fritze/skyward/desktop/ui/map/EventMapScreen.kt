@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -110,6 +112,13 @@ fun EventMapScreen(state: DesktopAppState) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
+                            // A canvas has no children for a screen reader to
+                            // walk, so it is one unnamed node unless we name it
+                            // (#79). The layer toggles and the detail pane
+                            // remain the readable route to the content.
+                            .semantics {
+                                contentDescription = "World map: ${enabledLayers.size} of ${MapLayer.entries.size} layers shown"
+                            }
                             .mapGestures(
                                 camera = camera,
                                 onCameraChange = { camera = it },

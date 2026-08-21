@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fritze.skyward.core.format.phenomenonLabel
@@ -253,11 +255,21 @@ private fun RuleEditorForm(
     }
 }
 
+/**
+ * §79's accessibility finding: with the label and the `Switch` as siblings,
+ * TalkBack announces an unnamed switch. `toggleable(role = Role.Switch)` on
+ * the row makes the two one node — named by the label, still reported as a
+ * switch — and the whole row becomes the (much larger) touch target.
+ */
 @Composable
 private fun EnabledRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = enabled, onValueChange = onChange, role = Role.Switch),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text("Enabled", style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = enabled, onCheckedChange = onChange)
+        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 
@@ -357,8 +369,11 @@ private fun LocationsSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Locations", style = MaterialTheme.typography.titleSmall)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = useAllLocations, onCheckedChange = onUseAllChange)
+        Row(
+            Modifier.toggleable(value = useAllLocations, onValueChange = onUseAllChange, role = Role.Switch),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(checked = useAllLocations, onCheckedChange = null)
             Text("All saved locations", modifier = Modifier.padding(start = 8.dp))
         }
         if (!useAllLocations) LocationChips(locations, chosenLocationIds, onToggleLocation)
