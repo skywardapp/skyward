@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.SavedLocation
+import dev.fritze.skyward.core.persistence.ThemeChoice
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.VisibilityContext
@@ -14,7 +15,6 @@ import dev.fritze.skyward.desktop.data.DesktopPaths
 import dev.fritze.skyward.desktop.notify.DesktopNotifier
 import dev.fritze.skyward.desktop.notify.FallbackChainNotifier
 import dev.fritze.skyward.desktop.scheduler.MissedReminder
-import dev.fritze.skyward.desktop.ui.theme.ThemeChoice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow

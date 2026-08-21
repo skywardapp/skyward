@@ -44,6 +44,8 @@ import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.format.formatDateTime
+import dev.fritze.skyward.core.format.formatDegrees
+import dev.fritze.skyward.core.format.formatKp
 import dev.fritze.skyward.core.format.formatTime
 import dev.fritze.skyward.core.model.AuroraForecastKind
 import dev.fritze.skyward.core.model.AuroraPayload
@@ -57,8 +59,6 @@ import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.geomagneticLatitudeDeg
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
-import dev.fritze.skyward.desktop.ui.common.formatDegrees
-import dev.fritze.skyward.desktop.ui.common.formatKp
 import dev.fritze.skyward.desktop.ui.theme.gScaleLabel
 import dev.fritze.skyward.desktop.ui.theme.kpColor
 import io.github.cosinekitty.astronomy.Observer

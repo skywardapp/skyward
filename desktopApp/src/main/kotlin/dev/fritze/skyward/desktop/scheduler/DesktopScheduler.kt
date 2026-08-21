@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 /** One entry of the §10.3 "While you were away" panel. */
 data class MissedReminder(
@@ -49,27 +48,31 @@ class DesktopScheduler(
     /**
      * §10.3: "on startup, list matches whose anchor passed while the app was
      * closed in a 'While you were away' panel instead of firing stale
-     * notifications". Marks them MISSED and returns them for display.
+     * notifications" — the display half of §10.4's catch-up rule.
      *
-     * [preexistingIds] are the row ids that were already in the DB before this
-     * session's startup re-plan. Anything outside that set was discovered
-     * *just now* (a fresh aurora nowcast, say) and is a genuine new reminder
-     * to fire, not something the user missed — without that distinction, a
-     * `notifyOnFirstSeen` row created moments ago by the startup refresh
-     * would be silently demoted into the panel, since the planner gives it a
-     * `fireAt` of `now`.
+     * The classification is the startup re-plan's job, not this method's: only
+     * `Planner.reconcile` knows each overdue row's occurrence window, and
+     * §10.4 draws the line there. A row whose event is still happening stays
+     * PENDING and [run] fires it at once (it is overdue, not stale); a row
+     * whose window has closed comes back MISSED, and those are what this
+     * panel lists. Deciding it here instead — "past due, therefore missed" —
+     * is what left the panel empty in its target case while silently swallowing
+     * reminders for events that had not even started yet (issue #48).
+     *
+     * [beforeReplan] is the notification table as it stood *before* this
+     * session's startup re-plan, which is what makes "the user missed this"
+     * distinguishable from "the re-plan just created this": a row discovered
+     * moments ago (a fresh aurora nowcast, say) is a genuine new reminder to
+     * fire, and a row already MISSED in an earlier session is old history that
+     * must not resurface in the panel every launch.
      */
-    suspend fun collectMissedWhileAway(now: Instant, preexistingIds: Set<String>): List<MissedReminder> {
-        val stale = notificationRepo.getAll().filter {
-            it.id in preexistingIds && it.fireAt <= now && it.status.isSchedulable()
-        }
+    suspend fun collectMissedWhileAway(beforeReplan: List<PlannedNotification>): List<MissedReminder> {
+        val wasSchedulable = beforeReplan.filter { it.status.isSchedulable() }.mapTo(mutableSetOf()) { it.id }
+        val missed = notificationRepo.getAll().filter { it.id in wasSchedulable && it.status == NotificationStatus.MISSED }
         val occurrences = occurrenceRepo.getAll().associateBy { it.id }
-        for (notification in stale) {
-            notificationRepo.updateStatus(notification.id, NotificationStatus.MISSED, firedAt = null)
-        }
-        return stale
+        return missed
             .sortedByDescending { it.fireAt }
-            .map { MissedReminder(it.copy(status = NotificationStatus.MISSED), occurrences[it.occurrenceId]) }
+            .map { MissedReminder(it, occurrences[it.occurrenceId]) }
     }
 
     /**

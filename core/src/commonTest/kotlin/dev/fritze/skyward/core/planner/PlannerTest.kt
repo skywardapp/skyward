@@ -7,7 +7,6 @@ import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.PlannedNotification
-import dev.fritze.skyward.core.model.Precision
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.SolarEclipseKind
@@ -85,14 +84,20 @@ class PlannerTest {
 
     @Test
     fun aLeadComputedInThePastIsDropped() {
+        // §7.4.3: "a lead whose computed fire_at is already in the past at plan
+        // time must be dropped, not queued". The drop happens in reconcile --
+        // the only place that can tell a never-planned past lead from one that
+        // was scheduled and then missed (§10.4) -- so assert it there, through
+        // the composed pipeline, not on desiredNotifications alone.
         val home = loc("home", "Home")
         // Peak already passed relative to `now`; every lead's fireAt is in the past.
         val pastOcc = occ(peakTime = now - 1.hours, windowEnd = now + 1.hours)
         val matches = listOf(Match(rule("r", leads = listOf(1.days, 2.hours)), pastOcc, home, visres(Quality.GOOD)))
 
         val desired = Planner.desiredNotifications(matches, now, utc)
+        val reconciled = Planner.reconcile(previous = emptyList(), desired = desired, now = now, occurrencesById = mapOf(pastOcc.id to pastOcc))
 
-        assertTrue(desired.isEmpty(), "expected all leads to be dropped as computed-in-the-past")
+        assertTrue(reconciled.isEmpty(), "expected all leads to be dropped as computed-in-the-past, even though the occurrence's window still contains `now`")
     }
 
     @Test
@@ -235,25 +240,82 @@ class PlannerTest {
 
     @Test
     fun deviceOffMissedWindowFiresImmediatelyIfStillWithinWindowElseMissed() {
+        // The whole point of issue #48: the overdue row and the desired set both
+        // come out of the real pipeline here. The old version hand-built a
+        // `desired` entry with a past fireAt that desiredNotifications could
+        // never produce, so it passed while the composed pipeline cancelled the
+        // row instead.
         val home = loc("home", "Home")
-        val laterNow = Instant.parse("2026-02-01T13:00:00Z") // after peak (12:00), window ends at 15:00
         val theOcc = occ(windowEnd = Instant.parse("2026-02-01T15:00:00Z"))
-        val overdue = PlannedNotification(
-            id = "se:test|${peak.epochSeconds}|86400",
-            occurrenceId = theOcc.id, ruleId = "r", locationId = home.id,
-            fireAt = Instant.parse("2026-01-31T12:00:00Z"), // this lead's fire time already passed
-            status = NotificationStatus.PENDING, precision = Precision.EXACT,
-            title = "t", body = "b", createdAt = now, firedAt = null,
-        )
-        val stillDesired = listOf(overdue.copy(fireAt = Instant.parse("2026-01-31T12:00:00Z")))
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val overdue = Planner.desiredNotifications(matches, now, utc).single() // fires 2026-01-31T12:00Z
+        assertTrue(overdue.fireAt < Instant.parse("2026-02-01T13:00:00Z"))
 
-        val caughtUp = Planner.reconcile(listOf(overdue), stillDesired, laterNow, mapOf(theOcc.id to theOcc))
-        assertEquals(NotificationStatus.PENDING, caughtUp.first().status)
-        assertEquals(laterNow, caughtUp.first().fireAt, "expected immediate catch-up fire time")
+        // Device off across the fire time; the eclipse is under way (peak 12:00, window to 15:00).
+        val laterNow = Instant.parse("2026-02-01T13:00:00Z")
+        val stillDesired = Planner.desiredNotifications(matches, laterNow, utc)
+        val caughtUp = Planner.reconcile(listOf(overdue), stillDesired, laterNow, mapOf(theOcc.id to theOcc)).single()
+        assertEquals(NotificationStatus.PENDING, caughtUp.status, "still schedulable, so the platform layer fires it at once")
+        assertEquals(overdue.fireAt, caughtUp.fireAt, "the row keeps the time it was *due*; `fireAt <= now` is what makes it fire")
 
-        val pastWindowNow = Instant.parse("2026-02-01T16:00:00Z") // after window end
-        val missed = Planner.reconcile(listOf(overdue), stillDesired, pastWindowNow, mapOf(theOcc.id to theOcc))
-        assertEquals(NotificationStatus.MISSED, missed.first().status)
+        // Same row after the window closed: no longer worth firing, but it was
+        // genuinely scheduled, so it becomes history rather than vanishing.
+        val pastWindowNow = Instant.parse("2026-02-01T16:00:00Z")
+        val missed = Planner.reconcile(listOf(overdue), Planner.desiredNotifications(matches, pastWindowNow, utc), pastWindowNow, mapOf(theOcc.id to theOcc))
+        assertEquals(NotificationStatus.MISSED, missed.single().status)
+    }
+
+    @Test
+    fun anOverdueRowThatIsNoLongerDesiredIsMissedRatherThanFiredOrCancelled() {
+        // The user disabled the rule (or the occurrence was withdrawn, §6.3)
+        // while the device was off. §10.4's catch-up must not resurrect it --
+        // but CANCELLED would claim the app cancelled a reminder whose moment
+        // had already passed, so it lands in history as MISSED.
+        val home = loc("home", "Home")
+        val theOcc = occ(windowEnd = Instant.parse("2026-02-01T15:00:00Z"))
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val overdue = Planner.desiredNotifications(matches, now, utc).single()
+        val laterNow = Instant.parse("2026-02-01T13:00:00Z") // still inside the occurrence's window
+
+        val result = Planner.reconcile(listOf(overdue), emptyList(), laterNow, mapOf(theOcc.id to theOcc))
+
+        assertEquals(NotificationStatus.MISSED, result.single().status)
+    }
+
+    @Test
+    fun catchingUpAnOverdueRowIsIdempotentAcrossRepeatedReplans() {
+        // §17.6: replan runs on every source upsert and app start, so the
+        // catch-up branch is hit again and again until the platform layer
+        // actually fires the row. It must be a fixed point, or the determinism
+        // guard (and the natural-key design behind it) is worthless.
+        val home = loc("home", "Home")
+        val theOcc = occ(windowEnd = Instant.parse("2026-02-01T15:00:00Z"))
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val overdue = Planner.desiredNotifications(matches, now, utc)
+        val laterNow = Instant.parse("2026-02-01T13:00:00Z")
+        val desired = Planner.desiredNotifications(matches, laterNow, utc)
+
+        val first = Planner.reconcile(overdue, desired, laterNow, mapOf(theOcc.id to theOcc))
+        val second = Planner.reconcile(first, desired, laterNow, mapOf(theOcc.id to theOcc))
+
+        assertEquals(first, second, "a caught-up row must not drift on the next replan")
+    }
+
+    @Test
+    fun aMissedRowIsNotResurrectedByALaterReplanWhoseLeadIsAlreadyPast() {
+        // MISSED/CANCELLED rows are re-desired as fresh when the same key comes
+        // back -- but only into the future. Re-desiring one onto a fire time
+        // that has already passed would hand it straight back to the catch-up
+        // branch and fire a reminder the app already gave up on.
+        val home = loc("home", "Home")
+        val theOcc = occ(windowEnd = Instant.parse("2026-02-01T15:00:00Z"))
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val laterNow = Instant.parse("2026-02-01T13:00:00Z")
+        val alreadyMissed = Planner.desiredNotifications(matches, now, utc).map { it.copy(status = NotificationStatus.MISSED) }
+
+        val result = Planner.reconcile(alreadyMissed, Planner.desiredNotifications(matches, laterNow, utc), laterNow, mapOf(theOcc.id to theOcc))
+
+        assertEquals(NotificationStatus.MISSED, result.single().status)
     }
 
     @Test
@@ -273,6 +335,26 @@ class PlannerTest {
         assertEquals(1, result.size)
         assertEquals(NotificationStatus.PENDING, result.first().status)
         assertEquals(shifted.first().fireAt, result.first().fireAt)
+    }
+
+    @Test
+    fun aPendingRowWhoseRecomputedFireTimeLandsInThePastIsCancelledNotFired() {
+        // §6.3 refines the anchor (or a timezone change reshuffles a quiet-hours
+        // deferral) and the same key now resolves to a time that has already
+        // passed. §7.4.3: that lead was in the past the moment it was computed,
+        // so it is dropped -- pushing it into the still-PENDING row would hand it
+        // straight to §10.4's catch-up branch on the next pass and fire it.
+        val home = loc("home", "Home")
+        val theOcc = occ(windowEnd = peak + 3.hours)
+        val matches = listOf(Match(rule("r", leads = listOf(1.days)), theOcc, home, visres(Quality.GOOD)))
+        val previous = Planner.desiredNotifications(matches, now, utc) // fires 2026-01-31T12:00Z
+        val movedIntoThePast = previous.map { it.copy(fireAt = now - 1.hours) }
+
+        val result = Planner.reconcile(previous, movedIntoThePast, now, mapOf(theOcc.id to theOcc))
+
+        assertEquals(NotificationStatus.CANCELLED, result.single().status)
+        // ...and it stays cancelled: a second pass must not re-desire it either.
+        assertEquals(result, Planner.reconcile(result, movedIntoThePast, now, mapOf(theOcc.id to theOcc)))
     }
 
     @Test

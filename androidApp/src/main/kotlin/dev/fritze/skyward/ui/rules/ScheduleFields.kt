@@ -32,7 +32,7 @@ val LEAD_PRESETS: List<Duration> = listOf(2.hours, 6.hours, 12.hours, 1.days, 3.
 val DEFAULT_LEAD: Duration = 1.days
 
 // English plural rules, inline. That is a decision, not an oversight — see
-// docs/adr/0012-english-only-ui-strings.md, which also lists the other sites
+// docs/adr/0013-english-only-ui-strings.md, which also lists the other sites
 // a future translation pass has to visit.
 fun formatLead(duration: Duration): String = when {
     duration.inWholeDays >= 30 -> "${duration.inWholeDays / 30} month${if (duration.inWholeDays / 30 == 1L) "" else "s"} before"

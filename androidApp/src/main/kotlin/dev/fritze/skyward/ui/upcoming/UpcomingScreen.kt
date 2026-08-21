@@ -47,13 +47,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.fritze.skyward.core.format.compassOf
 import dev.fritze.skyward.core.format.phenomenonLabel
+import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.model.Phenomenon
-import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.planner.UpcomingItem
 import dev.fritze.skyward.core.planner.UpcomingScope
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.openAppNotificationSettings
+import dev.fritze.skyward.ui.common.qualityColor
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -360,24 +362,9 @@ private fun locationLine(item: UpcomingItem): String {
     if (item.bestVisres.visibleAtLocation || travelKm == null) {
         return "Visible from ${item.bestLocation.name} — ${qualityLabel(item.bestVisres.quality)}"
     }
-    val compass = dev.fritze.skyward.core.format.compassOf(item.bestVisres.travelBearingDeg)
+    val compass = compassOf(item.bestVisres.travelBearingDeg)
     val direction = if (compass.isEmpty()) "" else "$compass "
     return "${travelKm.toInt()} km ${direction}of ${item.bestLocation.name}"
-}
-
-private fun qualityLabel(quality: Quality) = when (quality) {
-    Quality.NONE -> "Not visible"
-    Quality.MARGINAL -> "Marginal"
-    Quality.GOOD -> "Good"
-    Quality.EXCELLENT -> "Excellent"
-}
-
-@Composable
-private fun qualityColor(quality: Quality) = when (quality) {
-    Quality.EXCELLENT -> MaterialTheme.colorScheme.primary
-    Quality.GOOD -> MaterialTheme.colorScheme.tertiary
-    Quality.MARGINAL -> MaterialTheme.colorScheme.secondary
-    Quality.NONE -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun Double.oneDecimal(): String = ((this * 10).roundToInt() / 10.0).toString()

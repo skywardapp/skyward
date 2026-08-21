@@ -11,19 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
-
-/**
- * §11's `theme` setting. Desktop has no reliable cross-DE "follow the system
- * theme" signal, so [SYSTEM] resolves to dark — an app whose whole subject is
- * the night sky is a reasonable place for that to be the default rather than
- * a light-mode surprise.
- */
-enum class ThemeChoice { SYSTEM, DARK, LIGHT;
-
-    companion object {
-        fun parse(raw: String?): ThemeChoice = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: SYSTEM
-    }
-}
+import dev.fritze.skyward.core.persistence.ThemeChoice
 
 private val DarkScheme = darkColorScheme(
     primary = Color(0xFF9FC6FF),
@@ -133,6 +121,13 @@ class SkywardPalette private constructor(private val light: Boolean) {
  */
 val LocalSkywardPalette = staticCompositionLocalOf { SkywardPalette.Dark }
 
+/**
+ * §11's `theme` setting. Desktop has no reliable cross-DE "follow the system
+ * theme" signal, so [ThemeChoice.SYSTEM] resolves to dark — an app whose whole
+ * subject is the night sky is a reasonable place for that to be the default
+ * rather than a light-mode surprise. Android resolves the same value against
+ * the OS signal instead (§13).
+ */
 @Composable
 fun SkywardTheme(theme: ThemeChoice, content: @Composable () -> Unit) {
     val light = theme == ThemeChoice.LIGHT
@@ -155,13 +150,6 @@ fun phenomenonColor(phenomenon: Phenomenon): Color = LocalSkywardPalette.current
 @Composable
 @ReadOnlyComposable
 fun kpColor(kp: Double): Color = LocalSkywardPalette.current.kp(kp)
-
-fun qualityLabel(quality: Quality): String = when (quality) {
-    Quality.NONE -> "Not visible"
-    Quality.MARGINAL -> "Marginal"
-    Quality.GOOD -> "Good"
-    Quality.EXCELLENT -> "Excellent"
-}
 
 /** NOAA G-scale label for a Kp value (G1 starts at Kp 5). */
 fun gScaleLabel(kp: Double): String? = when {

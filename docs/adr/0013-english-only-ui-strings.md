@@ -1,4 +1,4 @@
-# ADR 0012: v1 ships English-only, with UI strings in Kotlin
+# ADR 0013: v1 ships English-only, with UI strings in Kotlin
 
 **Status:** Accepted for v1; revisit at the first credible translation offer
 
