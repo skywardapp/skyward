@@ -54,22 +54,16 @@ class VisibilityResultCacheTest {
         fetchedAt = fetchedAt, expiresAt = null,
     )
 
-    private val enckeElements = CometElements(
-        epoch = Instant.parse("2023-10-22T03:35:18.402Z"),
-        eccentricity = 0.8477496967533629,
-        perihelionDistanceAu = 0.3379482792219925,
-        inclinationDeg = 11.41227811179314,
-        ascendingNodeDeg = 334.1935846036774,
-        argPerihelionDeg = 187.1342463695676,
-        tpPerihelion = Instant.parse("2023-10-22T03:35:18.402Z"),
-    )
+    // These tests only need *a* valid CometElements, not real ephemeris data
+    // (contrast CometVisibilityModelTest's Horizons-validated Encke elements).
+    private val testElements = CometElements(now, 0.9, 1.0, 0.0, 0.0, 0.0, now)
 
     private fun cometOcc(fetchedAt: Instant) = Occurrence(
         id = "cm:test", phenomenon = Phenomenon.COMET, sourceId = "jpl", title = "Comet",
         window = TimeWindow(now, now + 30.days), peakTime = now + 15.days, certainty = Certainty.FORECAST,
         payload = CometPayload(
-            designation = "C/2025 K1", name = null, elements = enckeElements, magParams = CometMagParams(6.0, 10.0),
-            perihelionDate = enckeElements.tpPerihelion, peakMag = 4.0, peakMagDate = now + 15.days, magAtIngest = 4.0,
+            designation = "C/2025 K1", name = null, elements = testElements, magParams = CometMagParams(6.0, 10.0),
+            perihelionDate = testElements.tpPerihelion, peakMag = 4.0, peakMagDate = now + 15.days, magAtIngest = 4.0,
         ),
         fetchedAt = fetchedAt, expiresAt = null,
     )
