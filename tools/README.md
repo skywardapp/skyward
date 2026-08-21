@@ -10,6 +10,19 @@ Not part of the app; scripts that run at build/dev time, not on-device.
   EONET, JPL SBDB/Horizons) and GSFC eclipse canon rows into
   `core/src/commonTest/resources/fixtures/` for the golden tests. Lands with
   M1 (astronomy golden tests) and M4 (polled-source parser tests).
+  - **`fetch-gsfc-eclipse-paths.py`** — §17.2's centreline fixture. Downloads
+    Espenak's umbral-path tables for the three §17.1 named eclipses and writes
+    their central-line rows (time, latitude, longitude, path width, central
+    duration, at the published 120-second interval) to
+    `gsfc_central_paths_named_eclipses.csv`. That table is what
+    `EclipsePathCanonTest` measures the sampled path against, and its central
+    durations are the published totality figures §17.1 spot-checks.
+
+    ```sh
+    python3 tools/fetch-gsfc-eclipse-paths.py
+    ```
+
+    Rewrites the file in place; review the diff before committing it.
 
 Both land with the milestones above, not M0.
 

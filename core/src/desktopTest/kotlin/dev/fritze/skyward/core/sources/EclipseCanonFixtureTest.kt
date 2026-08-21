@@ -114,24 +114,22 @@ class EclipseCanonFixtureTest {
 
     @Test
     fun localCircumstancesNamedEclipseSpotChecksMatchPublishedTimes() {
-        val rows = readCsv("fixtures/gsfc_local_solar_circumstances_named_eclipses.csv").map {
-            LocalCircumstanceRow(
-                eclipseDate = it.getValue("eclipse_date"),
-                city = it.getValue("city"),
-                point = GeoPoint(it.getValue("latitude_deg").toDouble(), it.getValue("longitude_deg").toDouble()),
-                expectedLocalKind = SolarEclipseKind.valueOf(it.getValue("expected_local_kind")),
-                firstContactUtc = Instant.parse(it.getValue("first_contact_utc")),
-                maxUtc = Instant.parse(it.getValue("max_utc")),
-                lastContactUtc = Instant.parse(it.getValue("last_contact_utc")),
-            )
-        }
+        val rows = localCircumstanceRows()
 
-        val sydney2028 = rows.singleOrNull { it.eclipseDate == "2028-07-22" && it.city == "Sydney Australia" }
-        assertNotNull(sydney2028, "fixture must include the 2028-07-22 Sydney totality spot-check")
+        // §17.1 asks for three cities per named eclipse; assert that rather
+        // than only iterating whatever the fixture happens to hold, since a
+        // silently shrinking fixture is how this requirement erodes.
+        for (eclipseDate in listOf("2026-08-12", "2027-08-02", "2028-07-22")) {
+            val cities = rows.filter { it.eclipseDate == eclipseDate }
+            assertEquals(3, cities.size, "§17.1 wants 3 cities for $eclipseDate, fixture has ${cities.map { it.city }}")
+        }
+        assertTrue(
+            rows.any { it.eclipseDate == "2028-07-22" && it.city == "Sydney Australia" && it.expectedLocalKind == SolarEclipseKind.TOTAL },
+            "fixture must include the 2028-07-22 Sydney totality spot-check",
+        )
 
         for (row in rows) {
-            val searchStart = (row.maxUtc - 4.hours).toAstroTime()
-            val local = searchLocalSolarEclipse(searchStart, Observer(row.point.latDeg, row.point.lonDeg, 0.0))
+            val local = localCircumstancesAt(row.point, row.maxUtc)
 
             val computedKind = when (local.kind) {
                 EclipseKind.Total -> SolarEclipseKind.TOTAL
@@ -143,8 +141,104 @@ class EclipseCanonFixtureTest {
 
             assertWithinMinutes(local.partialBegin.time.toInstant(), row.firstContactUtc, row.city, row.eclipseDate, "first contact")
             assertWithinMinutes(local.peak.time.toInstant(), row.maxUtc, row.city, row.eclipseDate, "maximum")
-            assertWithinMinutes(local.partialEnd.time.toInstant(), row.lastContactUtc, row.city, row.eclipseDate, "last contact")
+            row.lastContactUtc?.let {
+                assertWithinMinutes(local.partialEnd.time.toInstant(), it, row.city, row.eclipseDate, "last contact")
+            }
+            row.totalityDurationSec?.let { published ->
+                val computed = totalityDurationSec(local)
+                assertNotNull(computed, "${row.city} ${row.eclipseDate}: expected totality, got ${local.kind}")
+                // §17.1 asks for published *values*, and a published duration
+                // is quoted to the second for a city, not for the reader's
+                // exact coordinates — 15 s covers the difference between a
+                // city's nominal point and its extent without admitting a
+                // genuinely wrong duration (these paths gain or lose a second
+                // of totality over a few km, so a real error is far larger).
+                assertTrue(
+                    abs(computed - published) <= 15.0,
+                    "${row.city} ${row.eclipseDate}: totality ${computed}s, published ${published}s",
+                )
+            }
         }
+    }
+
+    /**
+     * §17.1: "2026-08-12 total eclipse: totality in northern Spain; Madrid
+     * partial > 90 %; path sample near (43° N, 5° W)."
+     */
+    @Test
+    fun august2026IsTotalInNorthernSpainAndAJustMissedPartialInMadrid() {
+        val nearMiss = localCircumstancesAt(GeoPoint(40.4168, -3.7038), Instant.parse("2026-08-12T18:32:00Z"))
+        assertEquals(EclipseKind.Partial, nearMiss.kind, "Madrid sits just outside the 2026 path")
+        assertTrue(
+            nearMiss.obscuration > 0.90,
+            "§17.1: Madrid must see a partial deeper than 90 %, got ${nearMiss.obscuration}",
+        )
+        // The near-miss is the whole point of this spot-check: Madrid is
+        // ~99.98 % covered (Wikipedia, "Solar eclipse of August 12, 2026") and
+        // still not total, so a model that rounds obscuration up to totality —
+        // or a path whose southern limit is drawn a few tens of km too far
+        // south — fails here and nowhere else.
+        assertTrue(
+            nearMiss.obscuration > 0.99,
+            "expected Madrid within a whisker of totality, got ${nearMiss.obscuration}",
+        )
+
+        // (43° N, 5° W) is §17.1's named northern-Spain reference point; the
+        // published centreline passes 43.37 N 6.19 W two minutes earlier.
+        val northernSpain = localCircumstancesAt(GeoPoint(43.0, -5.0), Instant.parse("2026-08-12T18:28:00Z"))
+        assertEquals(EclipseKind.Total, northernSpain.kind, "§17.1: (43 N, 5 W) is inside the 2026 path")
+        assertNotNull(totalityDurationSec(northernSpain))
+    }
+
+    /**
+     * §17.1: "2027-08-02 total eclipse: totality Luxor ≈ 6 min 22 s;
+     * Gibraltar-area centerline crossing."
+     */
+    @Test
+    fun august2027IsTotalOverLuxorForThePublishedSixMinutesAndCrossesTheGibraltarArea() {
+        val luxor = localCircumstancesAt(GeoPoint(25.6872, 32.6396), Instant.parse("2027-08-02T10:05:00Z"))
+        assertEquals(EclipseKind.Total, luxor.kind)
+        val duration = assertNotNull(totalityDurationSec(luxor))
+        // 6m22s = 382 s (§17.1); Wikipedia's Espenak-derived figure for
+        // greatest eclipse is 6m23s, and Luxor sits essentially on the
+        // centreline near it. 10 s spans both published values — a broken
+        // shadow-cone or timing model would be minutes out, not seconds.
+        assertTrue(
+            abs(duration - 382.0) <= 10.0,
+            "Luxor totality ${duration}s, published ~382 s (6m22s)",
+        )
+
+        // The Gibraltar-area crossing: Tarifa is the mainland point the
+        // centreline comes ashore at, Gibraltar itself a few km east.
+        for ((name, point) in listOf("Tarifa" to GeoPoint(36.0128, -5.6065), "Gibraltar" to GeoPoint(36.1408, -5.3536))) {
+            val local = localCircumstancesAt(point, Instant.parse("2027-08-02T08:47:00Z"))
+            assertEquals(EclipseKind.Total, local.kind, "§17.1: $name is in the 2027 path")
+            assertNotNull(totalityDurationSec(local), name)
+        }
+    }
+
+    private fun localCircumstanceRows(): List<LocalCircumstanceRow> =
+        readCsv("fixtures/gsfc_local_solar_circumstances_named_eclipses.csv").map {
+            LocalCircumstanceRow(
+                eclipseDate = it.getValue("eclipse_date"),
+                city = it.getValue("city"),
+                point = GeoPoint(it.getValue("latitude_deg").toDouble(), it.getValue("longitude_deg").toDouble()),
+                expectedLocalKind = SolarEclipseKind.valueOf(it.getValue("expected_local_kind")),
+                firstContactUtc = Instant.parse(it.getValue("first_contact_utc")),
+                maxUtc = Instant.parse(it.getValue("max_utc")),
+                lastContactUtc = it.getValue("last_contact_utc").takeIf(String::isNotEmpty)?.let(Instant::parse),
+                totalityDurationSec = it.getValue("totality_duration_sec").takeIf(String::isNotEmpty)?.toDouble(),
+            )
+        }
+
+    /** The engine's own local circumstances, searched from far enough back to find [near]'s eclipse. */
+    private fun localCircumstancesAt(point: GeoPoint, near: Instant) =
+        searchLocalSolarEclipse((near - 6.hours).toAstroTime(), Observer(point.latDeg, point.lonDeg, 0.0))
+
+    private fun totalityDurationSec(local: io.github.cosinekitty.astronomy.LocalSolarEclipseInfo): Double? {
+        val begin = local.totalBegin?.time?.toInstant() ?: return null
+        val end = local.totalEnd?.time?.toInstant() ?: return null
+        return (end - begin).inWholeMilliseconds / 1000.0
     }
 
     private fun assertWithinMinutes(
@@ -211,6 +305,9 @@ class EclipseCanonFixtureTest {
         val expectedLocalKind: SolarEclipseKind,
         val firstContactUtc: Instant,
         val maxUtc: Instant,
-        val lastContactUtc: Instant,
+        /** Null where the source publishes only a sunset-truncated or totality-end value. */
+        val lastContactUtc: Instant?,
+        /** Null where the eclipse is only partial from this city. */
+        val totalityDurationSec: Double?,
     )
 }
