@@ -84,6 +84,11 @@ internal data class UniversalAnomaly(val x: Double, val iterations: Int)
  * wide bracket.
  */
 internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): UniversalAnomaly? {
+    // The bracket and the f' >= q > 0 argument above both require a real,
+    // positive perihelion distance and a physical eccentricity; degenerate
+    // elements are unsolvable, not slow to solve (§7.4.2).
+    if (!(q > 0.0) || !q.isFinite() || !(e >= 0.0) || !dtDays.isFinite()) return null
+
     // alpha = 1/a: positive for ellipses, 0 for parabolas, negative for hyperbolas — no branch.
     val alpha = (1.0 - e) / q
 
@@ -156,11 +161,11 @@ internal fun solveUniversalAnomaly(q: Double, e: Double, dtDays: Double): Univer
  * per-conic branching (and the discontinuities at e=1 it causes) that a
  * Newton-Raphson-on-Kepler's-equation / Barker's-equation split would have.
  *
- * Returns `null` if the Newton-Raphson solve fails to converge within
- * [KEPLER_MAX_ITERATIONS] — callers must drop the comet with a diagnostic
- * rather than propagate a garbage position (§7.4.2 step 2), which is why
- * this is nullable rather than the non-null signature the design doc's
- * pseudocode shows.
+ * Returns `null` if [solveUniversalAnomaly] fails to converge within
+ * [KEPLER_MAX_ITERATIONS], or if the two independent routes to r disagree
+ * — callers must drop the comet with a diagnostic rather than propagate a
+ * garbage position (§7.4.2 step 2), which is why this is nullable rather
+ * than the non-null signature the design doc's pseudocode shows.
  */
 fun heliocentricPosition(el: CometElements, t: Instant): Vec3? {
     val dt = (t - el.tpPerihelion).inWholeSeconds / 86400.0 // days since perihelion passage

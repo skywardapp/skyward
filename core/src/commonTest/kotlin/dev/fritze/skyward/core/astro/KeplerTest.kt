@@ -128,12 +128,18 @@ class KeplerTest {
         // but does not sample right at the boundary, so exercise the envelope
         // where alpha is smallest.
         val eccentricities = listOf(0.9999, 0.99999, 1.0, 1.00001, 1.0001)
+        val perihelionDistances = listOf(0.12, 0.34, 1.0, 3.0)
         val dtValues = listOf(-3650.0, -1000.0, 1000.0, 3650.0)
         for (e in eccentricities) {
-            for (dt in dtValues) {
-                val solution = solveUniversalAnomaly(1.0, e, dt)
-                assertNotNull(solution, "e=$e, dt=$dt days should converge")
-                assertTrue(solution.iterations < 30, "e=$e, dt=$dt days took ${solution.iterations} iterations")
+            for (q in perihelionDistances) {
+                for (dt in dtValues) {
+                    val solution = solveUniversalAnomaly(q, e, dt)
+                    assertNotNull(solution, "e=$e, q=$q au, dt=$dt days should converge")
+                    assertTrue(
+                        solution.iterations < 30,
+                        "e=$e, q=$q au, dt=$dt days took ${solution.iterations} iterations",
+                    )
+                }
             }
         }
     }
