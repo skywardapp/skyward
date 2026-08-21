@@ -9,7 +9,7 @@ captures, it does not refresh them.
 tools/fixtures/fetch-swpc.sh        # Kp forecast, full-size OVATION grid, 1-minute nowcast
 tools/fixtures/fetch-eonet.sh       # EONET open events, EonetSource's default categories
 tools/fixtures/fetch-jpl-sbdb.sh    # the comet query CometSource.discoveryUrl() issues
-tools/fixtures/fetch-horizons.py    # SBDB elements + Horizons vectors for the propagator test
+tools/fixtures/fetch-horizons.py    # osculating elements + daily ephemerides for the §17.3b propagator oracle
 ```
 
 Needs `curl` (the three shell scripts) and Python 3 with nothing outside the
@@ -20,13 +20,20 @@ standard library (the Horizons one).
 Each script issues the **same request the corresponding source issues** —
 the URLs and query parameters are copied from `AuroraSource`, `KpNowcast`,
 `EonetSource` and `CometSource`. Change one of those and change it here, or
-the fixture stops describing what the app asks for.
+the fixture stops describing what the app asks for. `fetch-horizons.py` is
+the exception, in kind rather than degree: §17.3b's oracle validates the
+propagator itself (`Kepler.kt`), not a parser, so there is no app-side
+request to mirror — it is JPL Horizons' geometric state vectors, RA/Dec and
+T-mag, for four comets spanning the eccentricity/perihelion regimes §17.3b
+names, sampled daily for a year around each comet's perihelion.
 
 Three of the four capture bytes verbatim. `fetch-horizons.py` cannot: JPL
-Horizons serves its `VECTORS` output as a human-formatted table wrapped in a
-banner, and reproducing that table's parser inside a test would be testing
-the wrong thing. It distills the capture once, into the small JSON the test
-reads, and records in the file how it was obtained.
+Horizons serves its `VECTORS`/`OBSERVER` output as human-formatted tables
+wrapped in a banner, and reproducing that table's parser inside a test would
+be testing the wrong thing. It distills the capture once, into the two CSVs
+the test reads (`jpl_horizons_comet_elements.csv`,
+`jpl_horizons_comet_ephemerides.csv`), and records in the file how it was
+obtained.
 
 ## Refreshing is a review
 
