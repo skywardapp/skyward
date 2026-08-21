@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night-mode counterpart of values/themes.xml (§13). Only the resolved
+         darkness differs; everything else is inherited from the base theme. -->
+    <style name="Theme.Skyward" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/skyward_window_dark</item>
+    </style>
+</resources>

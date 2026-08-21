@@ -18,7 +18,7 @@ androidxTestJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
 androidxTestRules = "1.7.0"
 androidxTestCoreKtx = "1.7.0"
-# §15.2's table says 1.1.x; see docs/adr/0011-compose-native-tray-version.md.
+# §15.2's table says 1.1.x; see docs/adr/0012-compose-native-tray-version.md.
 composeNativeTray = "1.3.3"
 twoSlices = "0.9.7"
 

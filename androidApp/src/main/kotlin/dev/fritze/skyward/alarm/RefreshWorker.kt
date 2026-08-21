@@ -18,12 +18,14 @@ class RefreshWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        // Force every COMPUTED source on each periodic pass: per SourceRunner.runDue's own
-        // contract, an OnHorizonChange source never becomes due again on its own after a
-        // successful run, so without this the rolling horizon window would stop revealing new
-        // occurrences at its far edge after the very first refresh. Cheap (local astronomy,
-        // no network) -- POLLED sources are unaffected and still run on their own schedule.
-        container.sourceRunner.runDue(Clock.System.now(), force = container.computedSources.map { it.id }.toSet())
+        // Nothing is forced here. Every source, COMPUTED included, now carries its
+        // own next_run_at (the COMPUTED ones a daily one, ADR 0009), so due-ness
+        // alone keeps the rolling horizon window moving. Forcing the COMPUTED
+        // sources every pass instead re-ran EclipseSource's path sampling -- minutes
+        // of CPU, not the "cheap local astronomy" this comment used to claim -- and
+        // WorkManager's ~10-minute ceiling for a non-expedited worker could cut the
+        // pass off before the POLLED sources listed after them ever ran (issue #49).
+        container.sourceRunner.runDue(Clock.System.now())
         return Result.success()
     }
 

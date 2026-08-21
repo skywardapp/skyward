@@ -46,6 +46,9 @@ class SettingsRepo(private val db: SkywardDatabase) {
         get("source.$sourceId.enabled")?.let { it == "true" } ?: defaultValue
     suspend fun setSourceEnabled(sourceId: String, enabled: Boolean) = set("source.$sourceId.enabled", enabled.toString())
 
+    fun observeTheme(): Flow<ThemeChoice> = observe(KEY_THEME).map { ThemeChoice.parse(it) }
+    suspend fun setTheme(theme: ThemeChoice) = set(KEY_THEME, theme.name)
+
     suspend fun getExactAlarmCardDismissedVersion(): Long? =
         get(KEY_EXACT_ALARM_CARD_DISMISSED_VERSION)?.toLongOrNull()
     suspend fun setExactAlarmCardDismissedVersion(versionCode: Long) =
@@ -54,6 +57,7 @@ class SettingsRepo(private val db: SkywardDatabase) {
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_HORIZON_YEARS = "horizon_years"
+        const val KEY_THEME = "theme"
         const val KEY_EXACT_ALARM_CARD_DISMISSED_VERSION = "exact_alarm_card_dismissed_version"
         const val DEFAULT_HORIZON_YEARS = 3
     }
