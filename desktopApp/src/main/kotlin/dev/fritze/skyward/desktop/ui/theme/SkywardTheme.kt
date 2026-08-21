@@ -7,19 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.Quality
-
-/**
- * §11's `theme` setting. Desktop has no reliable cross-DE "follow the system
- * theme" signal, so [SYSTEM] resolves to dark — an app whose whole subject is
- * the night sky is a reasonable place for that to be the default rather than
- * a light-mode surprise.
- */
-enum class ThemeChoice { SYSTEM, DARK, LIGHT;
-
-    companion object {
-        fun parse(raw: String?): ThemeChoice = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: SYSTEM
-    }
-}
+import dev.fritze.skyward.core.persistence.ThemeChoice
 
 private val DarkScheme = darkColorScheme(
     primary = Color(0xFF9FC6FF),
@@ -41,6 +29,13 @@ private val LightScheme = lightColorScheme(
     secondary = Color(0xFF1F6E60),
 )
 
+/**
+ * §11's `theme` setting. Desktop has no reliable cross-DE "follow the system
+ * theme" signal, so [ThemeChoice.SYSTEM] resolves to dark — an app whose whole
+ * subject is the night sky is a reasonable place for that to be the default
+ * rather than a light-mode surprise. Android resolves the same value against
+ * the OS signal instead (§13).
+ */
 @Composable
 fun SkywardTheme(theme: ThemeChoice, content: @Composable () -> Unit) {
     MaterialTheme(
