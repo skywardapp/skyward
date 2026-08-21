@@ -53,6 +53,7 @@ fun main(args: Array<String>) {
             windowVisibility.value = true
             occurrenceId?.let(state::openOccurrence)
         },
+        onDeliveryOutcome = state::recordDeliveryOutcome,
     )
     val refreshLoop = SourceRefreshLoop(
         sourceRunner = container.sourceRunner,

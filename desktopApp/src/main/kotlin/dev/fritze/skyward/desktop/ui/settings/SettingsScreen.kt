@@ -132,6 +132,10 @@ private fun TestNotificationRow(state: DesktopAppState) {
                         onActivated = {},
                     )
                 }
+                // Same channel the scheduler reports through, so a successful
+                // test retracts a standing "reminders can't be shown" banner
+                // and a failed one raises it.
+                state.recordDeliveryOutcome(delivered)
                 note = if (delivered) {
                     "Sent — if nothing appeared, check your desktop's notification settings."
                 } else {

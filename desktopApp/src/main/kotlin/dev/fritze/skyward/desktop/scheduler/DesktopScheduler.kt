@@ -34,6 +34,15 @@ class DesktopScheduler(
     private val occurrenceRepo: OccurrenceRepo,
     private val notifier: DesktopNotifier,
     private val onActivated: (String?) -> Unit,
+    /**
+     * Called with the outcome of every delivery attempt (§10.1's honesty
+     * contract). When every backend in the chain refuses, the reminder is
+     * gone and the only party that can tell the user is the window — see
+     * `DesktopAppState.recordDeliveryOutcome`. Reported both ways so a
+     * later success can retract the claim rather than leaving a warning up
+     * after the notification daemon comes back.
+     */
+    private val onDeliveryOutcome: (delivered: Boolean) -> Unit = {},
     private val clock: Clock = Clock.System,
 ) {
 
@@ -105,6 +114,10 @@ class DesktopScheduler(
         if (!posted) {
             System.err.println("no desktop notifier could deliver reminder ${notification.id}")
         }
+        // stderr is nobody's notification surface: a user whose desktop has no
+        // working notification daemon would otherwise learn nothing at all,
+        // and the reminder is still marked FIRED below (#79).
+        onDeliveryOutcome(posted)
         // Recorded as FIRED either way: a reminder the desktop refused to show
         // is still a reminder whose moment has passed, and re-posting it on
         // every subsequent DB change would be worse than losing it once.
