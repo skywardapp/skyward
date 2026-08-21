@@ -134,18 +134,34 @@ run {
 }
 
 // §17.5b / P6 / §16: "A dependency-licence report fails the build on any
-// dependency whose licence is not on an allowlist." Best-effort: resolves
-// each shipped app's runtime classpath, fetches the POM for every external
-// module, and checks declared <license><name> text. A module with no
-// discoverable license is a WARNING (many POMs omit it even for genuinely
-// permissive libraries — inheriting from a parent POM we didn't fetch, e.g.),
-// never a silent pass or a hard failure; a module whose license text matches
-// a known-incompatible term (NonCommercial, ShareAlike-without-GPL, SSPL,
-// Commons Clause, …) hard-fails the build, since that is exactly the class of
-// mistake D12 exists to prevent from recurring as dependencies are added.
+// dependency whose licence is not on an allowlist." Resolves each shipped
+// app's runtime classpath, fetches the POM for every external module, and
+// checks the declared <license><name> text — following the <parent> chain
+// when a POM declares none itself, which is how most "missing" licence
+// metadata in practice reads (slf4j-api, two-slices and Guava's
+// listenablefuture stub all inherit theirs). Anything still unidentified
+// after that walk fails the build; a genuine one-off goes in
+// `licenseUnknownExceptions` below, with the manual §16 verdict written
+// down, so an unknown can never pass silently.
+//
+// Two independent constraints, both enforced here:
+//  - P6/D12 — commercial use must stay possible, so NonCommercial,
+//    ShareAlike-without-GPL, SSPL, Commons Clause and friends hard-fail.
+//    That is the class of mistake D12 exists to prevent from recurring as
+//    dependencies are added.
+//  - D8 — the app is GPL-3.0-or-later, so a bundled dependency's licence must
+//    also be *GPL-compatible*. This is why the allowlist is narrower than
+//    "any OSI-approved licence": EPL-1.0 and MPL-1.1 are commercial-use-clean
+//    but GPL-incompatible, and GPL-2.0-*only* is incompatible with GPL-3
+//    (hence the "or later" in the GPL patterns). EPL is deliberately absent:
+//    EPL-2.0 *can* be GPL-compatible, but only when the copyright holder
+//    elected the secondary-licence option, and that election lives in the
+//    LICENSE file rather than the POM's <name> text — so an EPL dependency
+//    must be reviewed by hand and recorded in `licenseUnknownExceptions`
+//    rather than pattern-matched through.
 val licenseAllowlistPatterns = listOf(
     "apache.*2", "mit license", "^mit$", "bsd.*2.claus", "bsd.*3.claus", "^bsd license",
-    "eclipse public license", "^epl", "mozilla public license", "^mpl",
+    "mozilla public license.*2", "^mpl.?2",
     "public domain", "^cc0", "creative commons cc0", "unlicense",
     "gnu general public license.*version 2.*later", "^gpl-2\\.0-or-later",
     "gnu general public license.*version 3.*later", "^gpl-3\\.0-or-later", "gnu lesser general public license",
@@ -157,6 +173,19 @@ val licenseDenylistPatterns = listOf(
     "sspl", "server side public license", "business source license", "\\bbusl\\b",
     "not for commercial", "no commercial use",
 ).map { Regex(it, RegexOption.IGNORE_CASE) }
+
+// Per-coordinate escape hatch for the handful of artifacts whose licence
+// genuinely cannot be read out of the POM chain (an empty stub POM, a
+// <parent> pinned by an unresolvable property, an EPL-2.0 dependency whose
+// secondary-licence election only appears in its LICENSE file). Keyed on
+// "group:module" — deliberately not on version, since the value records a
+// human verdict about the project, and a relicensing would show up in the
+// review this list exists to force. Every entry states where the licence was
+// actually read from; an entry without that is not a verdict, it is a mute
+// button. Empty is the goal: reach for the parent walk first.
+val licenseUnknownExceptions = mapOf<String, String>(
+    // "com.example:thing" to "BSD-3-Clause per its LICENSE file at v1.2.3; POM is a stub",
+)
 
 // Configuration names (per subproject) whose resolved dependency graph should
 // be license-checked — the classpaths that actually ship in a built artifact.
@@ -210,6 +239,81 @@ subprojects {
     }
 }
 
+/**
+ * Reads the `<licenses>` names declared by a POM, walking `<parent>` when the
+ * POM itself declares none — Maven inherits `<licenses>`, so a bare
+ * `slf4j-api` POM is not a licence-less artifact, it is one whose licence
+ * lives two levels up (slf4j-api -> slf4j-parent -> slf4j-bom -> MIT).
+ * Without this walk the check's "unknown" bucket is dominated by artifacts
+ * that are in fact perfectly identifiable, which is what forced it to warn
+ * rather than fail.
+ *
+ * Only *direct* children are read at each level: `getElementsByTagName` would
+ * also pick up `<licenses>` nested in a `<profile>` or a plugin
+ * configuration, which are not the module's own licence.
+ */
+fun Project.declaredLicenseNames(pomFile: java.io.File?): List<String> {
+    var file = pomFile ?: return emptyList()
+    val visited = mutableSetOf<String>()
+    // Depth cap: a Maven parent chain is a DAG in principle and three levels
+    // deep in practice, so anything longer is a cycle or a mistake, and this
+    // check must terminate either way.
+    repeat(8) {
+        val doc = runCatching {
+            javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder().parse(file)
+        }.getOrNull() ?: return emptyList()
+        val root = doc.documentElement ?: return emptyList()
+
+        val names = directChild(root, "licenses")
+            ?.let { directChildren(it, "license") }
+            ?.mapNotNull { directChild(it, "name")?.textContent?.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        if (names.isNotEmpty()) return names
+
+        val parent = directChild(root, "parent") ?: return emptyList()
+        val group = directChild(parent, "groupId")?.textContent?.trim().orEmpty()
+        val module = directChild(parent, "artifactId")?.textContent?.trim().orEmpty()
+        val version = directChild(parent, "version")?.textContent?.trim().orEmpty()
+        // A version left as an unresolved "${...}" property can't be fetched;
+        // that dependency lands in the exception list, by hand, on purpose.
+        if (group.isEmpty() || module.isEmpty() || version.isEmpty() || version.startsWith('$')) return emptyList()
+        if (!visited.add("$group:$module:$version")) return emptyList()
+
+        file = resolvePomFile(group, module, version) ?: return emptyList()
+    }
+    return emptyList()
+}
+
+fun directChild(parent: org.w3c.dom.Element, name: String): org.w3c.dom.Element? =
+    directChildren(parent, name).firstOrNull()
+
+fun directChildren(parent: org.w3c.dom.Element, name: String): List<org.w3c.dom.Element> {
+    val kids = parent.childNodes
+    return (0 until kids.length)
+        .mapNotNull { kids.item(it) as? org.w3c.dom.Element }
+        .filter { it.tagName == name }
+}
+
+/** Fetches one POM by coordinates (used for `<parent>` hops, which are not on any classpath). */
+fun Project.resolvePomFile(group: String, module: String, version: String): java.io.File? =
+    runCatching {
+        dependencies.createArtifactResolutionQuery()
+            .forModule(group, module, version)
+            .withArtifacts(
+                org.gradle.maven.MavenModule::class.java,
+                org.gradle.maven.MavenPomArtifact::class.java,
+            )
+            .execute()
+            .resolvedComponents
+            .firstOrNull()
+            ?.getArtifacts(org.gradle.maven.MavenPomArtifact::class.java)
+            ?.filterIsInstance<org.gradle.api.artifacts.result.ResolvedArtifactResult>()
+            ?.firstOrNull()
+            ?.file
+    }.getOrNull()
+
 fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.Configuration) {
     val moduleIds = configuration.incoming.resolutionResult.allComponents
         .mapNotNull { it.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier }
@@ -228,6 +332,7 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
 
     val denied = mutableListOf<String>()
     val unknown = mutableListOf<String>()
+    val excepted = mutableListOf<String>()
 
     for (component in result.resolvedComponents) {
         val id = component.id
@@ -235,35 +340,34 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
             .filterIsInstance<org.gradle.api.artifacts.result.ResolvedArtifactResult>()
             .firstOrNull()?.file
 
-        val licenseNames = pomFile?.let { file ->
-            runCatching {
-                val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
-                    .newDocumentBuilder().parse(file)
-                val nodes = doc.getElementsByTagName("license")
-                (0 until nodes.length).mapNotNull { i ->
-                    (nodes.item(i) as org.w3c.dom.Element)
-                        .getElementsByTagName("name")
-                        .item(0)?.textContent?.trim()
-                }
-            }.getOrNull().orEmpty()
-        } ?: emptyList()
+        val licenseNames = declaredLicenseNames(pomFile)
+        val coordinate = (id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)
+            ?.let { "${it.group}:${it.module}" }
+        val exceptionReason = coordinate?.let { licenseUnknownExceptions[it] }
 
-        when {
-            licenseNames.isEmpty() ->
-                unknown += "$id (no <licenses> block in its POM)"
-            licenseNames.any { name -> licenseDenylistPatterns.any { it.containsMatchIn(name) } } ->
+        val problem = when {
+            licenseNames.any { name -> licenseDenylistPatterns.any { it.containsMatchIn(name) } } -> {
+                // Denylisted is never exceptable: P6/D12 is a project
+                // constraint, not a metadata-quality question.
                 denied += "$id -> $licenseNames"
+                null
+            }
+            licenseNames.isEmpty() ->
+                "$id (no <licenses> block in its POM or any of its parents)"
             licenseNames.none { name -> licenseAllowlistPatterns.any { it.containsMatchIn(name) } } ->
-                unknown += "$id -> $licenseNames (none matched the allowlist)"
+                "$id -> $licenseNames (none matched the allowlist)"
+            else -> null
+        }
+        if (problem != null) {
+            if (exceptionReason != null) excepted += "$problem — allowed: $exceptionReason" else unknown += problem
         }
     }
 
-    if (unknown.isNotEmpty()) {
-        logger.warn(
-            "checkDependencyLicenses (${configuration.name}): ${unknown.size} " +
-                "dependencies have no license this check could positively allowlist — " +
-                "verify manually against §16 before relying on this alone:\n" +
-                unknown.joinToString("\n") { "  - $it" }
+    if (excepted.isNotEmpty()) {
+        logger.lifecycle(
+            "checkDependencyLicenses (${configuration.name}): ${excepted.size} " +
+                "dependencies passed on a recorded manual verdict:\n" +
+                excepted.joinToString("\n") { "  - $it" }
         )
     }
     if (denied.isNotEmpty()) {
@@ -273,5 +377,21 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
                 denied.joinToString("\n") { "  - $it" }
         )
     }
-    logger.lifecycle("checkDependencyLicenses (${configuration.name}): OK — ${moduleIds.size} dependencies, no denylisted licences.")
+    if (unknown.isNotEmpty()) {
+        // §17.5b says this fails the build, and it means it: a licence this
+        // check cannot place is exactly the case where nobody has looked.
+        throw GradleException(
+            "checkDependencyLicenses (${configuration.name}): ${unknown.size} dependencies have no " +
+                "licence this check could place on the §16 allowlist:\n" +
+                unknown.joinToString("\n") { "  - $it" } +
+                "\n\nEither the licence is genuinely not allowlisted — in which case do not bundle it — " +
+                "or the POM metadata is unreadable, in which case verify the licence by hand (its LICENSE " +
+                "file, not its README) against §16's commercial-use and GPL-3-compatibility constraints " +
+                "and record the verdict in `licenseUnknownExceptions` in the root build.gradle.kts."
+        )
+    }
+    logger.lifecycle(
+        "checkDependencyLicenses (${configuration.name}): OK — ${moduleIds.size} dependencies, " +
+            "every licence on the §16 allowlist."
+    )
 }
