@@ -19,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.format.CoordinateAxis
+import dev.fritze.skyward.core.format.parseCoordinate
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
@@ -118,11 +120,11 @@ private fun LocationEditor(
     var latText by remember(draft.id) { mutableStateOf(draft.point.latDeg.toString()) }
     var lonText by remember(draft.id) { mutableStateOf(draft.point.lonDeg.toString()) }
 
-    val lat = latText.toDoubleOrNull()
-    val lon = lonText.toDoubleOrNull()
-    val latValid = lat != null && lat in -90.0..90.0
-    // §5: "lon in [-180, 180)" — the upper bound is deliberately exclusive.
-    val lonValid = lon != null && lon >= -180.0 && lon < 180.0
+    // §5's ranges (including the deliberately exclusive upper bound on
+    // longitude) live in `parseCoordinate` so the two frontends can't drift
+    // apart on them again -- Android used to accept exactly 180.
+    val latEntry = parseCoordinate(latText, CoordinateAxis.LATITUDE)
+    val lonEntry = parseCoordinate(lonText, CoordinateAxis.LONGITUDE)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
@@ -137,10 +139,11 @@ private fun LocationEditor(
                 value = latText,
                 onValueChange = {
                     latText = it
-                    it.toDoubleOrNull()?.let { value -> onChange(draft.copy(point = draft.point.copy(latDeg = value))) }
+                    parseCoordinate(it, CoordinateAxis.LATITUDE).degrees?.let { value -> onChange(draft.copy(point = draft.point.copy(latDeg = value))) }
                 },
                 label = { Text("Latitude") },
-                isError = latText.isNotEmpty() && !latValid,
+                isError = latEntry.isError,
+                supportingText = latEntry.error?.let { message -> { Text(message) } },
                 singleLine = true,
                 modifier = Modifier.width(180.dp),
             )
@@ -148,10 +151,11 @@ private fun LocationEditor(
                 value = lonText,
                 onValueChange = {
                     lonText = it
-                    it.toDoubleOrNull()?.let { value -> onChange(draft.copy(point = draft.point.copy(lonDeg = value))) }
+                    parseCoordinate(it, CoordinateAxis.LONGITUDE).degrees?.let { value -> onChange(draft.copy(point = draft.point.copy(lonDeg = value))) }
                 },
                 label = { Text("Longitude") },
-                isError = lonText.isNotEmpty() && !lonValid,
+                isError = lonEntry.isError,
+                supportingText = lonEntry.error?.let { message -> { Text(message) } },
                 singleLine = true,
                 modifier = Modifier.width(180.dp),
             )
@@ -160,7 +164,10 @@ private fun LocationEditor(
             TextButton(onClick = { onChange(draft.copy(isPrimary = !draft.isPrimary)) }) {
                 Text(if (draft.isPrimary) "Primary location ✓" else "Make primary")
             }
-            Button(onClick = onSave, enabled = draft.name.isNotBlank() && latValid && lonValid) { Text("Save") }
+            Button(
+                onClick = onSave,
+                enabled = draft.name.isNotBlank() && latEntry.degrees != null && lonEntry.degrees != null,
+            ) { Text("Save") }
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
     }

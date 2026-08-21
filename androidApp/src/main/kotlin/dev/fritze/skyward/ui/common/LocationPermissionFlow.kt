@@ -20,20 +20,58 @@ import androidx.core.content.ContextCompat
 import dev.fritze.skyward.core.model.GeoPoint
 
 /**
+ * What came back from a "use current location" tap. Every way of not getting
+ * a fix used to collapse into a single `null`, which left the caller with
+ * nothing to say -- so the button did nothing visible after the user had just
+ * answered a system dialog. The two failures need different remedies (grant
+ * the permission vs. wait for a fix or type the coordinates), so they stay
+ * apart all the way to the screen.
+ */
+sealed interface LocationFixOutcome {
+    /** A cached coarse fix, recent enough to stand for "where the user is now". */
+    data class Fixed(val point: GeoPoint) : LocationFixOutcome
+
+    /** The runtime prompt came back denied, or the permission was revoked between the check and the read. */
+    data object PermissionDenied : LocationFixOutcome
+
+    /** Permission is granted, but no enabled provider holds a fix younger than [MAX_LOCATION_AGE_MILLIS]. */
+    data object NoRecentFix : LocationFixOutcome
+}
+
+/**
+ * The sentence to show under the button, or null when there is nothing to
+ * report. Both screens show the same wording for the same outcome -- the
+ * remedy ("type the coordinates") is the same in either place, and it is the
+ * cause that differs.
+ */
+val LocationFixOutcome.failureMessage: String?
+    get() = when (this) {
+        is LocationFixOutcome.Fixed -> null
+        LocationFixOutcome.PermissionDenied ->
+            "Location permission denied — enter the coordinates below instead."
+        LocationFixOutcome.NoRecentFix ->
+            "Couldn't get a location fix — enter the coordinates below instead."
+    }
+
+/**
  * §10.2's "location prominent disclosure (required by Play, harmless on
  * F-Droid): before the first ACCESS_COARSE_LOCATION runtime prompt, show a
  * full-screen disclosure ... on-device only and never transmitted." This is
  * the dialog-sized version of that disclosure, shared by onboarding and the
  * LocationEditor's "use current location" button -- both are places the
  * very first prompt could happen depending on what the user skips.
+ *
+ * [onOutcome] fires for every tap that reaches the system, including the ones
+ * that fail. Dismissing the disclosure itself with "Not now" is deliberately
+ * silent: the user withdrew the request, so there is no failure to report.
  */
 @Composable
-fun rememberLocationPermissionRequester(onLocation: (GeoPoint?) -> Unit): () -> Unit {
+fun rememberLocationPermissionRequester(onOutcome: (LocationFixOutcome) -> Unit): () -> Unit {
     val context = LocalContext.current
     var showDisclosure by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        onLocation(if (granted) readLastKnownCoarseLocation(context) else null)
+        onOutcome(if (granted) readLastKnownCoarseLocation(context) else LocationFixOutcome.PermissionDenied)
     }
 
     if (showDisclosure) {
@@ -60,7 +98,7 @@ fun rememberLocationPermissionRequester(onLocation: (GeoPoint?) -> Unit): () -> 
     return {
         val alreadyGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (alreadyGranted) {
-            onLocation(readLastKnownCoarseLocation(context))
+            onOutcome(readLastKnownCoarseLocation(context))
         } else {
             showDisclosure = true
         }
@@ -70,9 +108,15 @@ fun rememberLocationPermissionRequester(onLocation: (GeoPoint?) -> Unit): () -> 
 /** getLastKnownLocation() can return "quite old" cached fixes (its own docs say to always check age); reject anything older than this. */
 private val MAX_LOCATION_AGE_MILLIS = 30 * 60 * 1000L
 
-private fun readLastKnownCoarseLocation(context: android.content.Context): GeoPoint? {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
-    val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager ?: return null
+private fun readLastKnownCoarseLocation(context: android.content.Context): LocationFixOutcome {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        return LocationFixOutcome.PermissionDenied
+    }
+    // A missing LocationManager is indistinguishable to the user from a device
+    // that simply has no fix, and there is no permission for them to fix, so it
+    // reports as NoRecentFix rather than growing a third message.
+    val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager
+        ?: return LocationFixOutcome.NoRecentFix
     val providers = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
     // Collect every enabled provider's cached fix and pick the newest by elapsed-realtime (not
     // Location.getTime()/wall-clock, which isn't monotonic) -- the first enabled provider isn't
@@ -81,8 +125,8 @@ private fun readLastKnownCoarseLocation(context: android.content.Context): GeoPo
         .filter { manager.isProviderEnabled(it) }
         .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
         .maxByOrNull(Location::getElapsedRealtimeNanos)
-        ?: return null
+        ?: return LocationFixOutcome.NoRecentFix
     val ageMillis = (SystemClock.elapsedRealtimeNanos() - newest.elapsedRealtimeNanos) / 1_000_000
-    if (ageMillis > MAX_LOCATION_AGE_MILLIS) return null
-    return GeoPoint(newest.latitude, newest.longitude)
+    if (ageMillis > MAX_LOCATION_AGE_MILLIS) return LocationFixOutcome.NoRecentFix
+    return LocationFixOutcome.Fixed(GeoPoint(newest.latitude, newest.longitude))
 }
