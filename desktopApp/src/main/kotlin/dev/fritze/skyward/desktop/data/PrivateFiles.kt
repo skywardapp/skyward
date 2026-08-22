@@ -48,8 +48,12 @@ internal object PrivateFiles {
             return directory
         } catch (e: FileAlreadyExistsException) {
             // Already there: an install that predates this hardening, so
-            // tighten it rather than leaving the old bits in place forever.
-            restrict(directory, OWNER_ONLY_DIRECTORY)
+            // tighten it rather than leaving the old bits in place forever --
+            // but only if it really is a directory. This exception also fires
+            // for a path occupied by something else entirely, and chmod-ing
+            // that to `rwx------` would hand a stray file an execute bit on
+            // the way to failing anyway.
+            if (Files.isDirectory(directory)) restrict(directory, OWNER_ONLY_DIRECTORY)
             return directory
         } catch (e: UnsupportedOperationException) {
             // Non-POSIX filesystem: nothing to set, but the directory still
@@ -68,7 +72,10 @@ internal object PrivateFiles {
         try {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE))
         } catch (e: FileAlreadyExistsException) {
-            restrict(file, OWNER_ONLY_FILE)
+            // Regular files only. A directory sitting on this path would be
+            // made untraversable by `rw-------`, which is a good deal worse
+            // than the world-readable bits this is here to remove.
+            restrictFile(file)
         } catch (e: UnsupportedOperationException) {
             runCatching { Files.createFile(file) }
         } catch (e: IOException) {
@@ -95,8 +102,15 @@ internal object PrivateFiles {
         runCatching { Files.setPosixFilePermissions(path, permissions) }
     }
 
-    /** [restrict] with the owner-only file bits — for paths a library created for us. */
+    /**
+     * [restrict] with the owner-only file bits — for paths a library created
+     * for us, such as SQLite's WAL sidecars.
+     *
+     * A path that is missing, or that is not a regular file, is left alone:
+     * the bits only make sense for something whose contents this app is
+     * responsible for.
+     */
     fun restrictFile(path: Path) {
-        if (Files.exists(path)) restrict(path, OWNER_ONLY_FILE)
+        if (Files.isRegularFile(path)) restrict(path, OWNER_ONLY_FILE)
     }
 }

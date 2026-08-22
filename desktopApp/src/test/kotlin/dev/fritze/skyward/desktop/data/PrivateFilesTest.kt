@@ -41,11 +41,49 @@ class PrivateFilesTest {
     fun leavesTheSharedXdgParentAlone() {
         // `~/.local/share` belongs to every application on the machine, not to
         // Skyward — making it owner-only would reach well past this app.
+        //
+        // The parent's mode is set here rather than left to whatever umask the
+        // machine running the tests happens to have, so the assertion below
+        // means "unchanged" instead of "not the one value we'd object to".
         val parent = temporaryDirectory.resolve("share")
+        Files.createDirectory(parent)
+        if (posixSupported) Files.setPosixFilePermissions(parent, PosixFilePermissions.fromString("rwxr-xr-x"))
+
         PrivateFiles.createDirectory(parent.resolve("skyward"))
 
         assertTrue(Files.isDirectory(parent))
-        if (posixSupported) assertTrue(permissionsOf(parent) != "rwx------", "the shared parent was tightened too")
+        if (posixSupported) assertEquals("rwxr-xr-x", permissionsOf(parent))
+    }
+
+    @Test
+    fun leavesAPathOccupiedByAFileAloneRatherThanChmoddingIt() {
+        // The data dir's path already taken by something that is not a
+        // directory. Tightening it to `rwx------` would hand a stray file an
+        // execute bit on the way to failing anyway; the caller's own use of
+        // the path is what should report the problem.
+        val occupied = temporaryDirectory.resolve("not-a-directory")
+        Files.writeString(occupied, "someone else's file")
+        if (posixSupported) Files.setPosixFilePermissions(occupied, PosixFilePermissions.fromString("rw-r--r--"))
+
+        PrivateFiles.createDirectory(occupied)
+
+        assertEquals("someone else's file", Files.readString(occupied))
+        if (posixSupported) assertEquals("rw-r--r--", permissionsOf(occupied))
+    }
+
+    @Test
+    fun leavesAPathOccupiedByADirectoryTraversable() {
+        // The mirror case, and the worse one: `rw-------` on a directory
+        // strips the execute bit and makes it untraversable, which is a good
+        // deal worse than the world-readable bits this is here to remove.
+        val occupied = temporaryDirectory.resolve("not-a-file")
+        Files.createDirectory(occupied)
+        if (posixSupported) Files.setPosixFilePermissions(occupied, PosixFilePermissions.fromString("rwxr-xr-x"))
+
+        PrivateFiles.createFile(occupied)
+
+        assertTrue(Files.isDirectory(occupied))
+        if (posixSupported) assertEquals("rwxr-xr-x", permissionsOf(occupied))
     }
 
     @Test
