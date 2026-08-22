@@ -10,16 +10,19 @@ only and never transmitted anywhere."* The Play Store listing
 (`fastlane/metadata/android/en-US/full_description.txt`) repeated the same
 claim in its own words: *"Your saved locations never leave your device."*
 
-Neither statement survives contact with §7.7. `EonetSource` appends a
-`bbox=` parameter to its NASA EONET requests, and `eonetBbox()`
-(`core/.../sources/EonetBbox.kt`, tightened by ADR 0008) builds that box
-from **every saved location**, not just the one just granted through the
-permission this disclosure precedes. A GPS fix accepted through the very
-dialog making the promise becomes a `SavedLocation` that can shape a box
-sent to `eonet.gsfc.nasa.gov` (and lands in that service's request logs).
-With a small `ReachableWithin` radius the box narrows to within tens of km
-of the user's actual locations — not their exact coordinates, but far more
-than "never transmitted anywhere" admits.
+Neither statement survives contact with §7.7. Whenever ADR 0008's
+conditions in `eonetBbox()` (`core/.../sources/EonetBbox.kt`) are met — at
+least two saved locations within 2 000 km of each other, and every enabled
+terrestrial rule travel-bounded — `EonetSource` appends a `bbox=` parameter,
+built from **every saved location**, to its NASA EONET requests; outside
+those conditions it fetches unnarrowed and no bbox is sent at all. When the
+conditions are met, a GPS fix accepted through the very dialog making the
+promise becomes a `SavedLocation` that can shape a box sent to
+`eonet.gsfc.nasa.gov` (and lands in that service's request logs), not just
+the one just granted through the permission this disclosure precedes. With a
+small `ReachableWithin` radius the box narrows to within tens of km of the
+user's actual locations — not their exact coordinates, but far more than
+"never transmitted anywhere" admits.
 
 This is a spec-internal contradiction, not a code bug: §7.7 correctly
 describes what ships, and §10.2 correctly describes what Play requires a
@@ -50,11 +53,12 @@ no account, no data ever leaving the device to anywhere other than the
 three named public data providers (P1), and no exact coordinates ever
 transmitted (the bbox is a region padded by a travel radius, ADR 0008's
 whole point). What it stops claiming is that *no* location-derived data
-ever reaches those providers, which was never true of `EonetSource` and
-`AuroraSource` alike (Kp/OVATION requests carry no location, but the
-broader "on-device only" framing invited the same misreading there too —
-this ADR's wording is deliberately about EONET specifically, since that is
-the one source location shapes).
+ever reaches any provider — a claim §7.7's bbox already made false for
+`EonetSource`. `AuroraSource` is unaffected: its Kp/OVATION requests carry
+no location parameter at all, since it fetches the whole nowcast grid and
+filters against saved locations on-device (§7.3.3), so the old "on-device
+only" wording was accurate for it. This ADR's correction is scoped to
+EONET specifically, the one source a saved location actually shapes.
 
 ## Consequences
 
