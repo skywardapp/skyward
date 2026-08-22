@@ -126,6 +126,15 @@ work:
   a teardown added in round 1 to fix a genuine app-op leak, which turned out to
   be the same hazard wearing a different hat.
 
+  Because the grant cannot be undone, it also has to be *ordered*: every test
+  that reads the install-time denied state must run before it. That is not
+  something class-level alphabetical luck should decide, so the granting test
+  lives in `RealAlarmSchedulingTest` alongside the state it perturbs — a
+  receiver test outside the receiver suite, deliberately — under
+  `@FixMethodOrder(MethodSorters.NAME_ASCENDING)`, named to sort last. What
+  decides where that test lives is the shared mutable OS state, not its subject
+  matter.
+
   So no suite denies or restores the op. The denied state is *read* from the
   flavour's own install default (free on `play`/API 34, and precisely what
   §17.5 asks about) rather than arranged, granting is left in place for the

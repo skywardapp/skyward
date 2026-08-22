@@ -29,9 +29,11 @@ import kotlin.time.Duration.Companion.hours
  *   only a root shell can send them; those tests skip honestly where adbd
  *   cannot be rooted, and [everyReceiverIsDeclaredForTheActionsItGuards]
  *   runs unconditionally so a skip can never mean no coverage at all.
- * - The exact-alarm permission change needs no simulated broadcast: moving the
- *   app-op makes `AlarmManagerService` send the real one
- *   ([grantingTheExactAlarmPermissionPromotesRowsBackToExact]).
+ * - The exact-alarm permission change needs no simulated broadcast at all:
+ *   moving the app-op makes `AlarmManagerService` send the real one. That test
+ *   lives in [RealAlarmSchedulingTest] rather than here, even though it is a
+ *   receiver test, because the grant is one-way and has to be ordered against
+ *   every other test that reads the exact-alarm state (ADR 0018).
  * - A foreign action is dispatched in-process, since it is not protected --
  *   which is exactly the attack the exported receivers' guards exist to stop.
  */
@@ -51,10 +53,6 @@ class SystemBroadcastReceiverTest {
         }
         seededNotificationIds.clear()
         container.alarmScheduler = AndroidAlarmScheduler(context)
-        // Deliberately no app-op restore: the grant below is one-way, because
-        // moving SCHEDULE_EXACT_ALARM away from allowed kills this process
-        // (ADR 0018). This teardown used to revoke it, and that is exactly what
-        // crashed play/API 34 (#55).
         context.clearShade()
     }
 
@@ -89,39 +87,6 @@ class SystemBroadcastReceiverTest {
     @Test
     fun packageReplacedReRegistersTheWindow() = runTest {
         assertReSyncOnProtectedBroadcast(Intent.ACTION_MY_PACKAGE_REPLACED, BootReceiver::class.java)
-    }
-
-    /**
-     * §17.5's "permission granted mid-life → re-plan promotes rows back to
-     * EXACT", end to end and with nothing simulated: `AlarmManagerService`
-     * watches `OP_SCHEDULE_EXACT_ALARM` and sends
-     * `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` itself when it
-     * moves to allowed, so flipping the op here makes the *OS* dispatch to the
-     * real exported [ExactAlarmPermissionReceiver], which does the promotion.
-     */
-    @Test
-    fun grantingTheExactAlarmPermissionPromotesRowsBackToExact() = runTest {
-        assumeTrue(
-            "exact alarms cannot be denied on this flavour/API, so there is nothing to promote back from",
-            exactAlarmDenialIsProducible(context),
-        )
-        val scheduler = AndroidAlarmScheduler(context)
-        // The starting state is read, not arranged: on play/API 34 the app is
-        // denied at install, and forcing that state with `appops set ... ignore`
-        // would be a revocation, which kills the process.
-        assumeTrue("exact alarms are not denied at install here", !scheduler.canScheduleExact())
-
-        val n = seed(freshNotification(Clock.System.now() + 1.hours))
-        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
-        assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
-
-        context.allowExactAlarms()
-
-        val promoted = awaitValue(
-            timeoutMillis = RECEIVER_TIMEOUT_MILLIS,
-            read = { container.notificationRepo.getById(n.id)?.precision },
-        ) { it == Precision.EXACT }
-        assertEquals("the OS broadcast must reach ExactAlarmPermissionReceiver and re-plan onto the exact path", Precision.EXACT, promoted)
     }
 
     /**

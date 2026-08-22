@@ -20,10 +20,12 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
+import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.MethodSorters
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -50,6 +52,12 @@ import kotlin.time.Duration.Companion.seconds
  * ADR 0018.
  */
 @RunWith(AndroidJUnit4::class)
+// Not decoration: [whenTheExactAlarmPermissionIsGrantedRowsPromoteBackToExact]
+// grants the exact-alarm app-op, and that grant cannot be undone without
+// killing the process (ADR 0018). Every test here that reads the install-time
+// denied state must therefore run before it, which this sorter guarantees and
+// the method names are chosen to satisfy.
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class RealAlarmSchedulingTest {
 
     @get:Rule
@@ -90,9 +98,11 @@ class RealAlarmSchedulingTest {
         seededNotificationIds.clear()
         container.restoreRealNotificationGate(context)
         container.alarmScheduler = AndroidAlarmScheduler(context)
-        // No app-op restore here, deliberately: moving SCHEDULE_EXACT_ALARM away
-        // from allowed kills this process (ADR 0018). Nothing in this suite
-        // grants it any more, so there is nothing to put back.
+        // No app-op restore here, deliberately. The grant in the last test of
+        // this class is one-way: moving SCHEDULE_EXACT_ALARM away from allowed
+        // kills this process (ADR 0018). It is left granted, which is safe
+        // because the ordering above puts every reader of the denied state
+        // ahead of it.
         context.clearShade()
     }
 
@@ -250,6 +260,45 @@ class RealAlarmSchedulingTest {
         }
     }
 
+    /**
+     * §17.5's "permission granted mid-life → re-plan promotes rows back to
+     * EXACT", end to end with nothing simulated: `AlarmManagerService` watches
+     * `OP_SCHEDULE_EXACT_ALARM` and sends
+     * `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` itself when it
+     * moves to allowed, so granting here makes the *OS* dispatch to the real,
+     * exported [ExactAlarmPermissionReceiver], which does the promotion.
+     *
+     * A receiver test living outside [SystemBroadcastReceiverTest], and named
+     * to sort last, both for the same reason: the grant is **one-way** (ADR
+     * 0018), so it has to run after every test that reads the install-time
+     * denied state. Placing it beside them under
+     * [org.junit.FixMethodOrder] is what makes that ordering a guarantee
+     * rather than an alphabetical accident. If you add a test here that needs
+     * the denied state, give it a name that sorts before this one.
+     */
+    @Test
+    fun whenTheExactAlarmPermissionIsGrantedRowsPromoteBackToExact() = runTest {
+        assumeTrue(
+            "exact alarms cannot be denied on this flavour/API, so there is nothing to promote back from",
+            exactAlarmDenialIsProducible(context),
+        )
+        // Read, not arranged: forcing the denied state with `appops set ...
+        // ignore` would be a revocation, which kills this process.
+        assumeTrue("exact alarms are not denied at install here", !scheduler.canScheduleExact())
+
+        val n = seed(freshNotification(Clock.System.now() + 1.hours))
+        AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())
+        assertEquals(Precision.APPROXIMATE, container.notificationRepo.getById(n.id)?.precision)
+
+        context.allowExactAlarms()
+
+        val promoted = awaitValue(
+            timeoutMillis = RECEIVER_TIMEOUT_MILLIS,
+            read = { container.notificationRepo.getById(n.id)?.precision },
+        ) { it == Precision.EXACT }
+        assertEquals("the OS broadcast must reach ExactAlarmPermissionReceiver and re-plan onto the exact path", Precision.EXACT, promoted)
+    }
+
     private suspend fun seed(n: PlannedNotification) = n.also {
         container.notificationRepo.upsert(it)
         seededNotificationIds += it.id
@@ -289,6 +338,9 @@ class RealAlarmSchedulingTest {
 
         /** Long enough that `AlarmSyncer` registers rather than misses the row, short enough to wait out. */
         val APPROXIMATE_LEAD = 3.seconds
+
+        /** The OS has to notice the app-op move, broadcast it, and let the receiver finish its `goAsync()` work. */
+        const val RECEIVER_TIMEOUT_MILLIS = 15_000L
 
         /** `Build.VERSION_CODES.UPSIDE_DOWN_CAKE` as a literal: the constant is API 34+, this compiles against minSdk 26. */
         const val UPSIDE_DOWN_CAKE = 34
