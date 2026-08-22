@@ -8,6 +8,7 @@ import dev.fritze.skyward.core.model.NotificationStatus
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.PlannedNotification
+import dev.fritze.skyward.core.model.Precision
 import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.SolarEclipseKind
@@ -30,6 +31,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -51,10 +53,11 @@ class PlannerTest {
         notifyOnFirstSeen: Boolean = false,
         phenomenon: Phenomenon = Phenomenon.SOLAR_ECLIPSE,
         anchor: Anchor = Anchor.PEAK,
+        firstSeenCooldown: kotlin.time.Duration? = null,
     ) = Rule(
         id = id, name = id, enabled = true, phenomena = setOf(phenomenon),
         locationIds = null, condition = Cond.VisibleAtLocation(Quality.MARGINAL),
-        schedule = NotifySchedule(leads, anchor, notifyOnFirstSeen, quietHours),
+        schedule = NotifySchedule(leads, anchor, notifyOnFirstSeen, quietHours, firstSeenCooldown),
         createdAt = now, modifiedAt = now,
     )
 
@@ -535,5 +538,105 @@ class PlannerTest {
 
         assertEquals(1, desired.size)
         assertEquals(peak, desired.first().fireAt)
+    }
+
+    // ---- first-seen cooldown (issue #57, ADR 0017) ----
+
+    private fun firstSeenCandidate(
+        occId: String,
+        ruleId: String = "r",
+        locationId: String = "home",
+        fireAt: Instant = now,
+        status: NotificationStatus = NotificationStatus.PENDING,
+        firedAt: Instant? = null,
+    ) = PlannedNotification(
+        id = "$occId|1|first", occurrenceId = occId, ruleId = ruleId, locationId = locationId,
+        fireAt = fireAt, status = status, precision = Precision.EXACT,
+        title = "t", body = "b", createdAt = fireAt, firedAt = firedAt,
+    )
+
+    @Test
+    fun firstSeenCooldownSuppressesARepeatWithinTheWindowForTheSameRuleAndLocation() {
+        val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
+        // The earlier alert was actually delivered to the user.
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 30.minutes))
+        // A churning-identity occurrence (aurora NOWCAST): a *different* occurrenceId every poll.
+        val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
+
+        val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
+
+        assertTrue(result.isEmpty(), "a second first-seen candidate inside the cooldown window must be suppressed")
+    }
+
+    @Test
+    fun firstSeenCooldownAllowsANewAlertOnceTheWindowElapses() {
+        val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 3.hours))
+        val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
+
+        val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
+
+        assertEquals(1, result.size, "once the cooldown has elapsed a fresh first-seen notification must go through")
+    }
+
+    @Test
+    fun firstSeenCooldownDoesNotApplyWithoutARuleSetting() {
+        val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = null)
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 1.minutes))
+        val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
+
+        val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
+
+        assertEquals(1, result.size, "no cooldown configured means the historical (uncooled) behaviour")
+    }
+
+    @Test
+    fun firstSeenCooldownIsScopedPerLocationAndRule() {
+        val r = rule("nowcast", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
+        val previous = listOf(
+            firstSeenCandidate("occ:1", ruleId = "other-rule", locationId = "home", status = NotificationStatus.FIRED, firedAt = now - 30.minutes),
+            firstSeenCandidate("occ:1", ruleId = "nowcast", locationId = "cabin", status = NotificationStatus.FIRED, firedAt = now - 30.minutes),
+        )
+        val desired = listOf(firstSeenCandidate("occ:2", ruleId = "nowcast", locationId = "home", fireAt = now))
+
+        val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
+
+        assertEquals(1, result.size, "a different rule or a different location must not consume the same cooldown")
+    }
+
+    @Test
+    fun firstSeenCooldownIgnoresANonFiredPreviousNotification() {
+        // CodeRabbit review, PR #114: a still-undelivered PENDING/REGISTERED
+        // row (or one that ended up CANCELLED/MISSED without ever reaching
+        // the user) must never block a replacement. Otherwise, once the
+        // occurrence backing that undelivered row churns again (aurora
+        // NOWCAST mints a fresh id every fetch), `reconcile` marks the stale
+        // row MISSED because its withdrawn occurrence disappears from
+        // `occurrencesById` -- and with the replacement suppressed too, the
+        // user ends up with no alert for an aurora that was genuinely
+        // ongoing.
+        val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
+        val previous = listOf(
+            firstSeenCandidate("occ:1", status = NotificationStatus.PENDING, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1b", status = NotificationStatus.REGISTERED, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1c", status = NotificationStatus.CANCELLED, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1d", status = NotificationStatus.MISSED, fireAt = now - 30.minutes),
+        )
+        val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
+
+        val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
+
+        assertEquals(1, result.size, "a notification that was never actually delivered must not block a fresh alert")
+    }
+
+    @Test
+    fun firstSeenCooldownNeverSuppressesLeadBasedCandidates() {
+        val r = rule("scheduled", leads = listOf(1.days), firstSeenCooldown = 2.hours)
+        val theOcc = occ()
+        val leadCandidate = Planner.desiredNotifications(listOf(Match(r, theOcc, loc("home", "Home"), visres(Quality.GOOD))), now, utc)
+
+        val result = Planner.applyFirstSeenCooldown(leadCandidate, leadCandidate, mapOf(r.id to r), now)
+
+        assertEquals(leadCandidate, result, "cooldown only targets notifyOnFirstSeen rows, not scheduled leads")
     }
 }

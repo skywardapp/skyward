@@ -32,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /** §9.7: SourceRunner.runDue -> Planner.replan()'s DB-backed orchestration, and §13.3's mute suppression. */
@@ -245,6 +246,88 @@ class ReplanCoordinatorTest {
         assertTrue("boundary-fired" in remainingIds, "a FIRED row exactly 180 days old is not yet older than the window")
         assertTrue("recent-fired" in remainingIds, "a FIRED row inside the 180-day window must be kept")
         assertTrue("ancient-pending" in remainingIds, "non-FIRED rows must be kept regardless of age")
+    }
+
+    @Test
+    fun firstSeenCooldownCollapsesRepeatedPollsOfAChurningIdentitySourceIntoOneAlert() = runTest {
+        // Issue #57 part 2: aurora NOWCAST mints a fresh occurrence id every
+        // ~15-minute active-tier poll (§7.3.3) while the same real-world
+        // event persists. Simulated here with the eclipse fixture standing
+        // in for the churning source: each "poll" withdraws the previous
+        // occurrence id and inserts a new one, exactly like
+        // SourceRunner.upsertOccurrences does for a source that stops
+        // reporting an id (§6.3).
+        val fx = Fixture()
+        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
+        fx.locationRepo.upsert(home)
+        fx.ruleRepo.upsert(
+            visibleRule("nowcast-like").copy(
+                schedule = NotifySchedule(emptyList(), Anchor.PEAK, notifyOnFirstSeen = true, quietHours = null, firstSeenCooldown = 2.hours),
+            ),
+        )
+
+        fx.occurrenceRepo.upsert(eclipseOcc("occ:poll-1", now + 30.days, certainty = Certainty.FORECAST, expiresAt = now + 2.hours), firstSeenAt = now)
+        val firstPoll = fx.coordinator.replan(now, utc)
+        assertEquals(1, firstPoll.size, "the first poll's first-seen match must notify")
+        fx.notificationRepo.updateStatus(firstPoll.single().id, NotificationStatus.FIRED, firedAt = now)
+
+        // Next active-tier poll, 15 minutes later: a *different* occurrence
+        // id (churn), well inside the cooldown window.
+        fx.occurrenceRepo.deleteById("occ:poll-1")
+        fx.occurrenceRepo.upsert(eclipseOcc("occ:poll-2", now + 30.days, fetchedAt = now + 15.minutes, certainty = Certainty.FORECAST, expiresAt = now + 2.hours + 15.minutes), firstSeenAt = now)
+        val secondPoll = fx.coordinator.replan(now + 15.minutes, utc)
+        assertTrue(
+            secondPoll.none { it.status == NotificationStatus.PENDING },
+            "a fresh occurrence id inside the cooldown window must not produce a new pending alert",
+        )
+
+        // A third poll after the cooldown has elapsed: the persisting event
+        // (still a fresh occurrence id) is allowed to alert again.
+        fx.occurrenceRepo.deleteById("occ:poll-2")
+        fx.occurrenceRepo.upsert(eclipseOcc("occ:poll-3", now + 30.days, fetchedAt = now + 3.hours, certainty = Certainty.FORECAST, expiresAt = now + 5.hours), firstSeenAt = now)
+        val thirdPoll = fx.coordinator.replan(now + 3.hours, utc)
+        assertEquals(
+            1,
+            thirdPoll.count { it.status == NotificationStatus.PENDING && it.occurrenceId == "occ:poll-3" },
+            "once the cooldown elapses the still-persisting event must be allowed to alert again",
+        )
+    }
+
+    @Test
+    fun firstSeenCooldownNeverSwallowsTheOnlyAlertWhenTheEarlierOneWasNeverDelivered() = runTest {
+        // CodeRabbit review, PR #114: if the cooldown suppressed a
+        // replacement candidate based on a merely-PENDING prior row (not yet
+        // actually delivered by the platform layer), and that prior row's
+        // occurrence then churns again before delivery, `reconcile` marks
+        // the stale row MISSED once its occurrence disappears -- and with
+        // the replacement also suppressed, the user would get no alert at
+        // all for an aurora that was genuinely ongoing. Unlike the sibling
+        // test above, this one deliberately does NOT mark the first poll's
+        // notification FIRED before the second poll runs.
+        val fx = Fixture()
+        val home = SavedLocation(id = "home", name = "Home", point = GeoPoint(48.0, 0.0), isPrimary = true, createdAt = now, modifiedAt = now)
+        fx.locationRepo.upsert(home)
+        fx.ruleRepo.upsert(
+            visibleRule("nowcast-like").copy(
+                schedule = NotifySchedule(emptyList(), Anchor.PEAK, notifyOnFirstSeen = true, quietHours = null, firstSeenCooldown = 2.hours),
+            ),
+        )
+
+        fx.occurrenceRepo.upsert(eclipseOcc("occ:poll-1", now + 30.days, certainty = Certainty.FORECAST, expiresAt = now + 2.hours), firstSeenAt = now)
+        val firstPoll = fx.coordinator.replan(now, utc)
+        assertEquals(NotificationStatus.PENDING, firstPoll.single().status, "still undelivered when the next poll runs")
+
+        // The occurrence churns again before the platform ever fired the
+        // first poll's notification.
+        fx.occurrenceRepo.deleteById("occ:poll-1")
+        fx.occurrenceRepo.upsert(eclipseOcc("occ:poll-2", now + 30.days, fetchedAt = now + 15.minutes, certainty = Certainty.FORECAST, expiresAt = now + 2.hours + 15.minutes), firstSeenAt = now)
+        val secondPoll = fx.coordinator.replan(now + 15.minutes, utc)
+
+        assertEquals(
+            1,
+            secondPoll.count { it.status == NotificationStatus.PENDING && it.occurrenceId == "occ:poll-2" },
+            "an undelivered prior notification must never suppress its replacement -- the user must get at least one alert",
+        )
     }
 
     private fun fired(id: String, firedAt: Instant) = PlannedNotification(

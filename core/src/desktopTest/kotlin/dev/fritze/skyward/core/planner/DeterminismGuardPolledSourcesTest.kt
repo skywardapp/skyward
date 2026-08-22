@@ -134,12 +134,10 @@ class DeterminismGuardPolledSourcesTest {
 
     @Test
     fun theFullPipelineIncludingPolledSourcesIsByteIdenticalAcrossTwoRuns() = runTest(timeout = 120.seconds) {
-        // Noon UTC, deliberately outside `default:aurora-now`'s 00-06 quiet
-        // hours (QuietHours(0, 6)) -- a `now` inside that window would defer
-        // the NOWCAST first-seen candidate past its own 1-hour occurrence
-        // window and applyQuietHours would drop it, which would make the
-        // "au:now:" assertion below flaky-by-construction rather than a
-        // property of the code under test.
+        // Noon UTC. `default:aurora-now` ships with no quiet hours (§9.6,
+        // issue #57), so this is not load-bearing for the "au:now:" assertion
+        // below the way it once was -- kept as a plain, unremarkable instant
+        // rather than picked for any significance to this test.
         val now = Instant.parse("2026-01-01T12:00:00Z")
         val horizonEnd = Instant.parse("2028-01-01T12:00:00Z")
         val location = SavedLocation(
