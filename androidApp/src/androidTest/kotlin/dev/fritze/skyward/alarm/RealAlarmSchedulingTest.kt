@@ -26,6 +26,7 @@ import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -143,7 +144,7 @@ class RealAlarmSchedulingTest {
      * notification can therefore only have come from `AlarmManager`.
      */
     @Test
-    fun systemDeliveryOfTheExactAlarmPostsThroughTheRealReceiver() = runTest {
+    fun systemDeliveryOfTheExactAlarmPostsThroughTheRealReceiver() = runTest(timeout = OS_SCHEDULING_DEADLINE) {
         assumeTrue("this device cannot schedule exact alarms", scheduler.canScheduleExact())
         val n = freshNotification(Clock.System.now() + DELIVERY_LEAD, NotificationStatus.REGISTERED)
         seededNotificationIds += n.id
@@ -193,7 +194,7 @@ class RealAlarmSchedulingTest {
      * See [exactAlarmDenialIsProducible].
      */
     @Test
-    fun aDeniedPermissionTakesTheWorkManagerPathAndRendersTheHedge() = runTest {
+    fun aDeniedPermissionTakesTheWorkManagerPathAndRendersTheHedge() = runTest(timeout = OS_SCHEDULING_DEADLINE) {
         assumeTrue(
             "exact alarms cannot be denied on this flavour/API (foss holds USE_EXACT_ALARM from 33; the op does not exist below 31)",
             exactAlarmDenialIsProducible(context),
@@ -258,6 +259,17 @@ class RealAlarmSchedulingTest {
         }.all { it.state == WorkInfo.State.CANCELLED }
 
     private companion object {
+        /**
+         * `runTest`'s own deadline for the two tests that wait on the OS
+         * rather than on this process. Their polling helpers sleep on the
+         * calling thread, so the wait is real wall-clock time: the delivery
+         * test can legitimately spend ~55 s of the default 60 s budget, and
+         * blowing that budget surfaces as `UncompletedCoroutinesError` -- which
+         * says nothing about what actually went wrong. With this, a reminder
+         * that never arrives fails on its own assertion message instead.
+         */
+        val OS_SCHEDULING_DEADLINE = 3.minutes
+
         /**
          * Generous on purpose. The delivery test has to cancel the WorkManager
          * twin and *wait for that cancel to land* before it writes the row, and
