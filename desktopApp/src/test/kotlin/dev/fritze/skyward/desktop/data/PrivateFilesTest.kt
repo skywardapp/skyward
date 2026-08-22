@@ -142,9 +142,4 @@ class PrivateFilesTest {
         if (posixSupported) assertEquals("rw-------", permissionsOf(file))
     }
 
-    @Test
-    fun restrictingAMissingFileIsANoOp() {
-        // SQLite's -wal/-shm sidecars only exist once it has opened in WAL mode.
-        PrivateFiles.restrictFile(temporaryDirectory.resolve("never-created-wal"))
-    }
 }

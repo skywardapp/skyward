@@ -111,15 +111,4 @@ internal object PrivateFiles {
         runCatching { Files.setPosixFilePermissions(path, permissions) }
     }
 
-    /**
-     * [restrict] with the owner-only file bits — for paths a library created
-     * for us, such as SQLite's WAL sidecars.
-     *
-     * A path that is missing, or that is not a regular file, is left alone:
-     * the bits only make sense for something whose contents this app is
-     * responsible for.
-     */
-    fun restrictFile(path: Path) {
-        if (Files.isRegularFile(path)) restrict(path, OWNER_ONLY_FILE)
-    }
 }

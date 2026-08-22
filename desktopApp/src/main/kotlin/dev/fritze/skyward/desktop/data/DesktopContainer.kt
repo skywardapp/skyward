@@ -133,18 +133,18 @@ class DesktopContainer(
             PrivateFiles.createFile(databaseFile)
             val driver = JdbcSqliteDriver("jdbc:sqlite:${databaseFile.toAbsolutePath()}")
             migrateIfNeeded(driver)
-            // The write-ahead log and shared-memory files are SQLite's to
-            // create, and they hold the same rows the database does. The
-            // containing directory is owner-only too, so this is belt and
-            // braces for a data dir a user has deliberately opened up.
-            for (suffix in SQLITE_SIDECAR_SUFFIXES) {
-                PrivateFiles.restrictFile(databaseFile.resolveSibling(databaseFile.fileName.toString() + suffix))
-            }
             return driver
         }
 
-        /** SQLite's WAL sidecars, which carry the same data as the database itself. */
-        private val SQLITE_SIDECAR_SUFFIXES = listOf("-wal", "-shm", "-journal")
+        // Nothing here chmods SQLite's sidecars, and that is deliberate. This
+        // database runs in the default DELETE journal mode -- no `-wal`/`-shm`
+        // ever exists, and the `-journal` is created and unlinked inside a
+        // single transaction, so a pass over those names at open time is
+        // guaranteed to find nothing. The bits that actually keep a rollback
+        // journal unreadable are the data directory's: POSIX needs `+x` on a
+        // directory to resolve any path inside it, and `DesktopPaths` makes
+        // that directory `rwx------`. Enabling WAL later would not change
+        // this -- the sidecars would still sit behind the same door.
 
         internal fun schemaAction(currentVersion: Long, schemaVersion: Long): SchemaAction = when {
             currentVersion == 0L -> SchemaAction.CREATE
