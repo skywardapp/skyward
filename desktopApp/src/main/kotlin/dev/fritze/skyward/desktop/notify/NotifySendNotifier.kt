@@ -20,7 +20,9 @@ class NotifySendNotifier(private val command: String = "notify-send") : DesktopN
             // A body starting with "-" would otherwise be parsed as an option.
             "--",
             notification.title,
-            notification.body,
+            // Remote strings reach this body (§7.4/§7.5) and notification
+            // daemons parse markup in it -- see [escapeNotificationBodyMarkup].
+            escapeNotificationBodyMarkup(notification.body),
         )
             .redirectErrorStream(true)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)

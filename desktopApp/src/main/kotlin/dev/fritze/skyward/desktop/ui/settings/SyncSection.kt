@@ -23,6 +23,7 @@ import dev.fritze.skyward.core.sync.SyncFile
 import dev.fritze.skyward.core.sync.SyncImportError
 import dev.fritze.skyward.desktop.APP_VERSION
 import dev.fritze.skyward.desktop.data.DesktopContainer
+import dev.fritze.skyward.desktop.data.PrivateFiles
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
 import dev.fritze.skyward.desktop.ui.common.SyncFileDialogs
@@ -149,7 +150,10 @@ private suspend fun runExport(state: DesktopAppState, target: File): String = tr
             .map { it.id },
     )
     val text = SyncCodec.export(file)
-    withContext(Dispatchers.IO) { target.writeText(text) }
+    // Owner-only, like the database it came out of: an export is the same
+    // precise coordinates in plain JSON, and the default umask would leave a
+    // world-readable copy of them in whatever directory the user picked (P1).
+    withContext(Dispatchers.IO) { PrivateFiles.writeText(target.toPath(), text) }
     "Exported ${file.locations.size} locations and ${file.rules.size} rules to ${target.name}."
 } catch (e: CancellationException) {
     throw e

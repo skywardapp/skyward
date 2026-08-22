@@ -125,10 +125,26 @@ class DesktopContainer(
          * lives, so it has to be read, acted on and written back by hand.
          */
         fun openDriver(databaseFile: Path): SqlDriver {
+            // Created owner-only *before* Xerial opens it: SQLite creates a
+            // missing database file with the process umask, which on a stock
+            // `umask 022` desktop means every saved location's coordinates are
+            // world-readable (P1). Creating it empty first costs nothing —
+            // SQLite treats a zero-length file as a fresh database.
+            PrivateFiles.createFile(databaseFile)
             val driver = JdbcSqliteDriver("jdbc:sqlite:${databaseFile.toAbsolutePath()}")
             migrateIfNeeded(driver)
             return driver
         }
+
+        // Nothing here chmods SQLite's sidecars, and that is deliberate. This
+        // database runs in the default DELETE journal mode -- no `-wal`/`-shm`
+        // ever exists, and the `-journal` is created and unlinked inside a
+        // single transaction, so a pass over those names at open time is
+        // guaranteed to find nothing. The bits that actually keep a rollback
+        // journal unreadable are the data directory's: POSIX needs `+x` on a
+        // directory to resolve any path inside it, and `DesktopPaths` makes
+        // that directory `rwx------`. Enabling WAL later would not change
+        // this -- the sidecars would still sit behind the same door.
 
         internal fun schemaAction(currentVersion: Long, schemaVersion: Long): SchemaAction = when {
             currentVersion == 0L -> SchemaAction.CREATE
