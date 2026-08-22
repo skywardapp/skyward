@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -73,6 +76,7 @@ import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.common.qualityColor
+import dev.fritze.skyward.ui.rules.LEAD_PRESETS
 import dev.fritze.skyward.ui.rules.formatLead
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
@@ -81,6 +85,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -280,37 +285,54 @@ private fun EventDetailActions(
 }
 
 /**
- * §13.3: "add one-off extra reminder" -- a small preset set plus a custom
- * hours field is enough.
+ * §13.3: "add one-off extra reminder" -- the same lead presets as the rules
+ * screen (`LEAD_PRESETS`), plus a custom field whose unit the user picks
+ * (minutes/hours/days) rather than assuming hours, since a lead as fine as
+ * 30 minutes or as coarse as several weeks is a legitimate choice here too.
  */
 @Composable
 private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () -> Unit) {
-    val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
-    var customHours by remember { mutableStateOf("") }
-    val customLeadHours = customHours.toPositiveHoursOrNull()
+    var customAmount by remember { mutableStateOf("") }
+    var customUnit by remember { mutableStateOf(LeadUnit.HOURS) }
+    val customLead = customAmount.toPositiveDoubleOrNull()
+        ?.let { customUnit.toDuration(it) }
+        ?.takeIf { it.isFinite() && it.isPositive() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Remind me before this event") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (preset in presets) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (preset in LEAD_PRESETS) {
                         FilterChip(selected = false, onClick = { onPick(preset) }, label = { Text(formatLead(preset)) })
                     }
                 }
-                OutlinedTextField(
-                    value = customHours,
-                    onValueChange = { customHours = it },
-                    label = { Text("Custom (hours before)") },
-                    singleLine = true,
-                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = customAmount,
+                        onValueChange = { customAmount = it },
+                        label = { Text("Custom") },
+                        singleLine = true,
+                        modifier = Modifier.width(100.dp),
+                    )
+                    for (unit in LeadUnit.entries) {
+                        FilterChip(selected = customUnit == unit, onClick = { customUnit = unit }, label = { Text(unit.label) })
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { customLeadHours?.let { onPick(it.hours) } },
-                enabled = customLeadHours != null,
+                onClick = { customLead?.let(onPick) },
+                enabled = customLead != null,
             ) { Text("Set") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -318,7 +340,13 @@ private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () 
 }
 
 /** A lead must be a real, positive duration -- a zero or negative one before "PEAK" would fire at or after it. */
-private fun String.toPositiveHoursOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
+private fun String.toPositiveDoubleOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
+
+private enum class LeadUnit(val label: String, val toDuration: (Double) -> Duration) {
+    MINUTES("min", { it.minutes }),
+    HOURS("hr", { it.hours }),
+    DAYS("day", { it.days }),
+}
 
 @Composable
 private fun Row2(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
