@@ -59,4 +59,18 @@ class EonetLinkTest {
     fun rejectsAWrongHostAltogether() {
         assertFalse(isSafeEonetLink("https://evil.com/eonet.gsfc.nasa.gov"))
     }
+
+    // WHATWG-conformant URL parsers (what an ACTION_VIEW target such as a
+    // browser actually uses) treat a backslash as a path separator inside an
+    // http(s) URL, so this resolves to evil.com there even though it reads
+    // as one RFC 3986 authority component ending in the real host.
+    @Test
+    fun rejectsABackslashHostConfusionTrick() {
+        assertFalse(isSafeEonetLink("https://evil.com\\@eonet.gsfc.nasa.gov/x"))
+    }
+
+    @Test
+    fun rejectsAnyUserinfoEvenWithTheRealHost() {
+        assertFalse(isSafeEonetLink("https://someone@eonet.gsfc.nasa.gov/x"))
+    }
 }
