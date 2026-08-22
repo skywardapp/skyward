@@ -47,13 +47,18 @@ internal object PrivateFiles {
             Files.createDirectory(directory, PosixFilePermissions.asFileAttribute(OWNER_ONLY_DIRECTORY))
             return directory
         } catch (e: FileAlreadyExistsException) {
-            // Already there: an install that predates this hardening, so
-            // tighten it rather than leaving the old bits in place forever --
-            // but only if it really is a directory. This exception also fires
-            // for a path occupied by something else entirely, and chmod-ing
-            // that to `rwx------` would hand a stray file an execute bit on
-            // the way to failing anyway.
-            if (Files.isDirectory(directory)) restrict(directory, OWNER_ONLY_DIRECTORY)
+            // This fires for two very different situations. Usually the
+            // directory is simply already there — an install that predates
+            // this hardening — and wants tightening rather than being left on
+            // its old bits forever. But it also fires when something that is
+            // not a directory occupies the path, and there the only honest
+            // answer is the exception: chmod-ing a stray file to `rwx------`
+            // would hand it an execute bit, and swallowing this would trade a
+            // message naming the offending path for whichever vaguer one
+            // SQLite eventually produces. `createDirectories` threw here
+            // before this class existed; it still does.
+            if (!Files.isDirectory(directory)) throw e
+            restrict(directory, OWNER_ONLY_DIRECTORY)
             return directory
         } catch (e: UnsupportedOperationException) {
             // Non-POSIX filesystem: nothing to set, but the directory still
@@ -72,10 +77,14 @@ internal object PrivateFiles {
         try {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE))
         } catch (e: FileAlreadyExistsException) {
-            // Regular files only. A directory sitting on this path would be
-            // made untraversable by `rw-------`, which is a good deal worse
-            // than the world-readable bits this is here to remove.
-            restrictFile(file)
+            // As in [createDirectory]: the ordinary case is a file that is
+            // already there, which is what this branch is for. A directory on
+            // the path is not — `rw-------` would strip its execute bit and
+            // make it untraversable, which is a good deal worse than the
+            // world-readable bits this is here to remove — so that one is
+            // reported rather than mangled.
+            if (!Files.isRegularFile(file)) throw e
+            restrict(file, OWNER_ONLY_FILE)
         } catch (e: UnsupportedOperationException) {
             runCatching { Files.createFile(file) }
         } catch (e: IOException) {

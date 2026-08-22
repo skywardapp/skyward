@@ -1,5 +1,6 @@
 package dev.fritze.skyward.desktop.data
 
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
@@ -8,6 +9,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -56,31 +58,32 @@ class PrivateFilesTest {
     }
 
     @Test
-    fun leavesAPathOccupiedByAFileAloneRatherThanChmoddingIt() {
-        // The data dir's path already taken by something that is not a
-        // directory. Tightening it to `rwx------` would hand a stray file an
-        // execute bit on the way to failing anyway; the caller's own use of
-        // the path is what should report the problem.
+    fun reportsAPathOccupiedByAFileInsteadOfChmoddingIt() {
+        // The data dir's path taken by something that is not a directory.
+        // `createDirectories` threw here before this class existed, and the
+        // exception names the offending path — much better than tightening a
+        // stray file to `rwx------`, handing it an execute bit, and leaving
+        // SQLite to report the real problem in vaguer words later.
         val occupied = temporaryDirectory.resolve("not-a-directory")
         Files.writeString(occupied, "someone else's file")
         if (posixSupported) Files.setPosixFilePermissions(occupied, PosixFilePermissions.fromString("rw-r--r--"))
 
-        PrivateFiles.createDirectory(occupied)
+        assertFailsWith<FileAlreadyExistsException> { PrivateFiles.createDirectory(occupied) }
 
         assertEquals("someone else's file", Files.readString(occupied))
         if (posixSupported) assertEquals("rw-r--r--", permissionsOf(occupied))
     }
 
     @Test
-    fun leavesAPathOccupiedByADirectoryTraversable() {
+    fun reportsAPathOccupiedByADirectoryInsteadOfMakingItUntraversable() {
         // The mirror case, and the worse one: `rw-------` on a directory
-        // strips the execute bit and makes it untraversable, which is a good
+        // strips the execute bit and locks everyone out of it, which is a good
         // deal worse than the world-readable bits this is here to remove.
         val occupied = temporaryDirectory.resolve("not-a-file")
         Files.createDirectory(occupied)
         if (posixSupported) Files.setPosixFilePermissions(occupied, PosixFilePermissions.fromString("rwxr-xr-x"))
 
-        PrivateFiles.createFile(occupied)
+        assertFailsWith<FileAlreadyExistsException> { PrivateFiles.createFile(occupied) }
 
         assertTrue(Files.isDirectory(occupied))
         if (posixSupported) assertEquals("rwxr-xr-x", permissionsOf(occupied))
