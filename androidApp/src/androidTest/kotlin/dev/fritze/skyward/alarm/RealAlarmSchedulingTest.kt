@@ -90,13 +90,9 @@ class RealAlarmSchedulingTest {
         seededNotificationIds.clear()
         container.restoreRealNotificationGate(context)
         container.alarmScheduler = AndroidAlarmScheduler(context)
-        // The denied-permission test moves the app-op, and an `assumeTrue` or a
-        // failed assertion can leave this method as the only thing that puts it
-        // back. Left pinned, it would decide the outcome of whichever test the
-        // runner picks next -- starting with
-        // theDefaultInstallStateOfThisFlavourMatchesItsManifest in this very
-        // class, which reads the op expecting the shipped default.
-        context.restoreExactAlarmDefault()
+        // No app-op restore here, deliberately: moving SCHEDULE_EXACT_ALARM away
+        // from allowed kills this process (ADR 0018). Nothing in this suite
+        // grants it any more, so there is nothing to put back.
         context.clearShade()
     }
 
@@ -199,8 +195,10 @@ class RealAlarmSchedulingTest {
             "exact alarms cannot be denied on this flavour/API (foss holds USE_EXACT_ALARM from 33; the op does not exist below 31)",
             exactAlarmDenialIsProducible(context),
         )
-        context.denyExactAlarms()
-        assumeTrue("the app-op did not take effect", !scheduler.canScheduleExact())
+        // Observed, not arranged. Denial is this flavour's install default on
+        // API 34 -- which is precisely §17.5's point -- and arranging it with
+        // `appops set ... ignore` would be a revocation, killing the process.
+        assumeTrue("exact alarms are not denied at install here", !scheduler.canScheduleExact())
         // The hedge is owed once ever (§10.5) and another suite may already
         // have spent it on this shared database.
         container.settingsRepo.delete(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN)
@@ -239,6 +237,11 @@ class RealAlarmSchedulingTest {
     @Test
     fun theDefaultInstallStateOfThisFlavourMatchesItsManifest() {
         assumeTrue("only API 34+ denies SCHEDULE_EXACT_ALARM at install", Build.VERSION.SDK_INT >= UPSIDE_DOWN_CAKE)
+        // This asserts the *install* default, so it is only meaningful while the
+        // op still is one. Granting is one-way in this process (ADR 0018), so a
+        // suite that ran earlier and granted makes this unanswerable rather than
+        // false -- skip instead of reporting a manifest problem that isn't one.
+        assumeTrue("the exact-alarm app-op has been moved by an earlier test", context.exactAlarmOpIsAtInstallDefault())
 
         if (holdsUseExactAlarm(context)) {
             assertTrue("foss declares USE_EXACT_ALARM, so exact alarms must be granted at install", scheduler.canScheduleExact())

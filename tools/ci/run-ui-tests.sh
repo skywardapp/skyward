@@ -88,9 +88,10 @@ await_device_ready || exit 1
 # "boot-receiver re-registration" needs a real dispatch to the real receiver, not a
 # test that re-implements BootReceiver's body (#55).
 #
-# UiAutomation.executeShellCommand runs in the shell that hosts `am instrument`,
-# which inherits adbd's uid, so restarting adbd as root is what lets
-# SystemBroadcastReceiverTest send them. See ADR 0018.
+# Restarting adbd as root ahead of the run is what has made those dispatches
+# work: SystemBroadcastReceiverTest's boot tests skip on neither matrix entry.
+# Exactly which privilege UiAutomation.executeShellCommand ends up with is not
+# pinned down here -- the verified fact is the outcome. See ADR 0018.
 #
 # Best effort by design: these are userdebug emulator images, so this normally
 # succeeds, but a device that refuses must not fail the run -- those two tests

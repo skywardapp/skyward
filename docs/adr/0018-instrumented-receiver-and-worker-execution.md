@@ -81,10 +81,13 @@ one route the OS permits in each case:
   moves to allowed, and the shell holds `MANAGE_APP_OPS_MODES`. Flipping the
   op therefore makes the *OS* dispatch the *real* broadcast to the *real*
   exported receiver.
-- **`BootReceiver`** — `am broadcast` from a root shell, arranged by
-  `adb root` in `tools/ci/run-ui-tests.sh` (`am instrument` inherits adbd's
-  uid). Best-effort: where adbd cannot be rooted those tests report
-  themselves skipped via `assumeTrue`.
+- **`BootReceiver`** — `am broadcast` from the shell `UiAutomation` gives us,
+  with `adb root` in `tools/ci/run-ui-tests.sh` ahead of it. The privilege the
+  dispatch actually ends up with is not something this ADR pins down: what is
+  verified is the outcome, that both protected broadcasts are dispatched and
+  neither test skips on either matrix entry. `adb root` stays because it is
+  free and best-effort — where adbd cannot be rooted those tests report
+  themselves skipped via `assumeTrue` rather than failing.
 - **The three workers** — `TestListenableWorkerBuilder` with the real
   `SkywardWorkerFactory`, which needs no WorkManager initialisation and
   takes the same construction path WorkManager takes at runtime.
@@ -113,14 +116,23 @@ Both surfaced on the very first matrix run and both are now baked into the
 suites, because each looks like an obvious test to write and cannot be made to
 work:
 
-- **A test may not revoke `SCHEDULE_EXACT_ALARM`.** Moving the app-op to
-  `ignore` makes the platform force-stop the app, which kills the
-  instrumentation process and aborts every test after it — the first run got
-  through 23 of 51 on `play`/API 34 before dying. So the standing-backup
-  invariant is asserted structurally (the backup is `ENQUEUED` alongside the
-  exact alarm) and the delivery half is covered by a test that *starts* from
-  the denied state rather than moving into it. Granting is safe; revoking is
-  not.
+- **The exact-alarm app-op is one-way: a test may grant it, never take it
+  back.** `AlarmManagerService` watches the op and, on any move away from
+  allowed, drops the package's exact alarms *and kills its uid* — which is the
+  uid the instrumentation runs in. It cost two CI rounds to learn how wide that
+  rule is. Round 1 killed `play`/API 34 at 23 of 51 tests through a test that
+  granted and then revoked in its body. Round 2 killed it again at 30 of 49,
+  through an `@After` that did nothing but restore the default after granting —
+  a teardown added in round 1 to fix a genuine app-op leak, which turned out to
+  be the same hazard wearing a different hat.
+
+  So no suite denies or restores the op. The denied state is *read* from the
+  flavour's own install default (free on `play`/API 34, and precisely what
+  §17.5 asks about) rather than arranged, granting is left in place for the
+  rest of the process, and the one test that asserts the install default guards
+  itself with `exactAlarmOpIsAtInstallDefault()` so a grant left behind makes it
+  skip rather than fail. The standing-backup invariant is asserted structurally
+  instead — the backup is `ENQUEUED` alongside the exact alarm.
 - **`RefreshWorker.doWork()` cannot be called from a test.**
   `SourceRunner.runDue` holds `runMutex`, and the app's own periodic
   `skyward-refresh` job — enqueued from `Application.onCreate`, which

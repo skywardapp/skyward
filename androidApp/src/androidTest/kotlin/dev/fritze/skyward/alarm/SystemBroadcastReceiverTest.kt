@@ -51,7 +51,10 @@ class SystemBroadcastReceiverTest {
         }
         seededNotificationIds.clear()
         container.alarmScheduler = AndroidAlarmScheduler(context)
-        context.restoreExactAlarmDefault()
+        // Deliberately no app-op restore: the grant below is one-way, because
+        // moving SCHEDULE_EXACT_ALARM away from allowed kills this process
+        // (ADR 0018). This teardown used to revoke it, and that is exactly what
+        // crashed play/API 34 (#55).
         context.clearShade()
     }
 
@@ -103,8 +106,10 @@ class SystemBroadcastReceiverTest {
             exactAlarmDenialIsProducible(context),
         )
         val scheduler = AndroidAlarmScheduler(context)
-        context.denyExactAlarms()
-        assumeTrue("the app-op did not take effect", !scheduler.canScheduleExact())
+        // The starting state is read, not arranged: on play/API 34 the app is
+        // denied at install, and forcing that state with `appops set ... ignore`
+        // would be a revocation, which kills the process.
+        assumeTrue("exact alarms are not denied at install here", !scheduler.canScheduleExact())
 
         val n = seed(freshNotification(Clock.System.now() + 1.hours))
         AlarmSyncer.sync(listOf(n), scheduler, container.notificationRepo, container.occurrenceRepo, Clock.System.now())

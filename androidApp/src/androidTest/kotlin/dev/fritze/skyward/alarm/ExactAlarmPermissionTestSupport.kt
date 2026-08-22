@@ -26,23 +26,36 @@ import android.os.Build
  *   flavour holds it from API 33 (§10.2/D13), so on foss at API 33+ denial is
  *   *not producible at all* -- see [exactAlarmDenialIsProducible].
  */
-internal fun Context.denyExactAlarms() = setExactAlarmOp("ignore")
-
-internal fun Context.allowExactAlarms() = setExactAlarmOp("allow")
-
-/**
- * Restores with `default`, not `allow`: `default` puts the op back to being
- * derived from the package's declared permissions, which is the state every
- * other suite in this process expects to find. Pinning it to `allow` would
- * paper over exactly the flavour difference §17.5 asks us to test.
- */
-internal fun Context.restoreExactAlarmDefault() = setExactAlarmOp("default")
-
-private fun Context.setExactAlarmOp(mode: String) {
+internal fun Context.allowExactAlarms() {
     // The op does not exist before API 31; `cmd appops` then errors out rather
     // than no-opping, so callers below S must not reach here.
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-    shell("cmd appops set $packageName SCHEDULE_EXACT_ALARM $mode")
+    shell("cmd appops set $packageName SCHEDULE_EXACT_ALARM allow")
+}
+
+/**
+ * There is deliberately no `denyExactAlarms()` and no restore-to-default.
+ *
+ * `AlarmManagerService` watches this op, and on any move *away* from allowed it
+ * both drops the package's exact alarms and kills its uid. The instrumentation
+ * runs in that uid, so a test that revokes takes the whole run down with it --
+ * twice observed on play/API 34: once from a test that granted then revoked in
+ * its body, and once from an `@After` that merely restored the default after
+ * granting (#55).
+ *
+ * The op is therefore one-way here: a suite may **grant** it, and must then
+ * leave it granted for the rest of the process. Anything needing the denied
+ * state reads it from the flavour's own install default instead of arranging
+ * it -- which is what §17.5 actually asks about, and is free on `play`.
+ * Tests that would be misled by a grant left behind guard with
+ * [exactAlarmOpIsAtInstallDefault]. See ADR 0018.
+ */
+internal fun Context.exactAlarmOpIsAtInstallDefault(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    // `cmd appops get` prints e.g. "SCHEDULE_EXACT_ALARM: allow" once set, and
+    // reports no operations while the op is still permission-derived.
+    val mode = shell("cmd appops get $packageName SCHEDULE_EXACT_ALARM")
+    return !mode.contains("allow") && !mode.contains("ignore")
 }
 
 /**
