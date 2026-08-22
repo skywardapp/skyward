@@ -70,19 +70,54 @@ class ThresholdDerivationTest {
     }
 
     @Test
-    fun picksTheLoosestThresholdAcrossRulesAndNestedGroups() {
+    fun picksTheLoosestThresholdAcrossRulesAndNestedGroupsThenAppliesTheSectionSixOneMargins() {
         val rules = listOf(
             ruleWith(Cond.KpAtLeast(6.0)),
-            ruleWith(Cond.And(listOf(Cond.KpAtLeast(4.0), Cond.MagnitudeAtMost(3.0)))),
-            ruleWith(Cond.Or(listOf(Cond.Not(Cond.MagnitudeAtMost(5.0)), Cond.ReachableWithin(200.0, Quality.GOOD)))),
+            ruleWith(Cond.And(listOf(Cond.KpAtLeast(4.0), Cond.MagnitudeAtMost(3.0)))).copy(
+                phenomena = setOf(Phenomenon.AURORA, Phenomenon.COMET),
+            ),
+            ruleWith(Cond.Or(listOf(Cond.Not(Cond.MagnitudeAtMost(1.0)), Cond.ReachableWithin(200.0, Quality.GOOD)))).copy(
+                phenomena = setOf(Phenomenon.COMET),
+            ),
             ruleWith(Cond.ReachableWithin(500.0, Quality.EXCELLENT)),
         )
 
         val thresholds = deriveThresholds(rules)
 
-        assertEquals(4.0, thresholds.minKpOfInterest, "the lowest Kp any rule cares about")
-        assertEquals(5.0, thresholds.maxCometMag, "the faintest magnitude any rule cares about")
+        // Lowest Kp any AURORA rule cares about (4.0) minus the §6.1 margin.
+        assertEquals(3.0, thresholds.minKpOfInterest)
+        // Faintest magnitude any COMET rule cares about (3.0) plus the §6.1 margin;
+        // the Not(MagnitudeAtMost(1.0)) leaf is skipped, not folded in as 1.0.
+        assertEquals(4.0, thresholds.maxCometMag)
         assertEquals(500.0, thresholds.maxTravelKm, "the largest travel radius any rule cares about")
+    }
+
+    @Test
+    fun onlyCollectsKpFromRulesThatSeeAuroraAndMagnitudeFromRulesThatSeeComets() {
+        val cometRuleWithKp = ruleWith(Cond.KpAtLeast(7.0)).copy(phenomena = setOf(Phenomenon.COMET))
+        val auroraRuleWithMag = ruleWith(Cond.MagnitudeAtMost(2.0)).copy(phenomena = setOf(Phenomenon.AURORA))
+
+        val thresholds = deriveThresholds(listOf(cometRuleWithKp, auroraRuleWithMag))
+
+        assertNull(thresholds.minKpOfInterest, "no enabled AURORA rule has a KpAtLeast leaf")
+        assertNull(thresholds.maxCometMag, "no enabled COMET rule has a MagnitudeAtMost leaf")
+    }
+
+    @Test
+    fun aNegatedKpOrMagnitudeLeafIsSkippedRatherThanTreatedAsPositive() {
+        // Not(KpAtLeast(6.0)) matches Kp < 6.0 down to zero, so it sets no
+        // lower bound to prune by; folding it in as 6.0 would wrongly narrow
+        // the threshold instead of widening it.
+        val negatedKp = ruleWith(Cond.Not(Cond.KpAtLeast(6.0)))
+        assertNull(deriveThresholds(listOf(negatedKp)).minKpOfInterest)
+
+        val negatedMag = ruleWith(Cond.Not(Cond.MagnitudeAtMost(4.0))).copy(phenomena = setOf(Phenomenon.COMET))
+        assertNull(deriveThresholds(listOf(negatedMag)).maxCometMag)
+
+        // Alongside an un-negated leaf in another rule, the negated one still
+        // contributes nothing — the margin applies only to the real leaf.
+        val alsoPositive = ruleWith(Cond.KpAtLeast(5.0))
+        assertEquals(4.0, deriveThresholds(listOf(negatedKp, alsoPositive)).minKpOfInterest)
     }
 
     @Test
@@ -90,6 +125,6 @@ class ThresholdDerivationTest {
         // deriveThresholds trusts its input list is already "enabled" rules
         // (the caller's job, per SourceRunner), so it ignores the flag itself.
         val disabled = ruleWith(Cond.KpAtLeast(6.0)).copy(enabled = false)
-        assertEquals(6.0, deriveThresholds(listOf(disabled)).minKpOfInterest)
+        assertEquals(5.0, deriveThresholds(listOf(disabled)).minKpOfInterest)
     }
 }

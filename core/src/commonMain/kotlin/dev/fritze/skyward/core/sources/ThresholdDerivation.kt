@@ -10,28 +10,49 @@ import dev.fritze.skyward.core.rules.Rule
  * — the loosest (most permissive) value across all rules for each kind,
  * since any one of them matching is enough. `null` means no enabled rule
  * uses that condition type at all, i.e. no threshold to prune by.
+ *
+ * Kp and magnitude leaves are collected only from rules whose `phenomena`
+ * include AURORA / COMET respectively — a `KpAtLeast` inside a rule that
+ * never sees aurora occurrences says nothing about aurora thresholds.
+ * `ReachableWithin` is collected across all enabled rules regardless of
+ * phenomenon, per §6.1.
+ *
+ * A leaf under `Not` is skipped rather than collected: `Not(KpAtLeast(6.0))`
+ * matches Kp < 6.0 down to zero, so it establishes no lower bound to prune
+ * by, and folding it in as if positive would wrongly narrow the threshold.
  */
 fun deriveThresholds(enabledRules: List<Rule>): DerivedThresholds {
-    val kps = mutableListOf<Double>()
-    val mags = mutableListOf<Double>()
-    val kms = mutableListOf<Double>()
-
-    fun walk(cond: Cond) {
-        when (cond) {
-            is Cond.And -> cond.all.forEach(::walk)
-            is Cond.Or -> cond.any.forEach(::walk)
-            is Cond.Not -> walk(cond.inner)
-            is Cond.KpAtLeast -> kps += cond.kp
-            is Cond.MagnitudeAtMost -> mags += cond.mag
-            is Cond.ReachableWithin -> kms += cond.km
-            else -> Unit
-        }
+    fun collectKp(cond: Cond): List<Double> = when (cond) {
+        is Cond.And -> cond.all.flatMap(::collectKp)
+        is Cond.Or -> cond.any.flatMap(::collectKp)
+        is Cond.Not -> emptyList()
+        is Cond.KpAtLeast -> listOf(cond.kp)
+        else -> emptyList()
     }
-    enabledRules.forEach { walk(it.condition) }
+
+    fun collectMag(cond: Cond): List<Double> = when (cond) {
+        is Cond.And -> cond.all.flatMap(::collectMag)
+        is Cond.Or -> cond.any.flatMap(::collectMag)
+        is Cond.Not -> emptyList()
+        is Cond.MagnitudeAtMost -> listOf(cond.mag)
+        else -> emptyList()
+    }
+
+    fun collectKm(cond: Cond): List<Double> = when (cond) {
+        is Cond.And -> cond.all.flatMap(::collectKm)
+        is Cond.Or -> cond.any.flatMap(::collectKm)
+        is Cond.Not -> emptyList()
+        is Cond.ReachableWithin -> listOf(cond.km)
+        else -> emptyList()
+    }
+
+    val kps = enabledRules.filter { Phenomenon.AURORA in it.phenomena }.flatMap { collectKp(it.condition) }
+    val mags = enabledRules.filter { Phenomenon.COMET in it.phenomena }.flatMap { collectMag(it.condition) }
+    val kms = enabledRules.flatMap { collectKm(it.condition) }
 
     return DerivedThresholds(
-        minKpOfInterest = kps.minOrNull(),
-        maxCometMag = mags.maxOrNull(),
+        minKpOfInterest = kps.minOrNull()?.minus(1.0),
+        maxCometMag = mags.maxOrNull()?.plus(1.0),
         maxTravelKm = kms.maxOrNull(),
         terrestrialRulesAreTravelBounded = terrestrialRulesAreTravelBounded(enabledRules),
     )
