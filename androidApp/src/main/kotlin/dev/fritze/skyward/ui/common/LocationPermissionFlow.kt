@@ -62,7 +62,8 @@ val LocationFixOutcome.failureMessage: String?
 /**
  * §10.2's "location prominent disclosure (required by Play, harmless on
  * F-Droid): before the first ACCESS_COARSE_LOCATION runtime prompt, show a
- * full-screen disclosure ... on-device only and never transmitted." This is
+ * full-screen disclosure ... stays on-device except for an approximate
+ * region optionally included in NASA EONET queries (ADR 0016)." This is
  * the dialog-sized version of that disclosure, shared by onboarding and the
  * LocationEditor's "use current location" button -- both are places the
  * very first prompt could happen depending on what the user skips.
@@ -88,7 +89,9 @@ fun rememberLocationPermissionRequester(onOutcome: (LocationFixOutcome) -> Unit)
                 Text(
                     "Skyward can use your approximate location to compute what's visible from where you " +
                         "are. This is entirely optional -- you can always add locations manually instead. " +
-                        "Your location is used on-device only and never transmitted anywhere.",
+                        "Your location stays on this device, except that an approximate region covering " +
+                        "your saved locations -- never your exact coordinates -- may be sent to NASA's " +
+                        "EONET service to narrow its event-data queries.",
                 )
             },
             confirmButton = {
