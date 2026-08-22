@@ -39,8 +39,8 @@ Add `NotifySchedule.firstSeenCooldown: Duration?` (default `null`, so every
 other rule is unaffected) and `Planner.applyFirstSeenCooldown`: a
 post-processing step over `desiredNotifications`'s output that drops a
 `notifyOnFirstSeen` candidate when a previous notification for the same
-`(ruleId, locationId)` already fired — or is due to — within the cooldown
-window. Ship the default "Aurora NOW" rule with `firstSeenCooldown = 2.hours`.
+`(ruleId, locationId)` already fired within the cooldown window. Ship the
+default "Aurora NOW" rule with `firstSeenCooldown = 2.hours`.
 
 The cooldown key is deliberately just `(ruleId, locationId)`, with no
 attempt to compare the *strength* of the current occurrence against the
