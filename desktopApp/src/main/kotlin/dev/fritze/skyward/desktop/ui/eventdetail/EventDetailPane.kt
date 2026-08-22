@@ -160,7 +160,9 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
 private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit) {
     var customAmount by remember { mutableStateOf("") }
     var customUnit by remember { mutableStateOf(LeadUnit.HOURS) }
-    val customLead = customAmount.toPositiveDoubleOrNull()?.let { customUnit.toDuration(it) }
+    val customLead = customAmount.toPositiveDoubleOrNull()
+        ?.let { customUnit.toDuration(it) }
+        ?.takeIf { it.isFinite() && it.isPositive() }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(

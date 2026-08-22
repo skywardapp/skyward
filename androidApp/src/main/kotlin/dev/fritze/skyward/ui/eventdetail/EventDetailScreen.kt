@@ -291,7 +291,9 @@ private fun EventDetailActions(
 private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () -> Unit) {
     var customAmount by remember { mutableStateOf("") }
     var customUnit by remember { mutableStateOf(LeadUnit.HOURS) }
-    val customLead = customAmount.toPositiveDoubleOrNull()?.let { customUnit.toDuration(it) }
+    val customLead = customAmount.toPositiveDoubleOrNull()
+        ?.let { customUnit.toDuration(it) }
+        ?.takeIf { it.isFinite() && it.isPositive() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
