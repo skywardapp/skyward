@@ -201,11 +201,40 @@ private fun PayloadExtras(payload: OccurrencePayload, primaryVisres: VisibilityR
     if (payload is CometPayload) {
         CometComplianceBlock(payload, primaryVisres, zone)
     }
-    if (payload is TerrestrialPayload) {
-        OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }) {
+    // §19 R1/issue #65: `payload.link` is remote-supplied (EONET JSON) and
+    // reaches here unvalidated -- a compromised/MITMed response could smuggle
+    // an `intent:`/`market:`/`file:` URI into ACTION_VIEW, or an empty/garbage
+    // link (the parser's default) could crash the activity. Only offer the
+    // button for a link that actually resolves to the fixed EONET API host,
+    // and swallow a launch failure rather than crash if no app claims it.
+    if (payload is TerrestrialPayload && isSafeEonetLink(payload.link)) {
+        OutlinedButton(onClick = {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }
+        }) {
             Text("Open on EONET")
         }
     }
+}
+
+private const val EONET_LINK_HOST = "eonet.gsfc.nasa.gov"
+
+/**
+ * True only for an `http(s)` link whose host is exactly [EONET_LINK_HOST] --
+ * not a subdomain, suffix, or userinfo trick on top of it. Parsed by hand
+ * rather than with `android.net.Uri` so this stays a plain, JVM-testable
+ * function; failing closed (returning false) on anything that doesn't parse
+ * cleanly just means the button doesn't show, which is the safe direction.
+ */
+internal fun isSafeEonetLink(link: String): Boolean {
+    val schemeEnd = link.indexOf("://")
+    if (schemeEnd <= 0) return false
+    val scheme = link.substring(0, schemeEnd).lowercase()
+    if (scheme != "http" && scheme != "https") return false
+    val afterScheme = link.substring(schemeEnd + 3)
+    val authorityEnd = afterScheme.indexOfFirst { it == '/' || it == ':' || it == '?' || it == '#' }
+    val authority = if (authorityEnd == -1) afterScheme else afterScheme.substring(0, authorityEnd)
+    val host = authority.substringAfterLast('@')
+    return host.equals(EONET_LINK_HOST, ignoreCase = true)
 }
 
 @Composable
