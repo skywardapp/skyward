@@ -165,13 +165,20 @@ private fun cometCopy(payload: CometPayload, visres: VisibilityResult, location:
     return NotificationCopy(title, parts.joinToString(" "))
 }
 
+/**
+ * §8.4/issue #56: the visibility model works on |geomagnetic latitude|, so a
+ * southern observer legitimately gets aurora guidance too — it must point
+ * them at their own (south) horizon, not the north one.
+ */
+fun auroraLookDirection(geomagneticLatDeg: Double): String = if (geomagneticLatDeg < 0.0) "south" else "north"
+
 private fun auroraNowcastCopy(payload: AuroraPayload, visres: VisibilityResult, location: SavedLocation): NotificationCopy {
     val details = visres.localDetails as? LocalDetails.AuroraLocal
     val title = "Aurora possible NOW at ${location.name}"
     val probability = details?.ovationProbability ?: 0
     val parts = mutableListOf("OVATION $probability% overhead probability (${hhmmUtc(payload.issuedAt)} UTC forecast).")
-    if (details?.darknessStart != null) {
-        parts += "Look north after full darkness (~${hhmm(details.darknessStart, location)})."
+    if (details != null && details.darknessStart != null) {
+        parts += "Look ${auroraLookDirection(details.geomagneticLatDeg)} after full darkness (~${hhmm(details.darknessStart, location)})."
     }
     return NotificationCopy(title, parts.joinToString(" "))
 }

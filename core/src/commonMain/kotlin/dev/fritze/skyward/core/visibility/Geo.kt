@@ -73,6 +73,18 @@ const val GEOMAGNETIC_POLE_LAT_DEG = 80.85
 const val GEOMAGNETIC_POLE_LON_DEG = -72.76
 val GEOMAGNETIC_POLE = GeoPoint(GEOMAGNETIC_POLE_LAT_DEG, GEOMAGNETIC_POLE_LON_DEG)
 
+/**
+ * Geomagnetic south pole — antipodal to [GEOMAGNETIC_POLE] under §8.4's
+ * dipole model (issue #56: a southern observer's travel target lies toward
+ * this pole, not the northern one).
+ */
+const val GEOMAGNETIC_SOUTH_POLE_LAT_DEG = -GEOMAGNETIC_POLE_LAT_DEG
+const val GEOMAGNETIC_SOUTH_POLE_LON_DEG = GEOMAGNETIC_POLE_LON_DEG + 180.0
+val GEOMAGNETIC_SOUTH_POLE = GeoPoint(GEOMAGNETIC_SOUTH_POLE_LAT_DEG, GEOMAGNETIC_SOUTH_POLE_LON_DEG)
+
+/** The geomagnetic pole in [gmLatDeg]'s own hemisphere (§8.4, issue #56). */
+fun geomagneticPoleFor(gmLatDeg: Double): GeoPoint = if (gmLatDeg < 0.0) GEOMAGNETIC_SOUTH_POLE else GEOMAGNETIC_POLE
+
 /** Dipole geomagnetic latitude of [p], degrees (Appendix D formula; §8.4). */
 fun geomagneticLatitudeDeg(p: GeoPoint): Double {
     val lat = p.latDeg.toRadians()

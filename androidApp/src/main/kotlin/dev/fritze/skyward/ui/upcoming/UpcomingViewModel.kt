@@ -2,6 +2,7 @@ package dev.fritze.skyward.ui.upcoming
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.fritze.skyward.core.format.auroraLookDirection
 import dev.fritze.skyward.core.format.refreshFailureMessage
 import dev.fritze.skyward.core.model.AuroraForecastKind
 import dev.fritze.skyward.core.model.AuroraPayload
@@ -72,6 +73,8 @@ data class AuroraBannerUiState(
     val currentKp: Double?,
     val issuedAt: Instant,
     val darknessStart: Instant?,
+    // issue #56: which horizon to watch, by hemisphere of the primary location.
+    val lookDirection: String,
 )
 
 /** Holds the pieces `combine` in the view-model has no typed overload for six flows of. */
@@ -268,5 +271,6 @@ internal fun activeAuroraBanner(
         currentKp = currentKp,
         issuedAt = (occurrence.payload as AuroraPayload).issuedAt,
         darknessStart = details?.darknessStart,
+        lookDirection = auroraLookDirection(details?.geomagneticLatDeg ?: 0.0),
     )
 }

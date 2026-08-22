@@ -164,6 +164,9 @@ class DeterminismGuardPolledSourcesTest {
         // (AuroraSource.kt), exactly the natural-key drift this guard exists
         // to catch, plus the EONET rule now enabled above.
         assertTrue(firstRun.notifications.any { it.occurrenceId.startsWith("au:now:") }, "the aurora NOWCAST path must reach a planned notification")
+        // "eo:", not "eonet:": §6.4's natural key for an EONET event is
+        // `eo:<EONET id>` (EonetSource.buildOccurrence). The source *id* is
+        // "eonet" -- asserted above -- but it never prefixes an occurrence id.
         assertTrue(firstRun.notifications.any { it.occurrenceId.startsWith("eo:") }, "the EONET path must reach a planned notification")
 
         assertEquals(firstRun.occurrences, secondRun.occurrences, "the occurrence pipeline (incl. polled sources) must be deterministic run-to-run")
