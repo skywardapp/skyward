@@ -81,6 +81,29 @@ await_device_ready() {
 
 await_device_ready || exit 1
 
+# BOOT_COMPLETED and MY_PACKAGE_REPLACED are <protected-broadcast>s: ActivityManager
+# refuses them from any app-id outside the system set, checked on the action before
+# the component is even resolved. So neither the app's own sendBroadcast() nor
+# `am broadcast` from the ordinary shell (uid 2000) can deliver one -- and §17.5's
+# "boot-receiver re-registration" needs a real dispatch to the real receiver, not a
+# test that re-implements BootReceiver's body (#55).
+#
+# UiAutomation.executeShellCommand runs in the shell that hosts `am instrument`,
+# which inherits adbd's uid, so restarting adbd as root is what lets
+# SystemBroadcastReceiverTest send them. See ADR 0018.
+#
+# Best effort by design: these are userdebug emulator images, so this normally
+# succeeds, but a device that refuses must not fail the run -- those two tests
+# report themselves skipped (assumeTrue) and everything else is unaffected. adbd
+# restarting drops the connection, hence the re-wait; done once here rather than
+# inside the flavour loop so it costs one reconnect, not one per flavour.
+if adb root >/dev/null 2>&1; then
+  adb wait-for-device >/dev/null 2>&1
+  await_device_ready || exit 1
+else
+  log "adb root unavailable; the protected-broadcast tests will report themselves skipped"
+fi
+
 status=0
 for flavour in $FLAVOURS; do
   variant="$(tr '[:lower:]' '[:upper:]' <<<"${flavour:0:1}")${flavour:1}Debug"

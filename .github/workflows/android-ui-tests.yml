@@ -31,10 +31,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # minSdk is 26 and targetSdk 36; API 30 is the cheap, historically
-        # stable emulator image. Add further levels here as the UI grows —
-        # each entry is a full extra emulator boot, so add deliberately.
-        api-level: [30]
+        # minSdk is 26 and targetSdk 36.
+        #
+        # API 30 is the cheap, historically stable image, and the one where
+        # canScheduleExact() is hardwired true (§10.2 — SCHEDULE_EXACT_ALARM
+        # does not exist below 31), so it covers the *granted* half of §17.5
+        # and the pre-POST_NOTIFICATIONS notification path.
+        #
+        # API 34 exists here for the other half. §17.5 requires the denied
+        # exact-alarm state and calls it "the default state of the play
+        # flavour", which "must not be an afterthought" — and no earlier image
+        # can produce it: 31 and 32 pre-grant SCHEDULE_EXACT_ALARM at install,
+        # and below 31 there is nothing to deny. Android 14 is the first level
+        # where an app targeting 33+ that declares only SCHEDULE_EXACT_ALARM
+        # starts out denied, which is exactly what src/play's manifest ships.
+        # Until this entry existed, that scenario was only ever reached through
+        # a fake (#55). See docs/adr/0018-instrumented-receiver-and-worker-execution.md.
+        #
+        # Each entry is a full extra emulator boot, so add deliberately.
+        api-level: [30, 34]
     env:
       EMULATOR_TARGET: google_apis
       EMULATOR_ARCH: x86_64
