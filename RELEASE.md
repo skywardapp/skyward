@@ -10,8 +10,14 @@ doesn't start is a day added to the critical path.
 
 ## What's automated already
 
-- **`checkFlavourManifestParity`** (`androidApp/build.gradle.kts`) — foss/play
-  merged manifests may only diverge on the exact-alarm permission entries.
+- **`checkFlavourManifestParity`** (`androidApp/build.gradle.kts`) — the
+  foss/play merged manifests are diffed element by element, attributes and
+  all; the only permitted divergence is the exact-alarm permission entries
+  (§17.5b(a)/D13). Runs as part of `./gradlew check`.
+- **`checkFlavourSourceSetsManifestOnly`** (`androidApp/build.gradle.kts`) —
+  `src/foss/` and `src/play/` may hold their `AndroidManifest.xml` and nothing
+  else, and no other `foss*`/`play*` source set may exist (§17.5b(b)/D13):
+  flavour-specific code is drift that neither of the other two checks can see.
   Runs as part of `./gradlew check`.
 - **`checkFlavourDependencyParity`** (`androidApp/build.gradle.kts`) —
   foss/play release variants must resolve to identical dependency sets
