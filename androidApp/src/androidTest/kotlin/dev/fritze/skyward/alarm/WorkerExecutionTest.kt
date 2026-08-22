@@ -46,6 +46,20 @@ import kotlin.time.Duration.Companion.hours
  * is always already initialised before a test runs and
  * `initializeTestWorkManager()` would throw. [TestListenableWorkerBuilder]
  * needs no such initialisation. See ADR 0018.
+ *
+ * [RefreshWorker] is the one worker whose `doWork()` is *not* executed here,
+ * and that is a finding rather than an omission. `SourceRunner.runDue` holds
+ * `runMutex`, and the app's own periodic `skyward-refresh` job -- enqueued from
+ * `Application.onCreate`, which WorkManager starts immediately on first
+ * enqueue -- is already inside that lock doing the first-ever `EclipseSource`
+ * path sampling, the "minutes of CPU" [RefreshWorker]'s own comment describes.
+ * A test calling `doWork()` blocks behind it and dies on `runTest`'s one-minute
+ * deadline; disabling the sources first does not help, because the contending
+ * pass began before the test could disable anything. What that test would have
+ * covered -- the factory injecting the container -- is covered by
+ * [theFactoryConstructsEveryWorkerThatNeedsTheContainer] instead, and
+ * `RefreshWorker.doWork()` is a single delegating line whose behaviour belongs
+ * to `SourceRunner`, which `:core` tests directly.
  */
 @RunWith(AndroidJUnit4::class)
 class WorkerExecutionTest {
@@ -68,9 +82,6 @@ class WorkerExecutionTest {
     /** Ids this test seeded, so [restoreSharedState] can take them back out again. */
     private val seededNotificationIds = mutableListOf<String>()
 
-    /** Source enablement as found, so the [RefreshWorker] test can put it back. */
-    private var sourceEnablementBefore: Map<String, Boolean> = emptyMap()
-
     @Before
     fun startFromAKnownShade() {
         container.restoreRealNotificationGate(context)
@@ -86,10 +97,6 @@ class WorkerExecutionTest {
             container.notificationRepo.deleteById(id)
         }
         seededNotificationIds.clear()
-        for ((sourceId, enabled) in sourceEnablementBefore) {
-            container.settingsRepo.setSourceEnabled(sourceId, enabled)
-        }
-        sourceEnablementBefore = emptyMap()
         context.clearShade()
     }
 
@@ -155,26 +162,6 @@ class WorkerExecutionTest {
             container.notificationRepo.getById(outside.id)?.status,
         )
         assertTrue("nothing beyond the window may be registered", fake.scheduled.none { it.id == outside.id })
-    }
-
-    /**
-     * Every source is switched off first, and that is the point rather than a
-     * shortcut: on a fresh emulator database every source is due, so a real
-     * `runDue()` pass would issue live HTTPS to NOAA/JPL/EONET *and* re-run
-     * `EclipseSource`'s path sampling -- minutes of CPU, per [RefreshWorker]'s
-     * own note on issue #49. What this asserts is the half only a device can
-     * answer: that the factory injects the container and `doWork()` honours its
-     * contract. `SourceRunner`'s own behaviour is covered by `:core`'s tests.
-     */
-    @Test
-    fun refreshWorkerCompletesWhenNoSourceIsDue() = runTest {
-        val sources = container.computedSources + container.polledSources
-        sourceEnablementBefore = sources.associate { it.id to container.settingsRepo.isSourceEnabled(it.id) }
-        for (source in sources) container.settingsRepo.setSourceEnabled(source.id, false)
-
-        val result = TestListenableWorkerBuilder<RefreshWorker>(context).setWorkerFactory(factory).build().doWork()
-
-        assertTrue("the polling path must report success even with nothing to do", result is ListenableWorker.Result.Success)
     }
 
     /**

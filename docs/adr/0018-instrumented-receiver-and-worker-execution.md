@@ -89,9 +89,12 @@ one route the OS permits in each case:
   `SkywardWorkerFactory`, which needs no WorkManager initialisation and
   takes the same construction path WorkManager takes at runtime.
 - **The denied exact-alarm state** — driven by `cmd appops`, with **API 34
-  added to the CI matrix**, since 31 and 32 pre-grant the permission and
-  below 31 there is nothing to deny. Restored with `default`, not `allow`,
-  so the op goes back to being permission-derived.
+  added to the CI matrix**. The permission stops being pre-granted at API 33
+  for an app targeting 33+ (targetSdk is 36), so 33 or 34 would both produce
+  the state; 31 and 32 would not, and below 31 there is nothing to deny. 34 is
+  chosen as the more current, better-supported image, not because 33 lacks the
+  behaviour. Restored with `default`, not `allow`, so the op goes back to being
+  permission-derived.
 - **The SAF round-trip** — `LocalActivityResultRegistryOwner` overridden
   with a recording `ActivityResultRegistry` that resolves each launch to a
   test-controlled `content://` Uri. Only the picker Activity is replaced;
@@ -103,6 +106,30 @@ rather than passing quietly. `SystemBroadcastReceiverTest` also asserts
 unconditionally, via `queryBroadcastReceivers`, that every receiver is
 declared for the actions it guards — so a skip can never amount to no
 coverage at all.
+
+## Two things the emulator taught us that no amount of reading would
+
+Both surfaced on the very first matrix run and both are now baked into the
+suites, because each looks like an obvious test to write and cannot be made to
+work:
+
+- **A test may not revoke `SCHEDULE_EXACT_ALARM`.** Moving the app-op to
+  `ignore` makes the platform force-stop the app, which kills the
+  instrumentation process and aborts every test after it — the first run got
+  through 23 of 51 on `play`/API 34 before dying. So the standing-backup
+  invariant is asserted structurally (the backup is `ENQUEUED` alongside the
+  exact alarm) and the delivery half is covered by a test that *starts* from
+  the denied state rather than moving into it. Granting is safe; revoking is
+  not.
+- **`RefreshWorker.doWork()` cannot be called from a test.**
+  `SourceRunner.runDue` holds `runMutex`, and the app's own periodic
+  `skyward-refresh` job — enqueued from `Application.onCreate`, which
+  WorkManager starts immediately — is already inside it doing the first-ever
+  `EclipseSource` path sampling. A test calling `doWork()` queues behind
+  minutes of astronomy and dies on `runTest`'s one-minute deadline. Disabling
+  the sources first does not help: the contending pass began before the test
+  could disable anything. Worker construction through `SkywardWorkerFactory` is
+  covered instead, which is where the real risk lives.
 
 ## Consequences
 
@@ -134,10 +161,10 @@ coverage at all.
   it is on neither the classpath `checkFlavourDependencyParity` compares nor
   the one `checkDependencyLicenses` reads (§16, §17.5b).
 - §10.2 says the denied state is "always the initial state for the `play`
-  flavour on API 31+". That is optimistic: 31 and 32 grant
-  `SCHEDULE_EXACT_ALARM` at install, so it is true from 33 for an app
-  targeting 33+, and observable at install from 34. Recorded here rather
-  than by editing the design doc.
+  flavour on API 31+". That is optimistic by two levels: 31 and 32 still grant
+  `SCHEDULE_EXACT_ALARM` at install. It becomes true at 33 for an app targeting
+  33+, which this one does. Recorded here rather than by editing the design
+  doc.
 
 ## Alternatives considered
 

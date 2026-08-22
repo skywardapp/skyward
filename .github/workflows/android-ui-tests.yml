@@ -40,13 +40,15 @@ jobs:
         #
         # API 34 exists here for the other half. §17.5 requires the denied
         # exact-alarm state and calls it "the default state of the play
-        # flavour", which "must not be an afterthought" — and no earlier image
-        # can produce it: 31 and 32 pre-grant SCHEDULE_EXACT_ALARM at install,
-        # and below 31 there is nothing to deny. Android 14 is the first level
-        # where an app targeting 33+ that declares only SCHEDULE_EXACT_ALARM
-        # starts out denied, which is exactly what src/play's manifest ships.
-        # Until this entry existed, that scenario was only ever reached through
-        # a fake (#55). See docs/adr/0018-instrumented-receiver-and-worker-execution.md.
+        # flavour", which "must not be an afterthought" — and API 30 cannot
+        # produce it at all. The permission stops being pre-granted at API 33
+        # for an app targeting 33+ (targetSdk here is 36), so 33 or 34 would
+        # both do; 31 and 32 would not, because they still grant it at install.
+        # 34 is chosen over 33 as the more current and better-supported image,
+        # not because 33 lacks the behaviour. Confirmed on the first run: the
+        # play flavour skipped none of the denial tests, so the denied state
+        # was genuinely produced by the OS rather than by a fake (#55).
+        # See docs/adr/0018-instrumented-receiver-and-worker-execution.md.
         #
         # Each entry is a full extra emulator boot, so add deliberately.
         api-level: [30, 34]

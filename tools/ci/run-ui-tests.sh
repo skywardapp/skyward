@@ -95,10 +95,14 @@ await_device_ready || exit 1
 # Best effort by design: these are userdebug emulator images, so this normally
 # succeeds, but a device that refuses must not fail the run -- those two tests
 # report themselves skipped (assumeTrue) and everything else is unaffected. adbd
-# restarting drops the connection, hence the re-wait; done once here rather than
-# inside the flavour loop so it costs one reconnect, not one per flavour.
+# restarting drops the connection, hence the second readiness gate; done once
+# here rather than inside the flavour loop so it costs one reconnect, not one
+# per flavour.
 if adb root >/dev/null 2>&1; then
-  adb wait-for-device >/dev/null 2>&1
+  # await_device_ready already does its own bounded wait-for-device, so a bare
+  # `adb wait-for-device` here would only add an unbounded one: if adbd never
+  # came back it would sit until the job's 60-minute timeout instead of failing
+  # in READY_TIMEOUT_SECONDS with a diagnosis.
   await_device_ready || exit 1
 else
   log "adb root unavailable; the protected-broadcast tests will report themselves skipped"

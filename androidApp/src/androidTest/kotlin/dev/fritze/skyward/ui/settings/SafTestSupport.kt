@@ -1,7 +1,9 @@
 package dev.fritze.skyward.ui.settings
 
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -25,7 +27,7 @@ import java.io.File
  * [lastInput] is recorded rather than discarded because the export contract's
  * input *is* §12.2's suggested filename, and nothing else asserts its shape.
  */
-internal class RecordingActivityResultRegistry : ActivityResultRegistry(), ActivityResultRegistryOwner {
+internal class RecordingActivityResultRegistry(private val context: Context) : ActivityResultRegistry(), ActivityResultRegistryOwner {
 
     override val activityResultRegistry: ActivityResultRegistry get() = this
 
@@ -38,14 +40,23 @@ internal class RecordingActivityResultRegistry : ActivityResultRegistry(), Activ
     var launchCount: Int = 0
         private set
 
+    /** The Intent the contract built for the last launch, so a test can assert on what SAF would have been asked for. */
+    var lastIntent: Intent? = null
+        private set
+
     override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>, input: I, options: ActivityOptionsCompat?) {
         lastInput = input
         launchCount++
-        // Dispatched inline: both contracts here parse an Intent's data into a
-        // Uri?, so handing the result straight back is exactly what returning
-        // from the picker does, minus the Activity.
-        @Suppress("UNCHECKED_CAST")
-        dispatchResult(requestCode, nextResult as O)
+        // Both halves of the contract are exercised on purpose. createIntent is
+        // what SAF would actually be launched with -- it is where
+        // CreateDocument puts the suggested filename and the MIME type -- and
+        // the three-argument dispatchResult is what makes the registry run
+        // parseResult on the way back. The one-argument overload would hand the
+        // Uri over already parsed, leaving the production contracts untested
+        // and this suite asserting only its own plumbing.
+        lastIntent = contract.createIntent(context, input)
+        val resultCode = if (nextResult == null) Activity.RESULT_CANCELED else Activity.RESULT_OK
+        dispatchResult(requestCode, resultCode, Intent().setData(nextResult))
     }
 }
 

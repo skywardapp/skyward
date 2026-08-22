@@ -1,5 +1,6 @@
 package dev.fritze.skyward.ui.settings
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -65,7 +66,7 @@ class SyncRoundTripTest {
 
     private val context = ApplicationProvider.getApplicationContext<SkywardApplication>()
     private val container = context.container
-    private val registry = RecordingActivityResultRegistry()
+    private val registry = RecordingActivityResultRegistry(context)
 
     private val documents = mutableListOf<Uri>()
     private val seededLocationIds = mutableListOf<String>()
@@ -111,6 +112,12 @@ class SyncRoundTripTest {
         // launcher's input *is* that name -- the one place it can be asserted.
         val suggested = registry.lastInput as String
         assertTrue("export filename must match §12.2, was $suggested", suggested.matches(EXPORT_FILENAME))
+        // ...and CreateDocument must have carried it into the Intent SAF would
+        // have been launched with, alongside §12.2's MIME type.
+        val launched = registry.lastIntent!!
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, launched.action)
+        assertEquals(suggested, launched.getStringExtra(Intent.EXTRA_TITLE))
+        assertEquals("application/json", launched.type)
 
         val parsed = SyncCodec.parseForImport(context.readDocument(uri))
         assertTrue("the export must carry the saved location", parsed.locations.any { it.id == location.id })

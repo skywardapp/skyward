@@ -89,6 +89,13 @@ class RealAlarmSchedulingTest {
         seededNotificationIds.clear()
         container.restoreRealNotificationGate(context)
         container.alarmScheduler = AndroidAlarmScheduler(context)
+        // The denied-permission test moves the app-op, and an `assumeTrue` or a
+        // failed assertion can leave this method as the only thing that puts it
+        // back. Left pinned, it would decide the outcome of whichever test the
+        // runner picks next -- starting with
+        // theDefaultInstallStateOfThisFlavourMatchesItsManifest in this very
+        // class, which reads the op expecting the shipped default.
+        context.restoreExactAlarmDefault()
         context.clearShade()
     }
 
@@ -98,6 +105,14 @@ class RealAlarmSchedulingTest {
      * has ever checked: revoking the exact-alarm permission deletes the OS
      * alarm without broadcasting anything, so without that standing fallback a
      * mid-life revocation would silently drop the reminder.
+     *
+     * This asserts the backup exists rather than watching a revocation play
+     * out, because a test that actually revoked the op could not survive doing
+     * so: the platform force-stops the app, which takes the instrumentation
+     * process with it and aborts the remaining tests in the run (ADR 0018).
+     * The delivery half is covered by
+     * [aDeniedPermissionTakesTheWorkManagerPathAndRendersTheHedge] instead,
+     * which starts from the denied state rather than moving into it.
      */
     @Test
     fun theExactPathAlsoLeavesAWorkManagerBackupStanding() = runTest {
@@ -206,35 +221,6 @@ class RealAlarmSchedulingTest {
         assertTrue(
             "the first APPROXIMATE reminder ever must also explain itself (§10.5), but was: $body",
             body.contains("Times are approximate"),
-        )
-    }
-
-    /**
-     * The user-visible half of the asymmetry [AndroidAlarmScheduler]'s
-     * standing-backup comment is built around: revoking the exact-alarm
-     * permission mid-life deletes the OS alarm and broadcasts *nothing* (the
-     * OS only announces grants), so nothing re-plans -- and the reminder must
-     * arrive anyway, off the WorkManager job registered alongside it.
-     *
-     * Deliberately asserts delivery rather than which path delivered: whether
-     * the OS drops an already-set alarm on revocation is its business, not
-     * this app's, and pinning that would make the test a change-detector for
-     * platform behaviour. What §10.1 promises the user -- "never silently
-     * dropped" -- is what is checked.
-     */
-    @Test
-    fun revokingThePermissionMidFlightStillDeliversTheReminder() = runTest {
-        assumeTrue("exact alarms cannot be denied on this flavour/API", exactAlarmDenialIsProducible(context))
-        context.allowExactAlarms()
-        assumeTrue("this device cannot schedule exact alarms", scheduler.canScheduleExact())
-        val n = seed(freshNotification(Clock.System.now() + ALARM_LEAD, NotificationStatus.REGISTERED))
-        assertEquals(Precision.EXACT, scheduler.schedule(n))
-
-        context.denyExactAlarms()
-
-        assertNotNull(
-            "the standing WorkManager backup must survive the revocation",
-            context.awaitPosted(n.id, SCHEDULED_DELIVERY_TIMEOUT_MILLIS),
         )
     }
 
