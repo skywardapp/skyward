@@ -209,7 +209,7 @@ private class RuleDraftState {
                 anchor = schedule.anchor,
                 notifyOnFirstSeen = schedule.notifyOnFirstSeen,
                 quietHours = if (schedule.quietHoursEnabled) QuietHours(schedule.quietFromHour, schedule.quietToHour) else null,
-                // Not editable here (issue #57, ADR 0016) -- preserved from
+                // Not editable here (issue #57, ADR 0017) -- preserved from
                 // the rule being edited, same as `hidden` below, rather than
                 // silently dropped by a round trip through this screen.
                 firstSeenCooldown = base?.schedule?.firstSeenCooldown,

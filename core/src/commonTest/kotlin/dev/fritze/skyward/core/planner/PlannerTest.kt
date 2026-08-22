@@ -540,7 +540,7 @@ class PlannerTest {
         assertEquals(peak, desired.first().fireAt)
     }
 
-    // ---- first-seen cooldown (issue #57, ADR 0016) ----
+    // ---- first-seen cooldown (issue #57, ADR 0017) ----
 
     private fun firstSeenCandidate(
         occId: String,

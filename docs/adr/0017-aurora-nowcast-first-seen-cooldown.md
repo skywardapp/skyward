@@ -1,4 +1,4 @@
-# ADR 0016: Aurora NOWCAST first-seen notifications get a per-rule cooldown, not a phenomenon-aware dedup key
+# ADR 0017: Aurora NOWCAST first-seen notifications get a per-rule cooldown, not a phenomenon-aware dedup key
 
 **Status:** Accepted (implementation correction, not a reopening of D1–D13)
 

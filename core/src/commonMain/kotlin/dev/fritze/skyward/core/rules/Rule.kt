@@ -132,7 +132,7 @@ data class NotifySchedule(
     val notifyOnFirstSeen: Boolean, // fire as soon as occurrence first matches (aurora nowcast, comets, EONET)
     val quietHours: QuietHours?, // suppress+defer to end of quiet window (null = none)
     /**
-     * §10.4 extension (issue #57, ADR 0016): suppresses a new
+     * §10.4 extension (issue #57, ADR 0017): suppresses a new
      * `notifyOnFirstSeen` notification while a previous one for the same
      * (rule, location) already fired within this window. Exists for sources
      * whose occurrence identity churns every fetch (aurora NOWCAST, §7.3.3

@@ -156,7 +156,7 @@ object Planner {
     }
 
     /**
-     * §10.4 extension (issue #57, ADR 0016): drops a `notifyOnFirstSeen`
+     * §10.4 extension (issue #57, ADR 0017): drops a `notifyOnFirstSeen`
      * candidate whose rule set [dev.fritze.skyward.core.rules.NotifySchedule.firstSeenCooldown]
      * when a previous notification for the same `(ruleId, locationId)` pair
      * was actually *delivered* (`FIRED`, with a `firedAt`) within that

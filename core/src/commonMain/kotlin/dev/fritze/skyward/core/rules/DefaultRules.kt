@@ -125,7 +125,7 @@ fun defaultRules(now: Instant): List<Rule> = listOf(
             quietHours = null,
             // Issue #57 part 2: NOWCAST mints a new occurrence id every
             // ~15 min fetch (§7.3.3), so first-seen dedup alone re-buzzes on
-            // every active-tier poll while the aurora persists. See ADR 0016.
+            // every active-tier poll while the aurora persists. See ADR 0017.
             firstSeenCooldown = 2.hours,
         ),
         createdAt = now,

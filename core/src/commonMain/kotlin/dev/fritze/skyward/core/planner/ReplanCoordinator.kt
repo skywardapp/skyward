@@ -19,7 +19,7 @@ import kotlin.time.Instant
  * §9.7: the `SourceRunner.runDue` -> `Planner.replan()` step the design doc
  * refers to — reads current occurrences/locations/rules, runs the pure
  * §9/§10.4 pipeline, applies §13.3's mute suppression and `Planner`'s
- * first-seen cooldown (issue #57, ADR 0016), reconciles against what's
+ * first-seen cooldown (issue #57, ADR 0017), reconciles against what's
  * already in the DB, and persists the result. Deliberately stops at
  * persistence: turning the reconciled rows into actual OS alarms is
  * platform glue (`AlarmScheduler`, §10.2), not `:core`'s job.
