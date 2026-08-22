@@ -17,10 +17,14 @@
     <!-- Local-only (P1): no cloud backup of skyward.db (saved locations,
          rules, notification history) and no adb-backup-style extraction on
          API < 31. §12's export/import is the sanctioned migration path
-         instead. -->
+         instead. allowBackup="false" covers cloud/adb backup on every API
+         level, but some OEM builds on API 31+ still perform
+         device-to-device transfer despite it, so dataExtractionRules also
+         excludes the database from both channels explicitly (issue #63). -->
     <application
         android:name=".SkywardApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.Skyward"

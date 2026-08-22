@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Belt-and-suspenders alongside android:allowBackup="false" (§10.2, P1,
+  issue #63): on API 31+, some OEM builds honour allowBackup="false" for
+  cloud backup only and still perform device-to-device transfer, so the
+  database domain (skyward.db and its -wal/-shm/-journal siblings) is
+  excluded from both channels explicitly.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" />
+    </device-transfer>
+</data-extraction-rules>
