@@ -46,6 +46,25 @@ class UpcomingViewModelTest {
         assertEquals(62, banner.ovationProbabilityPercent)
         assertEquals(5.7, banner.currentKp)
         assertEquals(now - 5.minutes, banner.issuedAt)
+        assertEquals("north", banner.lookDirection)
+    }
+
+    @Test
+    fun activeAuroraBannerTellsASouthernPrimaryLocationToLookSouth() {
+        // issue #56: the primary location's hemisphere, not a hardcoded "north".
+        val southernPrimary = location("hobart", "Hobart", GeoPoint(-42.8821, 147.3272), isPrimary = true)
+        val nowcastOcc = nowcast("south", issuedAt = now - 5.minutes, expiresAt = now + 90.minutes)
+
+        val banner = activeAuroraBanner(
+            occurrences = listOf(nowcastOcc),
+            locations = listOf(southernPrimary),
+            visibilityModels = visibilityModels,
+            ctx = VisibilityContext(now, grid(southernPrimary.point to 62)),
+            currentKp = 5.7,
+        )
+
+        assertNotNull(banner)
+        assertEquals("south", banner.lookDirection)
     }
 
     @Test

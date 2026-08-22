@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
+import dev.fritze.skyward.core.format.auroraLookDirection
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDegrees
 import dev.fritze.skyward.core.format.formatKp
@@ -414,7 +415,7 @@ private fun LocationVerdictRow(
                 when {
                     kpNeeded <= 0 -> "Above the auroral boundary at any Kp."
                     margin == null && peakKp == null -> "No current Kp reading and no forecast slot above your thresholds."
-                    margin != null && margin >= 0 -> "Now: Kp ${formatKp(current)} — ${formatDegrees(margin * 2, 1)} of margin. Look north after dark."
+                    margin != null && margin >= 0 -> "Now: Kp ${formatKp(current)} — ${formatDegrees(margin * 2, 1)} of margin. Look ${auroraLookDirection(geomagneticLat)} after dark."
                     margin != null -> "Now: Kp ${formatKp(current)} — short by ${formatKp(abs(margin))} Kp."
                     // Reached only when there is no live reading but a forecast slot exists.
                     else -> "Forecast peak Kp ${formatKp(peakKp ?: 0.0)} over the next three days."
