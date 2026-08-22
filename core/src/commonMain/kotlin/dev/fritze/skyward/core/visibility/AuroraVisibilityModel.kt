@@ -33,7 +33,7 @@ class AuroraVisibilityModel : VisibilityModel {
         val kpNeeded = ((66.0 - absGmLat) / 2.0).coerceAtLeast(0.0)
 
         val (baseQuality, travelTarget, travelTargetQuality) = when (payload.forecastKind) {
-            AuroraForecastKind.THREE_DAY -> threeDayQuality(payload, loc.point, absGmLat)
+            AuroraForecastKind.THREE_DAY -> threeDayQuality(payload, loc.point, gmLat, absGmLat)
             AuroraForecastKind.NOWCAST -> nowcastQuality(loc.point, ctx)
         }
 
@@ -87,7 +87,7 @@ class AuroraVisibilityModel : VisibilityModel {
     private data class RegimeResult(val quality: Quality, val travelTarget: GeoPoint?, val travelTargetQuality: Quality?)
 
     /** THREE_DAY: Kp-threshold visibility boundary. Its travel target sits exactly at the MARGINAL boundary. */
-    private fun threeDayQuality(payload: AuroraPayload, loc: GeoPoint, absGmLat: Double): RegimeResult {
+    private fun threeDayQuality(payload: AuroraPayload, loc: GeoPoint, gmLat: Double, absGmLat: Double): RegimeResult {
         val visLat = 66.0 - 2.0 * payload.kpForecast
         val quality = when {
             absGmLat >= visLat + 4.0 -> Quality.EXCELLENT
@@ -99,8 +99,10 @@ class AuroraVisibilityModel : VisibilityModel {
 
         // §8.4: move (visLat - absGmLat) deg along the great circle toward
         // the geomagnetic pole; ~111.2 km/deg (matches EARTH_RADIUS_KM*PI/180).
+        // issue #56: "the" pole is whichever one is in loc's own hemisphere —
+        // the northern pole constant alone sent southern observers the wrong way.
         val deltaGmLatDeg = visLat - absGmLat
-        val bearingToPole = initialBearingDeg(loc, GEOMAGNETIC_POLE)
+        val bearingToPole = initialBearingDeg(loc, geomagneticPoleFor(gmLat))
         val target = destinationPoint(loc, deltaGmLatDeg * KM_PER_DEGREE, bearingToPole)
         return RegimeResult(quality, target, Quality.MARGINAL)
     }

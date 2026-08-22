@@ -112,6 +112,17 @@ class GeoTest {
     }
 
     @Test
+    fun geomagneticPoleForPicksThePoleInTheGivenHemisphere() {
+        // issue #56: a southern gm-latitude must resolve to the south pole,
+        // not the north pole constant used for every location.
+        assertEquals(GEOMAGNETIC_POLE, geomagneticPoleFor(67.5))
+        assertEquals(GEOMAGNETIC_SOUTH_POLE, geomagneticPoleFor(-51.0))
+        // Poles are antipodal under the dipole model.
+        assertEquals(-GEOMAGNETIC_POLE_LAT_DEG, GEOMAGNETIC_SOUTH_POLE_LAT_DEG)
+        assertEquals(20015.09, haversineDistanceKm(GEOMAGNETIC_POLE, GEOMAGNETIC_SOUTH_POLE), 0.5)
+    }
+
+    @Test
     fun geomagneticLatitudeMatchesAppendixAsFrozenValues() {
         // §17.4: "dipole-latitude function vs. frozen expected values computed
         // with the Appendix D formula (Tromso 67.5, Berlin 52.2, Calgary 57.4,

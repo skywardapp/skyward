@@ -331,7 +331,7 @@ private fun AuroraNowcastBanner(banner: AuroraBannerUiState, liveKpFailed: Boole
             )
             banner.darknessStart?.let { darknessStart ->
                 Text(
-                    "Look north after full darkness (~${darknessStart.hhmmLocal()}).",
+                    "Look ${banner.lookDirection} after full darkness (~${darknessStart.hhmmLocal()}).",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

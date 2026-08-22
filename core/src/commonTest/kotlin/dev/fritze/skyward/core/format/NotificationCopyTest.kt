@@ -246,6 +246,24 @@ class NotificationCopyTest {
         assertEquals("Aurora possible NOW at Home", copy.title)
         assertTrue(copy.body.contains("OVATION 62% overhead probability (18:55 UTC forecast)"), copy.body)
         assertTrue(copy.body.contains("~21:40"), copy.body)
+        assertTrue(copy.body.contains("Look north"), copy.body)
+    }
+
+    @Test
+    fun auroraNowcastCopyTellsASouthernObserverToLookSouth() {
+        // issue #56: a negative geomagnetic latitude must not print "Look north".
+        val occ = Occurrence(
+            id = "au:now:south", phenomenon = Phenomenon.AURORA, sourceId = "swpc", title = "t",
+            window = TimeWindow(now, now + 1.hours), peakTime = null, certainty = Certainty.FORECAST,
+            payload = AuroraPayload(kpForecast = 6.0, forecastKind = AuroraForecastKind.NOWCAST, issuedAt = Instant.parse("2026-01-01T18:55:00Z")),
+            fetchedAt = now, expiresAt = null,
+        )
+        val details = LocalDetails.AuroraLocal(geomagneticLatDeg = -58.0, kpNeeded = 4.0, ovationProbability = 62, darknessStart = Instant.parse("2026-01-01T21:40:00Z"), darknessEnd = null)
+
+        val copy = renderNotificationCopy(occ, home, visres(localDetails = details), rule(), fireAt = now, leadUntilAnchor = null)
+
+        assertTrue(copy.body.contains("Look south"), copy.body)
+        assertTrue(!copy.body.contains("Look north"), copy.body)
     }
 
     // ---- moon event / conjunction / terrestrial: smoke coverage ----

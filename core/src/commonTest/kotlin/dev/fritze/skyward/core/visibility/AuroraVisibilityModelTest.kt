@@ -11,6 +11,7 @@ import dev.fritze.skyward.core.model.Quality
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.TimeWindow
 import dev.fritze.skyward.core.model.VisibilityResult
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -108,6 +109,32 @@ class AuroraVisibilityModelTest {
         // Delta gm-lat ~ 60 - 1 - 48.2 = 10.8deg (MARGINAL starts at visLat-1) -> ~1200km, generously bounded.
         assertTrue(travelDistanceKm in 500.0..2500.0, "expected a plausible multi-hundred-km travel distance, got $travelDistanceKm")
         assertEquals(Quality.MARGINAL, result.qualityAtNearestPoint)
+    }
+
+    @Test
+    fun southernHemisphereTravelGuidanceHeadsTowardTheSouthGeomagneticPoleNotTheNorth() {
+        // issue #56: Hobart, Tasmania — a southern observer below the
+        // visibility boundary must be steered further *south* (toward the
+        // south geomagnetic pole, i.e. away from the equator and away from
+        // the northern pole constant), never north.
+        val hobart = GeoPoint(-42.8821, 147.3272)
+        val occ = threeDayOccurrence(kp = 4.0, window = tromsoWinterNight) // visLat = 66-8 = 58
+        val result = model.evaluate(occ, loc(hobart), VisibilityContext(now = tromsoWinterNight.start, ovationGrid = null))
+
+        assertTrue(!result.visibleAtLocation)
+        val details = assertNotNull(result.localDetails as? LocalDetails.AuroraLocal)
+        assertTrue(details.geomagneticLatDeg < 0.0, "expected a southern geomagnetic latitude, got ${details.geomagneticLatDeg}")
+
+        val bearing = assertNotNull(result.travelBearingDeg)
+        val target = assertNotNull(result.nearestVisiblePoint)
+        // Bearing must point away from the equator (roughly southward), and
+        // the target's |gm lat| must exceed the origin's -- moving toward
+        // the north pole would do the opposite on both counts.
+        assertTrue(bearing in 90.0..270.0, "expected a southward bearing, got $bearing")
+        assertTrue(
+            abs(geomagneticLatitudeDeg(target)) > abs(details.geomagneticLatDeg),
+            "expected the travel target's |gm lat| (${abs(geomagneticLatitudeDeg(target))}) to exceed the origin's (${abs(details.geomagneticLatDeg)})",
+        )
     }
 
     @Test
