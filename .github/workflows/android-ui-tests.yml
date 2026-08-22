@@ -31,10 +31,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # minSdk is 26 and targetSdk 36; API 30 is the cheap, historically
-        # stable emulator image. Add further levels here as the UI grows —
-        # each entry is a full extra emulator boot, so add deliberately.
-        api-level: [30]
+        # minSdk is 26 and targetSdk 36.
+        #
+        # API 30 is the cheap, historically stable image, and the one where
+        # canScheduleExact() is hardwired true (§10.2 — SCHEDULE_EXACT_ALARM
+        # does not exist below 31), so it covers the *granted* half of §17.5
+        # and the pre-POST_NOTIFICATIONS notification path.
+        #
+        # API 34 exists here for the other half. §17.5 requires the denied
+        # exact-alarm state and calls it "the default state of the play
+        # flavour", which "must not be an afterthought" — and API 30 cannot
+        # produce it at all. The permission stops being pre-granted at API 33
+        # for an app targeting 33+ (targetSdk here is 36), so 33 or 34 would
+        # both do; 31 and 32 would not, because they still grant it at install.
+        # 34 is chosen over 33 as the more current and better-supported image,
+        # not because 33 lacks the behaviour. Confirmed on the first run: the
+        # play flavour skipped none of the denial tests, so the denied state
+        # was genuinely produced by the OS rather than by a fake (#55).
+        # See docs/adr/0018-instrumented-receiver-and-worker-execution.md.
+        #
+        # Each entry is a full extra emulator boot, so add deliberately.
+        api-level: [30, 34]
     env:
       EMULATOR_TARGET: google_apis
       EMULATOR_ARCH: x86_64

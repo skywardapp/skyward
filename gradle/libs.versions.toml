@@ -71,6 +71,10 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "a
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-rules = { module = "androidx.test:rules", version.ref = "androidxTestRules" }
 androidx-test-core-ktx = { module = "androidx.test:core-ktx", version.ref = "androidxTestCoreKtx" }
+# Shares `workManager` with work-runtime-ktx above, deliberately: work-testing
+# reaches into WorkManager's internals, so the two versions skewing is a
+# runtime failure rather than a resolution one.
+androidx-work-testing = { module = "androidx.work:work-testing", version.ref = "workManager" }
 
 compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "composeNativeTray" }
 two-slices = { module = "com.sshtools:two-slices", version.ref = "twoSlices" }
