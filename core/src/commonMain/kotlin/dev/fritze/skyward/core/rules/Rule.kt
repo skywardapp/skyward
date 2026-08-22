@@ -131,6 +131,17 @@ data class NotifySchedule(
     val anchor: Anchor, // PEAK or WINDOW_START or BEST_VIEWING (from localDetails, falls back to PEAK)
     val notifyOnFirstSeen: Boolean, // fire as soon as occurrence first matches (aurora nowcast, comets, EONET)
     val quietHours: QuietHours?, // suppress+defer to end of quiet window (null = none)
+    /**
+     * §10.4 extension (issue #57, ADR 0016): suppresses a new
+     * `notifyOnFirstSeen` notification while a previous one for the same
+     * (rule, location) already fired within this window. Exists for sources
+     * whose occurrence identity churns every fetch (aurora NOWCAST, §7.3.3
+     * "one occurrence per OVATION fetch") -- without it, first-seen dedup
+     * (which keys on the occurrence) gives no protection against re-alerting
+     * on every poll while the underlying event persists. `null` = no
+     * cooldown, the historical behaviour.
+     */
+    val firstSeenCooldown: Duration? = null,
 )
 
 /**

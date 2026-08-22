@@ -18,8 +18,9 @@ import kotlin.time.Instant
 /**
  * §9.7: the `SourceRunner.runDue` -> `Planner.replan()` step the design doc
  * refers to — reads current occurrences/locations/rules, runs the pure
- * §9/§10.4 pipeline, applies §13.3's mute suppression, reconciles against
- * what's already in the DB, and persists the result. Deliberately stops at
+ * §9/§10.4 pipeline, applies §13.3's mute suppression and `Planner`'s
+ * first-seen cooldown (issue #57, ADR 0016), reconciles against what's
+ * already in the DB, and persists the result. Deliberately stops at
  * persistence: turning the reconciled rows into actual OS alarms is
  * platform glue (`AlarmScheduler`, §10.2), not `:core`'s job.
  *
@@ -60,11 +61,12 @@ class ReplanCoordinator(
             .filter { it.rule.hidden && isMuteSuppressor(it.rule) }
             .mapTo(mutableSetOf()) { it.occ.id }
 
+        val previous = notificationRepo.getAll()
         val desired = Planner.desiredNotifications(matches, now, deviceZone)
             .filterNot { it.occurrenceId in suppressedOccurrenceIds }
+            .let { Planner.applyFirstSeenCooldown(it, previous, rules.associateBy { r -> r.id }, now) }
 
         val occurrencesById = occurrences.associateBy { it.id }
-        val previous = notificationRepo.getAll()
         val reconciled = Planner.reconcile(previous, desired, now, occurrencesById)
 
         for (notification in reconciled) notificationRepo.upsert(notification)

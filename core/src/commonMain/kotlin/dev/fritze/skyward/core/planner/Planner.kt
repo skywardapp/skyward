@@ -130,7 +130,7 @@ object Planner {
                 // anchor.
                 val firstSeenAnchor = m.occ.peakTime ?: m.occ.window.start
                 val fireAt = applyQuietHours(now, m.rule.schedule.quietHours, m.occ, deviceZone) ?: continue
-                val key = "${m.occ.id}|${firstSeenAnchor.epochSeconds}|first"
+                val key = "${m.occ.id}|${firstSeenAnchor.epochSeconds}$FIRST_SEEN_KEY_SUFFIX"
                 candidates += Candidate(key, m.rule, m.occ, m.loc, m.visres, fireAt, leadUntilAnchor = null)
             }
         }
@@ -154,6 +154,49 @@ object Planner {
             )
         }
     }
+
+    /**
+     * §10.4 extension (issue #57, ADR 0016): drops a `notifyOnFirstSeen`
+     * candidate whose rule set [dev.fritze.skyward.core.rules.NotifySchedule.firstSeenCooldown]
+     * when a previous notification for the same `(ruleId, locationId)` pair
+     * already fired -- or is about to -- within that window.
+     *
+     * Exists because first-seen dedup keys on the *occurrence* (§10.4), and
+     * a source like aurora NOWCAST deliberately mints a new occurrence id
+     * every fetch (§7.3.3), so dedup alone gives no protection there: every
+     * poll while the event persists would otherwise produce its own
+     * first-seen candidate. This runs on [desiredNotifications]'s output
+     * rather than folding into it, because the check needs `previous`
+     * (already-planned rows), which [desiredNotifications] deliberately
+     * doesn't take -- see its own doc comment.
+     *
+     * Deliberately keyed on `(ruleId, locationId)` alone, not on any
+     * phenomenon-specific "is this materially stronger" signal (e.g. Kp):
+     * the withdrawn occurrence a comparison would need is already gone from
+     * the DB by the next poll (§6.3's "drop withdrawn FORECAST rows"), and
+     * threading phenomenon data onto [PlannedNotification] would leak it out
+     * of the sealed `OccurrencePayload` it deliberately lives in (§5).
+     */
+    fun applyFirstSeenCooldown(
+        desired: List<PlannedNotification>,
+        previous: List<PlannedNotification>,
+        rulesById: Map<String, Rule>,
+        now: Instant,
+    ): List<PlannedNotification> = desired.filterNot { candidate ->
+        if (!candidate.id.endsWith(FIRST_SEEN_KEY_SUFFIX)) return@filterNot false
+        val cooldown = rulesById[candidate.ruleId]?.schedule?.firstSeenCooldown ?: return@filterNot false
+        previous.any { p ->
+            p.ruleId == candidate.ruleId &&
+                p.locationId == candidate.locationId &&
+                p.id != candidate.id &&
+                p.status != NotificationStatus.CANCELLED &&
+                p.status != NotificationStatus.MISSED &&
+                p.fireAt <= now &&
+                p.fireAt > now - cooldown
+        }
+    }
+
+    private const val FIRST_SEEN_KEY_SUFFIX = "|first"
 
     /**
      * §10.4 reconciliation: insert new desired rows as PENDING; a row no

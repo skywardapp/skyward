@@ -24,6 +24,7 @@ import dev.fritze.skyward.core.visibility.TerrestrialVisibilityModel
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -91,5 +92,21 @@ class DefaultRulesTest {
         // reach) must never appear even though EONET/aurora data isn't fed
         // in here at all, and conjunctions are.
         assertTrue(matchesByRule["Close conjunctions"] == null, "a shipped-disabled rule must never match")
+    }
+
+    @Test
+    fun auroraNowShipsWithNoQuietHoursAndAFirstSeenCooldown() {
+        // Regression guard for issue #57: quietHours = QuietHours(0, 6) on
+        // this rule silently dropped every nowcast alert between 00:00 and
+        // 06:00 (a NOWCAST occurrence's 1h window can't survive a defer to
+        // 06:00), contradicting §9.6's own "off by default". And without a
+        // cooldown, aurora NOWCAST's per-fetch occurrence identity (§7.3.3)
+        // re-alerts on every ~15-minute active-tier poll while an aurora
+        // persists.
+        val rule = defaultRules(Instant.parse("2026-01-01T00:00:00Z")).single { it.id == "default:aurora-now" }
+
+        assertEquals(null, rule.schedule.quietHours, "§9.6: quiet hours ship off by default")
+        assertTrue(rule.schedule.notifyOnFirstSeen)
+        assertTrue((rule.schedule.firstSeenCooldown ?: kotlin.time.Duration.ZERO) > kotlin.time.Duration.ZERO, "a churning-identity source needs a first-seen cooldown")
     }
 }

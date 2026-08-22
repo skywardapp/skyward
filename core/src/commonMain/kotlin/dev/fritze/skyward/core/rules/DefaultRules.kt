@@ -118,7 +118,15 @@ fun defaultRules(now: Instant): List<Rule> = listOf(
             leads = emptyList(),
             anchor = Anchor.PEAK,
             notifyOnFirstSeen = true,
-            quietHours = QuietHours(fromHour = 0, toHour = 6),
+            // §9.6: "quietHours 00-06 off by default" -- shipping it enabled
+            // silently dropped every nowcast alert overnight (issue #57),
+            // since a NOWCAST occurrence's 1h window can't survive a defer to
+            // 06:00. A user who wants overnight quiet can still turn this on.
+            quietHours = null,
+            // Issue #57 part 2: NOWCAST mints a new occurrence id every
+            // ~15 min fetch (§7.3.3), so first-seen dedup alone re-buzzes on
+            // every active-tier poll while the aurora persists. See ADR 0016.
+            firstSeenCooldown = 2.hours,
         ),
         createdAt = now,
         modifiedAt = now,
