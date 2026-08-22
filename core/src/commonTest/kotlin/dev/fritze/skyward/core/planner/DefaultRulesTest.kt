@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -107,6 +108,6 @@ class DefaultRulesTest {
 
         assertEquals(null, rule.schedule.quietHours, "§9.6: quiet hours ship off by default")
         assertTrue(rule.schedule.notifyOnFirstSeen)
-        assertTrue((rule.schedule.firstSeenCooldown ?: kotlin.time.Duration.ZERO) > kotlin.time.Duration.ZERO, "a churning-identity source needs a first-seen cooldown")
+        assertEquals(2.hours, rule.schedule.firstSeenCooldown, "ADR 0016's chosen cooldown, not merely some positive value")
     }
 }

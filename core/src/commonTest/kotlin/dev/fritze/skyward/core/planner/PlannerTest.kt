@@ -547,16 +547,19 @@ class PlannerTest {
         ruleId: String = "r",
         locationId: String = "home",
         fireAt: Instant = now,
+        status: NotificationStatus = NotificationStatus.PENDING,
+        firedAt: Instant? = null,
     ) = PlannedNotification(
         id = "$occId|1|first", occurrenceId = occId, ruleId = ruleId, locationId = locationId,
-        fireAt = fireAt, status = NotificationStatus.PENDING, precision = Precision.EXACT,
-        title = "t", body = "b", createdAt = fireAt, firedAt = null,
+        fireAt = fireAt, status = status, precision = Precision.EXACT,
+        title = "t", body = "b", createdAt = fireAt, firedAt = firedAt,
     )
 
     @Test
     fun firstSeenCooldownSuppressesARepeatWithinTheWindowForTheSameRuleAndLocation() {
         val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
-        val previous = listOf(firstSeenCandidate("occ:1", fireAt = now - 30.minutes))
+        // The earlier alert was actually delivered to the user.
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 30.minutes))
         // A churning-identity occurrence (aurora NOWCAST): a *different* occurrenceId every poll.
         val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
 
@@ -568,7 +571,7 @@ class PlannerTest {
     @Test
     fun firstSeenCooldownAllowsANewAlertOnceTheWindowElapses() {
         val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
-        val previous = listOf(firstSeenCandidate("occ:1", fireAt = now - 3.hours))
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 3.hours))
         val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
 
         val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
@@ -579,7 +582,7 @@ class PlannerTest {
     @Test
     fun firstSeenCooldownDoesNotApplyWithoutARuleSetting() {
         val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = null)
-        val previous = listOf(firstSeenCandidate("occ:1", fireAt = now - 1.minutes))
+        val previous = listOf(firstSeenCandidate("occ:1", status = NotificationStatus.FIRED, firedAt = now - 1.minutes))
         val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
 
         val result = Planner.applyFirstSeenCooldown(desired, previous, mapOf(r.id to r), now)
@@ -591,8 +594,8 @@ class PlannerTest {
     fun firstSeenCooldownIsScopedPerLocationAndRule() {
         val r = rule("nowcast", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
         val previous = listOf(
-            firstSeenCandidate("occ:1", ruleId = "other-rule", locationId = "home", fireAt = now - 30.minutes),
-            firstSeenCandidate("occ:1", ruleId = "nowcast", locationId = "cabin", fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1", ruleId = "other-rule", locationId = "home", status = NotificationStatus.FIRED, firedAt = now - 30.minutes),
+            firstSeenCandidate("occ:1", ruleId = "nowcast", locationId = "cabin", status = NotificationStatus.FIRED, firedAt = now - 30.minutes),
         )
         val desired = listOf(firstSeenCandidate("occ:2", ruleId = "nowcast", locationId = "home", fireAt = now))
 
@@ -602,11 +605,22 @@ class PlannerTest {
     }
 
     @Test
-    fun firstSeenCooldownIgnoresACancelledOrMissedPreviousNotification() {
+    fun firstSeenCooldownIgnoresANonFiredPreviousNotification() {
+        // CodeRabbit review, PR #114: a still-undelivered PENDING/REGISTERED
+        // row (or one that ended up CANCELLED/MISSED without ever reaching
+        // the user) must never block a replacement. Otherwise, once the
+        // occurrence backing that undelivered row churns again (aurora
+        // NOWCAST mints a fresh id every fetch), `reconcile` marks the stale
+        // row MISSED because its withdrawn occurrence disappears from
+        // `occurrencesById` -- and with the replacement suppressed too, the
+        // user ends up with no alert for an aurora that was genuinely
+        // ongoing.
         val r = rule("r", notifyOnFirstSeen = true, firstSeenCooldown = 2.hours)
         val previous = listOf(
-            plannedFrom(firstSeenCandidate("occ:1", fireAt = now - 30.minutes), NotificationStatus.CANCELLED),
-            plannedFrom(firstSeenCandidate("occ:1b", fireAt = now - 30.minutes), NotificationStatus.MISSED),
+            firstSeenCandidate("occ:1", status = NotificationStatus.PENDING, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1b", status = NotificationStatus.REGISTERED, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1c", status = NotificationStatus.CANCELLED, fireAt = now - 30.minutes),
+            firstSeenCandidate("occ:1d", status = NotificationStatus.MISSED, fireAt = now - 30.minutes),
         )
         val desired = listOf(firstSeenCandidate("occ:2", fireAt = now))
 

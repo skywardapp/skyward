@@ -159,7 +159,8 @@ object Planner {
      * §10.4 extension (issue #57, ADR 0016): drops a `notifyOnFirstSeen`
      * candidate whose rule set [dev.fritze.skyward.core.rules.NotifySchedule.firstSeenCooldown]
      * when a previous notification for the same `(ruleId, locationId)` pair
-     * already fired -- or is about to -- within that window.
+     * was actually *delivered* (`FIRED`, with a `firedAt`) within that
+     * window.
      *
      * Exists because first-seen dedup keys on the *occurrence* (§10.4), and
      * a source like aurora NOWCAST deliberately mints a new occurrence id
@@ -170,6 +171,17 @@ object Planner {
      * (already-planned rows), which [desiredNotifications] deliberately
      * doesn't take -- see its own doc comment.
      *
+     * Deliberately restricted to `FIRED` rows, not merely "not cancelled/
+     * missed": a still-`PENDING`/`REGISTERED` row hasn't reached the user
+     * yet. If it were allowed to suppress a replacement and the occurrence
+     * then churns again before the platform layer delivers it, [reconcile]
+     * marks the stale row `MISSED` once its withdrawn occurrence disappears
+     * from `occurrencesById` -- and with the replacement suppressed too, the
+     * user would receive nothing for an aurora that was genuinely ongoing.
+     * Gating on `FIRED` means the cooldown can only ever suppress a
+     * *repeat* of an alert the user already got, never risk swallowing the
+     * only one.
+     *
      * Deliberately keyed on `(ruleId, locationId)` alone, not on any
      * phenomenon-specific "is this materially stronger" signal (e.g. Kp):
      * the withdrawn occurrence a comparison would need is already gone from
@@ -177,7 +189,7 @@ object Planner {
      * threading phenomenon data onto [PlannedNotification] would leak it out
      * of the sealed `OccurrencePayload` it deliberately lives in (§5).
      */
-    fun applyFirstSeenCooldown(
+    internal fun applyFirstSeenCooldown(
         desired: List<PlannedNotification>,
         previous: List<PlannedNotification>,
         rulesById: Map<String, Rule>,
@@ -186,13 +198,12 @@ object Planner {
         if (!candidate.id.endsWith(FIRST_SEEN_KEY_SUFFIX)) return@filterNot false
         val cooldown = rulesById[candidate.ruleId]?.schedule?.firstSeenCooldown ?: return@filterNot false
         previous.any { p ->
-            p.ruleId == candidate.ruleId &&
+            p.status == NotificationStatus.FIRED &&
+                p.ruleId == candidate.ruleId &&
                 p.locationId == candidate.locationId &&
                 p.id != candidate.id &&
-                p.status != NotificationStatus.CANCELLED &&
-                p.status != NotificationStatus.MISSED &&
-                p.fireAt <= now &&
-                p.fireAt > now - cooldown
+                p.firedAt != null &&
+                p.firedAt > now - cooldown
         }
     }
 
