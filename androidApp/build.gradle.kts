@@ -84,7 +84,9 @@ android {
     // §15.1 / D13: the ONLY difference between the two flavours is the exact-alarm
     // permission (§10.2). No BuildConfig fields, no dependency differences, no
     // source-set Kotlin code — see androidApp/src/foss and src/play, which
-    // each contain exactly one file (AndroidManifest.xml).
+    // each contain exactly one file (AndroidManifest.xml). Keep these two
+    // blocks bare: a per-flavour buildConfigField or resValue written here is
+    // the one D13 divergence §17.5b's checks below cannot see.
     flavorDimensions += "store"
     productFlavors {
         create("foss") { dimension = "store" }   // F-Droid + GitHub releases
@@ -187,13 +189,19 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
-// §17.5b / R14: the manifest-diff CI check. fossDebug and playDebug must merge
-// to identical manifests except for the exact-alarm permission entries
+// §17.5b (a) / R14: the manifest-diff CI check. fossDebug and playDebug must
+// merge to identical manifests except for the exact-alarm permission entries
 // (§10.2) — any other divergence means D13's "flavours differ only in the
-// exact-alarm permission" invariant has silently broken. Compares
-// (name, maxSdkVersion) pairs, not bare names, because the foss/play
-// SCHEDULE_EXACT_ALARM entries differ only by maxSdkVersion (§10.2) and a
-// bare-name comparison would miss that attribute entirely.
+// exact-alarm permission" invariant has silently broken.
+//
+// The comparison is over the *whole* merged manifest, not just its
+// <uses-permission> elements: R14's drift risk is a flavour quietly gaining a
+// receiver, a provider, an <application> attribute or an extra <queries>
+// entry, none of which a permission-only diff can see. Permissions are still
+// compared as (name, maxSdkVersion) pairs — that falls out of comparing every
+// attribute of every element, and it is what makes the foss/play
+// SCHEDULE_EXACT_ALARM entries (identical in name, differing in
+// maxSdkVersion="32", §10.2) distinguishable at all.
 run {
     val androidComponents = extensions.getByType<com.android.build.api.variant.ApplicationAndroidComponentsExtension>()
     val mergedManifests = mutableMapOf<String, org.gradle.api.provider.Provider<org.gradle.api.file.RegularFile>>()
@@ -203,6 +211,7 @@ run {
         }
     }
 
+    val androidNs = "http://schemas.android.com/apk/res/android"
     val exactAlarmPermissionNames = setOf(
         "android.permission.USE_EXACT_ALARM",
         "android.permission.SCHEDULE_EXACT_ALARM",
@@ -221,44 +230,197 @@ run {
             val playFile = mergedManifests["playDebug"]?.get()?.asFile
                 ?: error("playDebug variant was not configured — check androidApp's productFlavors")
 
-            fun permissionPairs(manifestFile: File): Set<Pair<String, String?>> {
-                val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            fun parse(manifestFile: File): org.w3c.dom.Document =
+                javax.xml.parsers.DocumentBuilderFactory.newInstance()
                     .apply { isNamespaceAware = true }
                     .newDocumentBuilder()
                     .parse(manifestFile)
-                val androidNs = "http://schemas.android.com/apk/res/android"
-                val nodes = doc.getElementsByTagName("uses-permission")
+
+            fun isExactAlarmPermission(el: org.w3c.dom.Element): Boolean =
+                el.localName == "uses-permission" && el.getAttributeNS(androidNs, "name") in exactAlarmPermissionNames
+
+            // Attributes keyed by namespace URI rather than by prefix, so a
+            // flavour manifest that bound `android:` to a different prefix
+            // would still compare equal — the merger normalises prefixes, but
+            // relying on it would make this check's correctness depend on an
+            // AGP implementation detail.
+            fun attributeSignature(el: org.w3c.dom.Element): String =
+                (0 until el.attributes.length)
+                    .map { el.attributes.item(it) as org.w3c.dom.Attr }
+                    // xmlns declarations are scoping, not content: two manifests
+                    // that declare the same namespace at different depths are
+                    // the same manifest.
+                    .filterNot { it.namespaceURI == "http://www.w3.org/2000/xmlns/" }
+                    .map { attr ->
+                        val name = when (attr.namespaceURI) {
+                            null -> attr.name
+                            androidNs -> "android:${attr.localName}"
+                            else -> "{${attr.namespaceURI}}${attr.localName}"
+                        }
+                        "$name=\"${attr.value}\""
+                    }
+                    .sorted()
+                    .joinToString(", ")
+
+            // A multiset of root-anchored element paths: order-insensitive
+            // (the merger's output order is not a contract) but duplicate- and
+            // attribute-sensitive. Comment and text nodes are skipped —
+            // manifests carry no meaningful character data, and the flavour
+            // manifests' explanatory comments are exactly the kind of
+            // difference that must not fail this check.
+            fun elementPathCounts(manifestFile: File): Map<String, Int> {
+                val counts = mutableMapOf<String, Int>()
+                fun walk(el: org.w3c.dom.Element, parentPath: String) {
+                    if (isExactAlarmPermission(el)) return
+                    val attributes = attributeSignature(el)
+                    val path = "$parentPath/${el.localName ?: el.tagName}" + if (attributes.isEmpty()) "" else "[$attributes]"
+                    counts.merge(path, 1, Int::plus)
+                    val children = el.childNodes
+                    for (i in 0 until children.length) {
+                        val child = children.item(i)
+                        if (child is org.w3c.dom.Element) walk(child, path)
+                    }
+                }
+                walk(parse(manifestFile).documentElement, "")
+                return counts
+            }
+
+            // Every path is rooted at the <manifest> element and prefixed by
+            // it, so the shortest key is that element's own signature.
+            fun rootSignature(counts: Map<String, Int>): String =
+                counts.keys.minByOrNull { it.length } ?: error("merged manifest parsed to no elements at all")
+
+            val fossPaths = elementPathCounts(fossFile)
+            val playPaths = elementPathCounts(playFile)
+            val fossRoot = rootSignature(fossPaths)
+            val playRoot = rootSignature(playPaths)
+
+            // A divergent <manifest> element (a flavour-specific
+            // applicationIdSuffix or versionName, say) re-roots every path
+            // below it, so reporting the whole diff would bury the one line
+            // that matters under every element in the file.
+            if (fossRoot != playRoot) {
+                throw GradleException(
+                    "androidApp flavours' merged manifests diverge on the <manifest> element itself (D13):\n" +
+                        "  foss: $fossRoot\n  play: $playRoot"
+                )
+            }
+
+            val divergentPaths = (fossPaths.keys + playPaths.keys)
+                .filter { fossPaths[it] != playPaths[it] }
+                .sorted()
+
+            if (divergentPaths.isNotEmpty()) {
+                throw GradleException(
+                    "androidApp flavours' merged manifests diverge beyond the exact-alarm exception (D13):\n" +
+                        divergentPaths.joinToString("\n") { path ->
+                            "  ${path.removePrefix(fossRoot)} — foss: ${fossPaths[path] ?: 0}×, play: ${playPaths[path] ?: 0}×"
+                        } + "\n" +
+                        "Only the ${exactAlarmPermissionNames.joinToString(" / ")} entries may differ (§10.2)."
+                )
+            }
+
+            // Report what the flavours legitimately differ on, so the log says
+            // the exception is still in use rather than merely that nothing
+            // failed — an accidentally *empty* delta (both flavours losing the
+            // permission) is a §10.2 bug this check cannot see.
+            fun exactAlarmEntries(manifestFile: File): Set<Pair<String, String?>> {
+                val nodes = parse(manifestFile).getElementsByTagName("uses-permission")
                 return buildSet {
                     for (i in 0 until nodes.length) {
                         val el = nodes.item(i) as org.w3c.dom.Element
-                        val name = el.getAttributeNS(androidNs, "name")
-                        val maxSdk = el.getAttributeNS(androidNs, "maxSdkVersion").ifBlank { null }
-                        add(name to maxSdk)
+                        if (!isExactAlarmPermission(el)) continue
+                        add(el.getAttributeNS(androidNs, "name") to el.getAttributeNS(androidNs, "maxSdkVersion").ifBlank { null })
                     }
                 }
             }
 
-            val fossPermissions = permissionPairs(fossFile)
-            val playPermissions = permissionPairs(playFile)
-            val onlyInFoss = fossPermissions - playPermissions
-            val onlyInPlay = playPermissions - fossPermissions
-            val divergent = onlyInFoss + onlyInPlay
-
-            val unexpected = divergent.filterNot { (name, _) -> name in exactAlarmPermissionNames }
-            if (unexpected.isNotEmpty()) {
-                throw GradleException(
-                    "androidApp flavours diverge on permissions beyond the exact-alarm exception (D13):\n" +
-                        "  foss-only: $onlyInFoss\n  play-only: $onlyInPlay\n" +
-                        "Unexpected divergent entries: $unexpected"
-                )
-            }
-            logger.lifecycle("checkFlavourManifestParity: OK — flavours diverge only on ${divergent.map { it.first }.toSet()}")
+            val fossExactAlarm = exactAlarmEntries(fossFile)
+            val playExactAlarm = exactAlarmEntries(playFile)
+            val divergentPermissions = (fossExactAlarm - playExactAlarm) + (playExactAlarm - fossExactAlarm)
+            logger.lifecycle(
+                "checkFlavourManifestParity: OK — ${fossPaths.values.sum()} manifest elements identical; " +
+                    "flavours diverge only on ${divergentPermissions.map { it.first }.toSet()}"
+            )
         }
     }
 }
 
-// §17.5b (c) / D13: dependency-set parity between flavours. The manifest-diff
-// check above catches permission drift; a flavour pulling in an extra
+// §17.5b (b) / D13: flavour source-set purity. The manifest diff above sees
+// only what reaches a merged manifest, and the dependency-set check below
+// only what reaches a resolved classpath; neither can see a `.kt` file
+// compiled into one flavour and not the other, which is R14's real drift
+// risk. §15.1's layout gives each flavour exactly one file — its
+// AndroidManifest.xml — so the guard is simply that nothing else is there.
+//
+// Any file, not just `.kt`: a flavour-only drawable, string resource, asset
+// or `.java` file diverges the two APKs just as effectively, and none of them
+// is harder to add by accident.
+run {
+    val srcRoot = layout.projectDirectory.dir("src").asFile
+    val manifestOnlyDirs = listOf("foss", "play")
+
+    tasks.register("checkFlavourSourceSetsManifestOnly") {
+        group = "verification"
+        description = "Fails if a foss/play source set holds anything but its AndroidManifest.xml (D13, §17.5b)."
+
+        inputs.files(fileTree(srcRoot) { include("foss*/**", "play*/**") })
+            .withPropertyName("flavourSourceSets")
+            .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+
+        doLast {
+            fun relativeFiles(dir: File): List<String> =
+                dir.walkTopDown()
+                    .filter { it.isFile }
+                    .map { it.relativeTo(srcRoot).invariantSeparatorsPath }
+                    .sorted()
+                    .toList()
+
+            val violations = mutableListOf<String>()
+
+            for (name in manifestOnlyDirs) {
+                val dir = File(srcRoot, name)
+                if (!dir.isDirectory) {
+                    violations += "src/$name/ is missing — each flavour owns exactly one AndroidManifest.xml (§15.1)"
+                    continue
+                }
+                val contents = relativeFiles(dir)
+                if (contents != listOf("$name/AndroidManifest.xml")) {
+                    violations += "src/$name/ must contain AndroidManifest.xml and nothing else, but holds: $contents"
+                }
+            }
+
+            // Variant source sets (src/fossDebug/, src/playRelease/, …) are
+            // flavour-specific too, and src/fossRelease/ in particular is
+            // invisible to the manifest diff above, which compares the *debug*
+            // variants. None of them may exist at all.
+            //
+            // Test source sets (src/testFoss/, src/androidTestFoss/) are named
+            // the other way round and so fall outside this sweep, deliberately:
+            // §17.5 runs the same instrumented tests against both flavours, and
+            // a test that pins one flavour's behaviour ships in no APK.
+            val strayFlavourSourceSets = (srcRoot.listFiles() ?: emptyArray())
+                .sortedBy { it.name }
+                .filter { it.isDirectory && it.name !in manifestOnlyDirs }
+                .filter { it.name.startsWith("foss") || it.name.startsWith("play") }
+                .filter { relativeFiles(it).isNotEmpty() }
+                .map { "src/${it.name}/ holds flavour-specific sources: ${relativeFiles(it)}" }
+            violations += strayFlavourSourceSets
+
+            if (violations.isNotEmpty()) {
+                throw GradleException(
+                    "androidApp flavours differ by more than the exact-alarm permission (D13, §15.1):\n" +
+                        violations.joinToString("\n") { "  $it" } + "\n" +
+                        "Flavour-specific code belongs in src/main; if it genuinely cannot, that is an ADR, not a source set."
+                )
+            }
+            logger.lifecycle("checkFlavourSourceSetsManifestOnly: OK — ${manifestOnlyDirs.size} flavour source sets, manifests only.")
+        }
+    }
+}
+
+// §17.5b (c) / D13: dependency-set parity between flavours. The two checks
+// above catch manifest and source-set drift; a flavour pulling in an extra
 // dependency would be a subtler D13 violation that manifest diffing can't
 // see (there is currently no such source — both flavours share the same
 // `dependencies {}` block — but this is the automated enforcement called for
@@ -309,6 +471,12 @@ run {
     }
 }
 
+// All three parts of §17.5b's D13 guard run in `check`, so the invariant is
+// enforced by the same command a contributor runs locally, not only by CI.
 tasks.named("check") {
-    dependsOn("checkFlavourManifestParity", "checkFlavourDependencyParity")
+    dependsOn(
+        "checkFlavourManifestParity",
+        "checkFlavourSourceSetsManifestOnly",
+        "checkFlavourDependencyParity",
+    )
 }

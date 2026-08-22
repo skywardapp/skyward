@@ -70,8 +70,9 @@ get through the Android modules — say so rather than reporting a green run
 you didn't get.
 
 `./gradlew check` is not just tests. It also runs `verifyShowerCatalogsMatch`,
-`checkFlavourManifestParity`, `checkFlavourDependencyParity` and
-`checkDependencyLicenses` — see "Invariants" below for what each protects.
+`checkFlavourManifestParity`, `checkFlavourSourceSetsManifestOnly`,
+`checkFlavourDependencyParity` and `checkDependencyLicenses` — see
+"Invariants" below for what each protects.
 
 `debug-matches` is a headless CLI path through the whole domain pipeline
 (§18/M2's acceptance command). CI runs it against the *packaged* binary,
@@ -89,10 +90,19 @@ because that is the startup path a packaging mistake actually breaks (ADR
   Compose, no AndroidX. Platform bits go in `androidMain`/`desktopMain` behind
   `expect`/`actual`.
 - **The two Android flavours differ only in the exact-alarm permission**
-  (D13, §15.1). `src/fossMain/` and `src/playMain/` contain one
-  `AndroidManifest.xml` each and **no `.kt` files**. Adding flavour-specific
-  Kotlin, a `BuildConfig` field, or a dependency to one flavour fails CI —
-  correctly.
+  (D13, §15.1). `src/foss/` and `src/play/` (AGP's names for what §15.1 calls
+  `src/fossMain/`/`src/playMain/` — ADR 0001) contain one `AndroidManifest.xml`
+  each and nothing else. §17.5b's three guards, all of them inside
+  `./gradlew check`, are what make that true rather than merely intended:
+  `checkFlavourManifestParity` diffs the whole merged manifest of each
+  flavour, masking only the exact-alarm entries;
+  `checkFlavourSourceSetsManifestOnly` rejects any file in a `foss*`/`play*`
+  source set but those two manifests; `checkFlavourDependencyParity` compares
+  the resolved release classpaths. So flavour-specific Kotlin, a flavour-only
+  resource and a flavour-only dependency all fail CI — correctly. The one
+  divergence no guard sees is one written into `productFlavors {}` itself (a
+  per-flavour `buildConfigField`, say): those two blocks are one line each on
+  purpose, and keeping them that way is a review obligation.
 - **No monetization machinery** (P6/D13): no billing, entitlements, licence
   checks, ads or donation links. Equally, no dependency or data source whose
   licence forbids commercial use (this is why comets come from JPL, not COBS

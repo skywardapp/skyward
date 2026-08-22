@@ -21,10 +21,11 @@ permissions:
 # live in android-ui-tests.yml, which records the screen while they run.
 #
 # §17.5b's release-build checks land with M7:
-#   - dependency-set-parity between flavours runs inside `./gradlew check`
-#     (checkFlavourDependencyParity, androidApp/build.gradle.kts) alongside
-#     the manifest-diff and licence-allowlist checks, all three in the
-#     `check` job below.
+#   - all three parts of the D13 flavour-drift guard run inside
+#     `./gradlew check` (checkFlavourManifestParity,
+#     checkFlavourSourceSetsManifestOnly, checkFlavourDependencyParity in
+#     androidApp/build.gradle.kts) alongside the licence-allowlist check, all
+#     of them in the `check` job below.
 #   - assembleFossRelease/assemblePlayRelease succeeding is exercised by the
 #     `check` job too. No real signing key is required for either — both
 #     flavours' release build types are wired to sign with the owner's key
@@ -89,14 +90,14 @@ jobs:
           python3 -m pip install --user "jeepney==0.9.0"
 
       # commonTest on JVM (which since M6 includes the desktop app's own
-      # tests, §17), both flavours assemble, manifest-diff and
-      # licence-allowlist checks (§17.5b). Later milestones extend this job
-      # rather than replace it — see §17 for the full testing strategy.
+      # tests, §17), both flavours assemble, the three flavour-drift guards
+      # and the licence-allowlist check (§17.5b). Later milestones extend this
+      # job rather than replace it — see §17 for the full testing strategy.
       #
       # Run under a private session bus with the mock notification daemon on
       # it. `dbus-run-session` tears the bus down when the command finishes,
       # which is also how the daemon exits.
-      - name: Check (commonTest, lint, manifest parity, dependency licences)
+      - name: Check (commonTest, lint, flavour parity, dependency licences)
         env:
           SKYWARD_MOCK_NOTIFICATION_LOG: ${{ runner.temp }}/mock-notifications.jsonl
         run: |

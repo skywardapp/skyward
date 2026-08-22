@@ -18,11 +18,12 @@ this repository implements it. In particular:
 
 ## Status
 
-**M7 — Release engineering (in progress).** Signing config, the
-manifest/dependency-parity checks, and the reproducible-build check
-(§17.5b) are wired and green; F-Droid RFP, Play Console setup, Android
-Developer Verification and Flatpak submission are wall-clock, owner-only
-steps still outstanding — see [`RELEASE.md`](RELEASE.md) for the runbook.
+**M7 — Release engineering (in progress).** Signing config, all three
+flavour-drift guards (merged manifest, source sets, dependency sets) and
+the reproducible-build check (§17.5b) are wired and green; F-Droid RFP,
+Play Console setup, Android Developer Verification and Flatpak submission
+are wall-clock, owner-only steps still outstanding — see
+[`RELEASE.md`](RELEASE.md) for the runbook.
 
 Previously landed: M0 skeleton & CI, M1 astronomy core, M2 visibility +
 rules + planner, M3 Android MVP, M4 polled sources, M5 full RuleEditor +
