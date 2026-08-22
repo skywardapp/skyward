@@ -1,5 +1,6 @@
 package dev.fritze.skyward.desktop.data
 
+import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -125,6 +126,17 @@ class PrivateFilesTest {
 
         assertEquals("{}", Files.readString(file), "an existing file's contents must survive")
         if (posixSupported) assertEquals("rw-------", permissionsOf(file))
+    }
+
+    @Test
+    fun reportsAFileItCouldNotCreateInsteadOfReturningOne() {
+        // Returning normally without a file would leave the next writer to
+        // create one on its own terms, and `Files.newBufferedWriter` creates
+        // with the ambient umask — the world-readable outcome this class
+        // exists to prevent. Only the permission bits are best-effort.
+        val missing = temporaryDirectory.resolve("no-such-directory/skyward.db")
+
+        assertFailsWith<IOException> { PrivateFiles.createFile(missing) }
     }
 
     @Test

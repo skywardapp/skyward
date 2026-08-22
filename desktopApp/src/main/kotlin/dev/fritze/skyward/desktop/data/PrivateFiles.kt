@@ -1,6 +1,5 @@
 package dev.fritze.skyward.desktop.data
 
-import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -80,6 +79,11 @@ internal object PrivateFiles {
      * Ensures [file] exists with owner-only permissions, so that whatever
      * writes to it next — SQLite, a `writeText` — cannot leave a
      * world-readable file behind.
+     *
+     * A failure to create it at all propagates. Only the permission bits are
+     * best-effort: returning normally from here without a file would let the
+     * next writer create one on its own terms, which is precisely the
+     * world-readable outcome this exists to prevent.
      */
     fun createFile(file: Path): Path {
         try {
@@ -93,10 +97,6 @@ internal object PrivateFiles {
             // reported rather than mangled.
             if (!Files.isRegularFile(file)) throw e
             restrict(file, OWNER_ONLY_FILE)
-        } catch (e: IOException) {
-            // Unwritable directory, say. The caller's own write will fail with
-            // a message that actually explains the problem; swallowing it here
-            // would replace that with a confusing one.
         }
         return file
     }
@@ -129,13 +129,22 @@ internal object PrivateFiles {
         }
     }
 
-    /** [createFile] followed by the write, for §12's exports. */
+    /**
+     * [createFile] followed by the write, for §12's exports.
+     *
+     * Deliberately no `CREATE` among the open options. [createFile] has
+     * already made the file, owner-only; letting the writer create it too
+     * would hand it a second, unrestricted route into existence — so a
+     * `createFile` that failed for any reason would end in a world-readable
+     * export rather than an error. Without `CREATE` a missing file is a
+     * `NoSuchFileException` the caller reports, which is the failure this
+     * class is supposed to have.
+     */
     fun writeText(file: Path, text: String) {
         createFile(file)
         Files.newBufferedWriter(
             file,
             StandardOpenOption.WRITE,
-            StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
         ).use { it.write(text) }
     }
