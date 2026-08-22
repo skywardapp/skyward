@@ -31,6 +31,9 @@ Skyward is local-only: no account, no hosted backend, no telemetry. The only
 network traffic is direct HTTPS calls from your device to public data
 providers (NOAA, NASA) to fetch aurora, comet, and terrestrial-event data —
 everything else (eclipses, meteor showers, moon events, sky positions) is
-computed entirely on-device. Your saved locations never leave your device.
+computed entirely on-device. Your saved locations stay on your device,
+except that an approximate region covering them — never your exact
+coordinates — may be included in NASA EONET queries to narrow that source's
+response.
 
 Free software, GPL-3.0-or-later.
