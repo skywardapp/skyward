@@ -75,7 +75,7 @@ internal object PrivateFiles {
      */
     fun createFile(file: Path): Path {
         try {
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE))
+            createOwnerOnly(file)
         } catch (e: FileAlreadyExistsException) {
             // As in [createDirectory]: the ordinary case is a file that is
             // already there, which is what this branch is for. A directory on
@@ -85,14 +85,30 @@ internal object PrivateFiles {
             // reported rather than mangled.
             if (!Files.isRegularFile(file)) throw e
             restrict(file, OWNER_ONLY_FILE)
-        } catch (e: UnsupportedOperationException) {
-            runCatching { Files.createFile(file) }
         } catch (e: IOException) {
             // Unwritable directory, say. The caller's own write will fail with
             // a message that actually explains the problem; swallowing it here
             // would replace that with a confusing one.
         }
         return file
+    }
+
+    /**
+     * Creates [file] owner-only, or plainly on a filesystem with no POSIX
+     * view.
+     *
+     * The fallback is nested inside the creation attempt rather than sitting
+     * beside the [FileAlreadyExistsException] handler so that both routes
+     * report an occupied path the same way. Catching it out there instead
+     * would leave the non-POSIX route silently accepting a directory where
+     * its POSIX twin raises.
+     */
+    private fun createOwnerOnly(file: Path) {
+        try {
+            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE))
+        } catch (e: UnsupportedOperationException) {
+            Files.createFile(file)
+        }
     }
 
     /** [createFile] followed by the write, for §12's exports. */

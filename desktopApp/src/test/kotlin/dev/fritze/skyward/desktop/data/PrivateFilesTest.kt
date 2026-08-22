@@ -26,7 +26,13 @@ class PrivateFilesTest {
 
     @AfterTest
     fun cleanUp() {
-        Files.walk(temporaryDirectory).sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+        // `Files.walk` holds an open directory handle per level and is only
+        // released by closing the stream, so this runs inside `use` — a test
+        // class that leaks one per method would eventually run the JVM out of
+        // descriptors on a large enough suite.
+        Files.walk(temporaryDirectory).use { paths ->
+            paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+        }
     }
 
     private fun permissionsOf(path: Path) = PosixFilePermissions.toString(Files.getPosixFilePermissions(path))
