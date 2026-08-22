@@ -125,10 +125,26 @@ class DesktopContainer(
          * lives, so it has to be read, acted on and written back by hand.
          */
         fun openDriver(databaseFile: Path): SqlDriver {
+            // Created owner-only *before* Xerial opens it: SQLite creates a
+            // missing database file with the process umask, which on a stock
+            // `umask 022` desktop means every saved location's coordinates are
+            // world-readable (P1). Creating it empty first costs nothing —
+            // SQLite treats a zero-length file as a fresh database.
+            PrivateFiles.createFile(databaseFile)
             val driver = JdbcSqliteDriver("jdbc:sqlite:${databaseFile.toAbsolutePath()}")
             migrateIfNeeded(driver)
+            // The write-ahead log and shared-memory files are SQLite's to
+            // create, and they hold the same rows the database does. The
+            // containing directory is owner-only too, so this is belt and
+            // braces for a data dir a user has deliberately opened up.
+            for (suffix in SQLITE_SIDECAR_SUFFIXES) {
+                PrivateFiles.restrictFile(databaseFile.resolveSibling(databaseFile.fileName.toString() + suffix))
+            }
             return driver
         }
+
+        /** SQLite's WAL sidecars, which carry the same data as the database itself. */
+        private val SQLITE_SIDECAR_SUFFIXES = listOf("-wal", "-shm", "-journal")
 
         internal fun schemaAction(currentVersion: Long, schemaVersion: Long): SchemaAction = when {
             currentVersion == 0L -> SchemaAction.CREATE

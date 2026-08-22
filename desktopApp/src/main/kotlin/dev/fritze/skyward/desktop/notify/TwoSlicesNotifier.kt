@@ -35,7 +35,10 @@ class TwoSlicesNotifier(
             Toast.builder()
                 .type(ToastType.INFO)
                 .title(notification.title)
-                .content(notification.body)
+                // Escaped here rather than in the shared copy renderer: markup
+                // is a property of this delivery channel, not of §10.5's text
+                // (Android's notifications are not parsed this way).
+                .content(escapeNotificationBodyMarkup(notification.body))
                 // "Clicking a notification raises the window on the relevant detail
                 // view (DBus action if supported; else best effort)" (§10.3). On a
                 // desktop whose notification daemon ignores actions this simply

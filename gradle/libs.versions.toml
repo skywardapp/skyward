@@ -1,5 +1,20 @@
+# Single source of truth for versions (§15.2 of the design doc). Update
+# deliberately, in lockstep.
+#
+# What is *not* here: Gradle dependency verification
+# (`gradle/verification-metadata.xml`). The supply-chain pins this project does
+# have — the Gradle distribution's `distributionSha256Sum`, CI's
+# wrapper-validation step, and workflow actions pinned by commit SHA — each cost
+# one line at update time. Per-artifact checksum verification does not: it has
+# to be regenerated for every dependency bump, its coverage depends on which
+# tasks were run when it was written (a gap only surfaces later, as a failed
+# release build), and the entry set differs by host OS and JDK, so a
+# contributor on another platform hits missing entries rather than a clean
+# build. Adding it is a maintenance commitment, not a config change — see
+# issue #78. Until it is made deliberately, the pinned exact versions below are
+# the boundary.
+
 [versions]
-# Single source of truth for versions (§15.2 of the design doc). Update deliberately, in lockstep.
 kotlin = "2.4.10"
 composeMultiplatform = "1.11.1"
 composeBom = "2026.06.01"

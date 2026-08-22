@@ -106,6 +106,16 @@ because that is the startup path a packaging mistake actually breaks (ADR
   a release is cut by pushing a tag. There is no version field to edit.
 - **Dependency versions live only in `gradle/libs.versions.toml`**, pinned per
   §15.2 and updated deliberately, in lockstep.
+- **Supply-chain pins move together with what they pin.** The Gradle
+  distribution is checksum-pinned in `gradle/wrapper/gradle-wrapper.properties`
+  — change `distributionSha256Sum` in the same commit as `distributionUrl`,
+  taking the value from `<distributionUrl>.sha256`, or the wrapper refuses to
+  run. Every workflow `uses:` is a full commit SHA with its version in a
+  trailing comment; bump both halves together, and never relax one back to a
+  tag. Every `setup-gradle` step passes `validate-wrappers: true`, so the
+  committed wrapper JAR is checked against Gradle's published hashes before any
+  build runs. The header of `libs.versions.toml` records why there is no
+  `gradle/verification-metadata.xml`.
 - **`showers.json` exists twice** (`core/src/commonMain/resources/` and
   `core/src/androidMain/resources/`) because AGP needs its own copy. Update
   both together; `verifyShowerCatalogsMatch` fails the build if they diverge.

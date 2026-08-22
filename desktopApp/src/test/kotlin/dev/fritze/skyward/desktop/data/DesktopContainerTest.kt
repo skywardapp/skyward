@@ -4,6 +4,9 @@ import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.persistence.SkywardDatabase
 import kotlinx.coroutines.runBlocking
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,6 +21,20 @@ import kotlin.time.Instant
 class DesktopContainerTest {
 
     private val now = Instant.parse("2026-08-14T00:00:00Z")
+
+    @Test
+    fun leavesTheDatabaseFileReadableOnlyByItsOwner() {
+        // SQLite would create it with the process umask, which on a stock
+        // desktop leaves every saved location's coordinates world-readable —
+        // the opposite of what P1 promises (issue #78).
+        val file = createTempDirectory("skyward-test").resolve("skyward.db")
+
+        DesktopContainer.openDriver(file).close()
+
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+        }
+    }
 
     @Test
     fun createsTheSchemaOnAFreshDatabaseFileAndPersistsAcrossReopen() = runBlocking {

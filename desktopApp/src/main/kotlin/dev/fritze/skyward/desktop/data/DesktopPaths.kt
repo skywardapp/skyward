@@ -1,7 +1,6 @@
 package dev.fritze.skyward.desktop.data
 
 import java.nio.file.Path
-import kotlin.io.path.createDirectories
 
 /**
  * XDG base directories (§11: "DB at `$XDG_DATA_HOME/skyward/skyward.db`,
@@ -29,8 +28,16 @@ class DesktopPaths(
 
     fun autostartDir(): Path = configDir().resolve("autostart")
 
-    /** Creates the data directory if needed and returns the DB file path inside it. */
-    fun databaseFile(): Path = dataDir().createDirectories().resolve("skyward.db")
+    /**
+     * Creates the data directory if needed and returns the DB file path
+     * inside it.
+     *
+     * Owner-only, via [PrivateFiles]: the database holds every saved
+     * location's precise coordinates, and P1 promises those stay on the
+     * user's machine — which a `umask 022` directory does not deliver on a
+     * multi-user box.
+     */
+    fun databaseFile(): Path = PrivateFiles.createDirectory(dataDir()).resolve("skyward.db")
 
     private fun xdgDir(variable: String, homeRelativeFallback: String): Path {
         val fromEnvironment = environment(variable)?.takeIf { it.isNotBlank() }

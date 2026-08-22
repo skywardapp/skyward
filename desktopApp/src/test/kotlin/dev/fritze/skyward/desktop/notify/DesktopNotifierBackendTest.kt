@@ -63,6 +63,25 @@ class DesktopNotifierBackendTest {
     }
 
     @Test
+    fun notifySendReceivesTheBodyWithItsMarkupEscaped() {
+        // A comet name is whatever JPL sent (§7.4), and it lands in the body
+        // §10.5 renders. Notification daemons parse markup there, so the
+        // escaping has to happen on the way out of the app, not be trusted to
+        // the daemon (issue #78).
+        val (command, log) = stubNotifySend()
+        val hostile = reminder.copy(body = """Comet <a href="https://phish.example/">X</a> is up.""")
+
+        assertTrue(NotifySendNotifier(command).post(hostile, onActivated = {}))
+
+        val argv = log.readLines()
+        assertFalse(argv.any { "<a href" in it }, "raw markup reached notify-send: $argv")
+        assertContains(argv, "Comet &lt;a href=\"https://phish.example/\"&gt;X&lt;/a&gt; is up.")
+        // The title is the spec's plain-text summary field; escaping it would
+        // only show a literal "&amp;" to a user whose location has an "&".
+        assertContains(argv, hostile.title)
+    }
+
+    @Test
     fun notifySendReceivesTheReminderTextAndTheOptionTerminator() {
         val (command, log) = stubNotifySend()
 
