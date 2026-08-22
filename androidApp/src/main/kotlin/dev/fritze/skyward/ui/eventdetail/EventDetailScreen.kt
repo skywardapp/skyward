@@ -57,11 +57,14 @@ import dev.fritze.skyward.core.format.compassOf
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDistanceKm
 import dev.fritze.skyward.core.format.formatRelative
+import dev.fritze.skyward.core.format.geoUri
+import dev.fritze.skyward.core.format.googleMapsUrl
 import dev.fritze.skyward.core.format.localDetailLines
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.format.relativeChangeAfter
 import dev.fritze.skyward.core.model.CometPayload
+import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.LocalDetails
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.OccurrencePayload
@@ -328,6 +331,7 @@ private fun Row2(content: @Composable androidx.compose.foundation.layout.RowScop
  */
 @Composable
 private fun LocationCard(location: SavedLocation, visres: VisibilityResult, zone: TimeZone) {
+    val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -343,11 +347,38 @@ private fun LocationCard(location: SavedLocation, visres: VisibilityResult, zone
                         (visres.qualityAtNearestPoint?.let { qualityLabel(it).lowercase() } ?: "better conditions"),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                // §13.3's travel guidance, one tap further -- offered only where
+                // that line already is, i.e. only when there's a nearer point
+                // worth pointing at.
+                visres.nearestVisiblePoint?.let { point ->
+                    TextButton(onClick = { openNearestVisiblePointInMaps(context, point) }) {
+                        Text("Open in Maps")
+                    }
+                }
             }
             localDetailLines(visres.localDetails, zone).forEach {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+private const val NEAREST_VISIBLE_POINT_MAP_LABEL = "Best viewing spot"
+
+/**
+ * Tries `geo:` first so the OS offers whatever maps app the user actually
+ * has. Not every device has one registered (most emulators, some phones with
+ * none installed): `startActivity` throws `ActivityNotFoundException` rather
+ * than failing silently, so the fallback has to sit inside the same
+ * `runCatching`, and a failed fallback is swallowed too -- same "never crash
+ * the activity over an external link" contract the EONET button below uses.
+ */
+private fun openNearestVisiblePointInMaps(context: Context, point: GeoPoint) {
+    val openedGeo = runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(geoUri(point, NEAREST_VISIBLE_POINT_MAP_LABEL))))
+    }.isSuccess
+    if (!openedGeo) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(googleMapsUrl(point)))) }
     }
 }
 

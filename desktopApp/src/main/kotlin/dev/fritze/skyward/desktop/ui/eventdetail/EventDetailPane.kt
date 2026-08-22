@@ -42,6 +42,7 @@ import dev.fritze.skyward.core.format.compassOf
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDistanceKm
 import dev.fritze.skyward.core.format.formatRelative
+import dev.fritze.skyward.core.format.googleMapsUrl
 import dev.fritze.skyward.core.format.localDetailLines
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.format.qualityLabel
@@ -253,6 +254,12 @@ private fun LocationVisibilityCard(state: DesktopAppState, location: SavedLocati
                         (visres.qualityAtNearestPoint?.let { qualityLabel(it).lowercase() } ?: "better conditions"),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                // Desktop has no OS-level `geo:` handler, so this always opens
+                // the web fallback Android only falls back to -- same
+                // `openInBrowser` helper the EONET and JPL SBDB links above use.
+                visres.nearestVisiblePoint?.let { point ->
+                    TextButton(onClick = { openInBrowser(googleMapsUrl(point)) }) { Text("Open in Maps") }
+                }
             }
             localDetailLines(visres.localDetails, state.zone).forEach {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
