@@ -61,9 +61,17 @@ internal object PrivateFiles {
             restrict(directory, OWNER_ONLY_DIRECTORY)
             return directory
         } catch (e: UnsupportedOperationException) {
-            // Non-POSIX filesystem: nothing to set, but the directory still
-            // has to exist.
+            // The filesystem would not take the bits as a creation attribute.
+            // Create the directory and tighten it immediately after: this
+            // exception says the attribute could not be applied *atomically*,
+            // not that the filesystem has no permissions at all, so assuming
+            // the latter is how a world-readable data directory would slip
+            // through the one class meant to prevent exactly that. The gap
+            // between the two calls is real but small, and much smaller than
+            // leaving the directory open for its whole life. [restrict] is a
+            // no-op where there genuinely are no bits.
             Files.createDirectories(directory)
+            restrict(directory, OWNER_ONLY_DIRECTORY)
             return directory
         }
     }
@@ -102,12 +110,22 @@ internal object PrivateFiles {
      * report an occupied path the same way. Catching it out there instead
      * would leave the non-POSIX route silently accepting a directory where
      * its POSIX twin raises.
+     *
+     * Neither fallback is reachable on Linux, where the JDK's Unix provider
+     * takes POSIX permissions at creation — which is also why there is no
+     * test for them: reaching one needs a filesystem provider that refuses
+     * the attribute, and standing one up is more machinery than the branch
+     * is worth. They are written to fail closed regardless.
      */
     private fun createOwnerOnly(file: Path) {
         try {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE))
         } catch (e: UnsupportedOperationException) {
+            // Tightened straight after creation rather than left alone — see
+            // [createDirectory]'s matching branch for why "cannot be set
+            // atomically" must not be read as "has no permissions".
             Files.createFile(file)
+            restrict(file, OWNER_ONLY_FILE)
         }
     }
 
