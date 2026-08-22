@@ -308,7 +308,11 @@ private fun ExtraReminderPickerDialog(onPick: (Duration) -> Unit, onDismiss: () 
                         FilterChip(selected = false, onClick = { onPick(preset) }, label = { Text(formatLead(preset)) })
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     OutlinedTextField(
                         value = customAmount,
                         onValueChange = { customAmount = it },
