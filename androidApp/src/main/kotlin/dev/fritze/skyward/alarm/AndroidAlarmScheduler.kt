@@ -61,6 +61,4 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
     private fun cancelApproximate(id: String) {
         WorkManager.getInstance(context).cancelUniqueWork(approximateWorkName(id))
     }
-
-    private fun approximateWorkName(id: String) = "notify:$id"
 }

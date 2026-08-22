@@ -18,3 +18,13 @@ internal fun notificationPendingIntent(context: Context, notificationId: String)
     }
     return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 }
+
+/**
+ * The other half of the same identity: the unique-work name §10.2's
+ * approximate path registers under. It lives here, beside the exact path's
+ * `PendingIntent`, rather than private to [AndroidAlarmScheduler], because
+ * §17.5's instrumented tests assert on this exact name -- and a literal
+ * duplicated into a test can drift from the one actually enqueued without
+ * anything failing.
+ */
+internal fun approximateWorkName(notificationId: String) = "notify:$notificationId"

@@ -174,6 +174,13 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.core.ktx)
+    // TestListenableWorkerBuilder, so §17.5's tests run the real workers'
+    // bodies through the real SkywardWorkerFactory. Deliberately *not*
+    // WorkManagerTestInitHelper: ADR 0006 has WorkManager initialising lazily
+    // from AppContainer.scheduleBackgroundWork() during Application.onCreate,
+    // so by the time any test runs it is already initialised and
+    // initializeTestWorkManager() would throw. See ADR 0018.
+    androidTestImplementation(libs.androidx.work.testing)
     debugImplementation("androidx.compose.ui:ui-tooling")
     // Supplies the debug-only manifest entry for ComponentActivity that
     // createAndroidComposeRule<MainActivity>() launches into.

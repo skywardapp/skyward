@@ -2,21 +2,12 @@ package dev.fritze.skyward.alarm
 
 import android.Manifest
 import android.os.Build
-import android.os.SystemClock
-import android.service.notification.StatusBarNotification
-import androidx.core.app.NotificationManagerCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dev.fritze.skyward.SkywardApplication
-import dev.fritze.skyward.core.model.Certainty
-import dev.fritze.skyward.core.model.MeteorShowerPayload
 import dev.fritze.skyward.core.model.NotificationStatus
-import dev.fritze.skyward.core.model.Occurrence
-import dev.fritze.skyward.core.model.Phenomenon
-import dev.fritze.skyward.core.model.PlannedNotification
 import dev.fritze.skyward.core.model.Precision
-import dev.fritze.skyward.core.model.TimeWindow
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -27,21 +18,36 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Instant
 
 /**
  * §17.5 Android instrumented smoke tests: real DB, real [NotificationPoster]/
  * [AlarmSyncer], a [FakeAlarmScheduler] standing in for `AlarmManager`/
- * `WorkManager` (§10.2's own test seam). SAF export/import round-trip is
- * excluded per M3's own accept criteria (ships in M5).
+ * `WorkManager` (§10.2's own test seam).
  *
- * Drives [NotificationPoster.postNotificationFor] and [AlarmSyncer.sync]
- * directly rather than firing a real `BroadcastReceiver` through
- * `goAsync()`, which the system, not a test process, is meant to drive.
+ * This suite deliberately stops at the domain boundary: it drives
+ * [NotificationPoster.postNotificationFor] and [AlarmSyncer.sync] directly
+ * instead of the receivers and workers that call them in production. That
+ * used to be the whole of §17.5's coverage, which meant the plumbing between
+ * those pieces was asserted by nobody (#55). It no longer is:
+ *
+ * - [RealAlarmSchedulingTest] runs [AndroidAlarmScheduler] against the real
+ *   `AlarmManager` and `WorkManager`, and lets the system dispatch to the real
+ *   [NotificationAlarmReceiver];
+ * - [SystemBroadcastReceiverTest] does the same for [BootReceiver] and
+ *   [ExactAlarmPermissionReceiver];
+ * - [WorkerExecutionTest] runs the three workers through the real
+ *   [SkywardWorkerFactory];
+ * - [dev.fritze.skyward.ui.settings.SyncRoundTripTest] covers §17.5's SAF
+ *   export/import round-trip, which M3's accept criteria deferred to M5.
+ *
+ * What keeps *these* tests worth having is the states the OS will not produce
+ * on demand: notifications blocked at the app level, the once-ever APPROXIMATE
+ * hedge still unspent, and #48's pair of boot catch-up cases -- each of which
+ * needs a scheduler that answers as told rather than as the device happens to
+ * be configured. See ADR 0018.
  */
 @RunWith(AndroidJUnit4::class)
 class AlarmFlowInstrumentedTest {
@@ -67,16 +73,11 @@ class AlarmFlowInstrumentedTest {
         // same process-singleton container, and a stale fake would quietly
         // turn every posting assertion below into a no-op.
         container.restoreRealNotificationGate(context)
-        // Both cancelAll() and notify() are one-way calls into system_server:
-        // they return before the shade has caught up. Waiting for the cancel to
-        // land keeps the *previous* test's teardown from arriving after this
-        // test has already posted, and taking its notification with it.
-        NotificationManagerCompat.from(context).cancelAll()
-        // Asserted, not merely awaited: on a timeout the helper returns whatever
-        // is still up, and starting a test with a leftover notification would
-        // show as a confusing failure in the test body instead of here.
-        val remaining = awaitNotifications { it.isEmpty() }
-        assertTrue("notifications did not clear before the test started", remaining.isEmpty())
+        // Asserted, not merely awaited: on a timeout clearShade() returns
+        // whatever is still up, and starting a test with a leftover
+        // notification would show as a confusing failure in the test body
+        // instead of here.
+        assertTrue("notifications did not clear before the test started", context.clearShade().isEmpty())
     }
 
     @After
@@ -88,66 +89,6 @@ class AlarmFlowInstrumentedTest {
         // the alarm registration of whichever suite the runner picks next.
         container.alarmScheduler = AndroidAlarmScheduler(context)
     }
-
-    /**
-     * Polls `activeNotifications` until [predicate] holds, or the deadline
-     * passes. Reading it once, immediately after `notify()`, is a race that
-     * usually wins — which is the worst kind: it made this suite fail
-     * intermittently on CI rather than never.
-     */
-    private fun awaitNotifications(
-        timeoutMillis: Long = NOTIFICATION_TIMEOUT_MILLIS,
-        predicate: (List<StatusBarNotification>) -> Boolean,
-    ): List<StatusBarNotification> {
-        val deadline = SystemClock.uptimeMillis() + timeoutMillis
-        var active = NotificationManagerCompat.from(context).activeNotifications
-        while (!predicate(active) && SystemClock.uptimeMillis() < deadline) {
-            Thread.sleep(NOTIFICATION_POLL_MILLIS)
-            active = NotificationManagerCompat.from(context).activeNotifications
-        }
-        return active
-    }
-
-    private fun awaitPosted(notificationId: String): StatusBarNotification? =
-        awaitNotifications { list -> list.any { it.id == notificationId.hashCode() } }
-            .firstOrNull { it.id == notificationId.hashCode() }
-
-    private fun freshNotification(fireAt: Instant, status: NotificationStatus, precision: Precision) = PlannedNotification(
-        id = "test-${UUID.randomUUID()}",
-        occurrenceId = "occ-${UUID.randomUUID()}",
-        ruleId = "rule-${UUID.randomUUID()}",
-        locationId = "loc-${UUID.randomUUID()}",
-        fireAt = fireAt,
-        status = status,
-        precision = precision,
-        title = "Perseids peak tonight",
-        body = "Peaks around 02:30 local time, best after midnight.",
-        createdAt = Clock.System.now(),
-        firedAt = null,
-    )
-
-    /** A shower whose observing window is still open, so §10.4's catch-up applies. */
-    private fun openWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 2.hours, now + 2.hours))
-
-    /** ...and one whose window closed an hour ago, so it is genuinely missed. */
-    private fun closedWindowOccurrence(id: String, now: Instant) = meteorOccurrence(id, TimeWindow(now - 4.hours, now - 1.hours))
-
-    private fun meteorOccurrence(id: String, window: TimeWindow) = Occurrence(
-        id = id,
-        phenomenon = Phenomenon.METEOR_SHOWER,
-        sourceId = "showers",
-        title = "Perseids",
-        window = window,
-        peakTime = window.start,
-        certainty = Certainty.CERTAIN,
-        payload = MeteorShowerPayload(
-            iauCode = "PER", name = "Perseids", zhr = 100, zhrNote = null,
-            radiantRaDeg = 46.2, radiantDecDeg = 57.4, speedKmS = 59.0, parentBody = "109P/Swift-Tuttle",
-            activityStart = window.start, activityEnd = window.end, moonIlluminationAtPeak = 0.1,
-        ),
-        fetchedAt = window.start,
-        expiresAt = null,
-    )
 
     @Test
     fun exactAlarmRegistersAndReceiverPostsNotification() = runTest {
@@ -164,7 +105,7 @@ class AlarmFlowInstrumentedTest {
         // Simulate what NotificationAlarmReceiver does once AlarmManager fires it.
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        assertTrue("expected notification ${n.id.hashCode()} to be posted", awaitPosted(n.id) != null)
+        assertTrue("expected notification ${n.id.hashCode()} to be posted", context.awaitPosted(n.id) != null)
         assertEquals(NotificationStatus.FIRED, container.notificationRepo.getById(n.id)?.status)
     }
 
@@ -184,7 +125,7 @@ class AlarmFlowInstrumentedTest {
 
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        val posted = awaitPosted(n.id)
+        val posted = context.awaitPosted(n.id)
         assertTrue("expected notification to be posted", posted != null)
         val contentIntent = posted!!.notification.contentIntent
         assertTrue("expected a contentIntent so the tap opens the app", contentIntent != null)
@@ -206,7 +147,7 @@ class AlarmFlowInstrumentedTest {
 
         NotificationPoster.postNotificationFor(context, container, n.id)
 
-        val posted = awaitPosted(n.id)
+        val posted = context.awaitPosted(n.id)
         assertTrue("expected approximate notification to be posted", posted != null)
         val text = posted!!.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
         assertTrue("expected hedged copy to mention 'around'", text.contains("around"))
@@ -299,7 +240,7 @@ class AlarmFlowInstrumentedTest {
         val stored = container.notificationRepo.getById(n.id)
         assertEquals(NotificationStatus.MISSED, stored?.status)
         assertNull("a reminder nobody saw must not carry a fired timestamp", stored?.firedAt)
-        assertTrue("expected nothing to be posted while notifications are blocked", awaitNoPost(n.id))
+        assertTrue("expected nothing to be posted while notifications are blocked", context.awaitNoPost(n.id))
     }
 
     /** MISSED is terminal (§10.4), so a duplicate alarm must not resurrect it. */
@@ -311,7 +252,7 @@ class AlarmFlowInstrumentedTest {
         NotificationPoster.postNotificationFor(context, container, n.id)
 
         assertEquals(NotificationStatus.MISSED, container.notificationRepo.getById(n.id)?.status)
-        assertTrue("a MISSED row must stay missed", awaitNoPost(n.id))
+        assertTrue("a MISSED row must stay missed", context.awaitNoPost(n.id))
     }
 
     /**
@@ -330,19 +271,5 @@ class AlarmFlowInstrumentedTest {
         NotificationPoster.postNotificationFor(context, container, n.id)
 
         assertNull("the hedge must still be owed to the user", container.settingsRepo.get(NotificationPoster.KEY_APPROXIMATE_HEDGE_SHOWN))
-    }
-
-    /** True if [notificationId] is still absent from the shade after a short grace period. */
-    private fun awaitNoPost(notificationId: String): Boolean =
-        awaitNotifications(timeoutMillis = ABSENCE_GRACE_MILLIS) { list -> list.any { it.id == notificationId.hashCode() } }
-            .none { it.id == notificationId.hashCode() }
-
-    private companion object {
-        const val NOTIFICATION_TIMEOUT_MILLIS = 5_000L
-        const val NOTIFICATION_POLL_MILLIS = 50L
-
-        // Proving a *negative* can only ever be "still nothing after a while";
-        // the full timeout would just be dead time on every such assertion.
-        const val ABSENCE_GRACE_MILLIS = 500L
     }
 }
