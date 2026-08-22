@@ -12,10 +12,11 @@ claim in its own words: *"Your saved locations never leave your device."*
 
 Neither statement survives contact with §7.7. Whenever ADR 0008's
 conditions in `eonetBbox()` (`core/.../sources/EonetBbox.kt`) are met — at
-least two saved locations within 2 000 km of each other, and every enabled
-terrestrial rule travel-bounded — `EonetSource` appends a `bbox=` parameter,
-built from **every saved location**, to its NASA EONET requests; outside
-those conditions it fetches unnarrowed and no bbox is sent at all. When the
+least two saved locations whose every pair is within 2 000 km of each other,
+every enabled terrestrial rule is travel-bounded, and a valid travel radius
+is available — `EonetSource` appends a `bbox=` parameter, built from **every
+saved location**, to its NASA EONET requests; outside those conditions it
+fetches unnarrowed and no bbox is sent at all. When the
 conditions are met, a GPS fix accepted through the very dialog making the
 promise becomes a `SavedLocation` that can shape a box sent to
 `eonet.gsfc.nasa.gov` (and lands in that service's request logs), not just
