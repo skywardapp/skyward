@@ -409,7 +409,7 @@ private suspend fun writeThenReplan(
     onDone()
 }
 
-private val LEAD_PRESETS: List<Duration> = listOf(30.days, 14.days, 7.days, 2.days, 1.days, 6.hours, 2.hours, 30.minutes)
+internal val LEAD_PRESETS: List<Duration> = listOf(30.days, 14.days, 7.days, 2.days, 1.days, 6.hours, 2.hours, 30.minutes)
 
 @Composable
 private fun ScheduleEditor(schedule: NotifySchedule, onChange: (NotifySchedule) -> Unit) {

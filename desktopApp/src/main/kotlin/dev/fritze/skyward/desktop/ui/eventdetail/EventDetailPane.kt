@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -58,6 +59,7 @@ import dev.fritze.skyward.core.rules.NotifySchedule
 import dev.fritze.skyward.core.rules.Rule
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.openInBrowser
+import dev.fritze.skyward.desktop.ui.rules.LEAD_PRESETS
 import dev.fritze.skyward.desktop.ui.rules.describeLead
 import dev.fritze.skyward.desktop.ui.theme.qualityColor
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +70,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -149,35 +152,42 @@ fun EventDetailPane(state: DesktopAppState, occurrenceId: String, onClose: () ->
 }
 
 /**
- * §13.3's "add one-off extra reminder": a small preset set (matching the
- * issue's suggestion of 1 h/6 h/1 d/7 d) plus a custom-hours field, mirroring
- * `RulesScreen`'s `LeadChips` styling for a lead the user already recognizes.
+ * §13.3's "add one-off extra reminder": the same `LEAD_PRESETS` as
+ * `RulesScreen`'s `LeadChips`, plus a custom field whose unit the user picks
+ * (minutes/hours/days) instead of assuming hours.
  */
 @Composable
 private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit) {
-    val presets = listOf(1.hours, 6.hours, 1.days, 7.days)
-    var customHours by remember { mutableStateOf("") }
-    val customLeadHours = customHours.toPositiveHoursOrNull()
+    var customAmount by remember { mutableStateOf("") }
+    var customUnit by remember { mutableStateOf(LeadUnit.HOURS) }
+    val customLead = customAmount.toPositiveDoubleOrNull()?.let { customUnit.toDuration(it) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             if (currentLead == null) "Add one-off extra reminder" else "Extra reminder: ${describeLead(currentLead)} before",
             style = MaterialTheme.typography.labelMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            for (preset in presets) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for (preset in LEAD_PRESETS) {
                 FilterChip(selected = currentLead == preset, onClick = { onPick(preset) }, label = { Text(describeLead(preset)) })
             }
             OutlinedTextField(
-                value = customHours,
-                onValueChange = { customHours = it },
-                label = { Text("Custom (h)") },
+                value = customAmount,
+                onValueChange = { customAmount = it },
+                label = { Text("Custom") },
                 singleLine = true,
-                modifier = Modifier.width(120.dp),
+                modifier = Modifier.width(90.dp),
             )
+            for (unit in LeadUnit.entries) {
+                FilterChip(selected = customUnit == unit, onClick = { customUnit = unit }, label = { Text(unit.label) })
+            }
             TextButton(
-                onClick = { customLeadHours?.let { onPick(it.hours) } },
-                enabled = customLeadHours != null,
+                onClick = { customLead?.let(onPick) },
+                enabled = customLead != null,
             ) { Text("Set") }
             if (currentLead != null) {
                 TextButton(onClick = { onPick(null) }) { Text("Remove") }
@@ -187,7 +197,13 @@ private fun ExtraReminderRow(currentLead: Duration?, onPick: (Duration?) -> Unit
 }
 
 /** A lead must be a real, positive duration -- a zero or negative one before "PEAK" would fire at or after it. */
-private fun String.toPositiveHoursOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
+private fun String.toPositiveDoubleOrNull(): Double? = toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
+
+private enum class LeadUnit(val label: String, val toDuration: (Double) -> Duration) {
+    MINUTES("min", { it.minutes }),
+    HOURS("hr", { it.hours }),
+    DAYS("day", { it.days }),
+}
 
 @Composable
 private fun DetailHeader(state: DesktopAppState, occurrence: Occurrence, now: Instant, onClose: () -> Unit) {
