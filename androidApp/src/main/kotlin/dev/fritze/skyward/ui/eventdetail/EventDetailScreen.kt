@@ -73,6 +73,7 @@ import dev.fritze.skyward.ui.common.qualityColor
 import dev.fritze.skyward.ui.rules.formatLead
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
+import java.net.URI
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -201,11 +202,45 @@ private fun PayloadExtras(payload: OccurrencePayload, primaryVisres: VisibilityR
     if (payload is CometPayload) {
         CometComplianceBlock(payload, primaryVisres, zone)
     }
-    if (payload is TerrestrialPayload) {
-        OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }) {
+    // §19 R1/issue #65: `payload.link` is remote-supplied (EONET JSON) and
+    // reaches here unvalidated -- a compromised/MITMed response could smuggle
+    // an `intent:`/`market:`/`file:` URI into ACTION_VIEW, or an empty/garbage
+    // link (the parser's default) could crash the activity. Only offer the
+    // button for a link that actually resolves to the fixed EONET API host,
+    // and swallow a launch failure rather than crash if no app claims it.
+    if (payload is TerrestrialPayload && isSafeEonetLink(payload.link)) {
+        OutlinedButton(onClick = {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(payload.link))) }
+        }) {
             Text("Open on EONET")
         }
     }
+}
+
+private const val EONET_LINK_HOST = "eonet.gsfc.nasa.gov"
+
+/**
+ * True only for an `http(s)` link whose host is exactly [EONET_LINK_HOST] --
+ * not a subdomain, suffix, or userinfo trick on top of it. Parsed with
+ * `java.net.URI` (a plain JVM class, so this stays testable without
+ * Robolectric) rather than by hand: a hand-rolled authority split missed
+ * that WHATWG-conformant URL parsers -- what an ACTION_VIEW target such as a
+ * browser actually uses -- treat a backslash as a path separator inside an
+ * http(s) URL, so `https://evil.com\@eonet.gsfc.nasa.gov/x` would resolve to
+ * evil.com there even though an RFC 3986 parser reads one authority
+ * component ending in the real host (#65 review). Rejecting any backslash
+ * outright closes that gap regardless of which parser eventually handles the
+ * link. Failing closed (returning false) on anything that doesn't parse
+ * cleanly, or that carries userinfo at all, just means the button doesn't
+ * show, which is the safe direction.
+ */
+internal fun isSafeEonetLink(link: String): Boolean {
+    if (link.contains('\\')) return false
+    val uri = runCatching { URI(link) }.getOrNull() ?: return false
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") return false
+    if (uri.userInfo != null) return false
+    return uri.host?.equals(EONET_LINK_HOST, ignoreCase = true) == true
 }
 
 @Composable
