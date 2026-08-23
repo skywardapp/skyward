@@ -1350,7 +1350,7 @@ Android instrumented (small), run against **both flavours**: alarm registers & r
 
 - `assembleFossRelease` and `assemblePlayRelease` both succeed, and a three-part check keeps D13 honest over time: (a) parse both merged manifests and diff the permissions as **(name, maxSdkVersion) pairs** — the only permitted delta is the exact-alarm entries, and comparing bare names would miss the `maxSdkVersion="32"` attribute; (b) assert `src/fossMain/` and `src/playMain/` contain **no `.kt` files** — flavour-specific code is the actual drift risk, and merged manifests cannot see it; (c) assert both variants resolve to **identical dependency sets** (`./gradlew :androidApp:dependencies` per variant, normalised and compared).
 - Reproducibility smoke check: build `fossRelease` twice in a clean workspace and assert identical APK hashes (excluding the signature block). Failing this blocks release, per §15.4.
-- A dependency-licence report (Gradle licence plugin) fails the build on any dependency whose licence is not on an allowlist — the automated enforcement of P6/§16.
+- A dependency-licence report fails the build on any dependency whose licence is not on the allowlist, and on any licence it cannot place at all unless a recorded manual verdict for that coordinate sits in `licenseUnknownExceptions` — the automated enforcement of P6/§16. A denylisted licence is never exceptable.
 
 ### 17.6 Determinism guard
 
