@@ -61,7 +61,10 @@ appimagetool_sha256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb3
 tool="${APPIMAGETOOL:-}"
 if [ -z "$tool" ]; then
   tool="$build_dir/appimagetool-$appimagetool_version.AppImage"
-  if [ ! -x "$tool" ]; then
+  # Re-verify a cached copy too, not just a freshly downloaded one — a stale
+  # or tampered file sitting in build/appimage/ from a previous run must not
+  # get a free pass just because the path already exists.
+  if [ ! -x "$tool" ] || ! echo "$appimagetool_sha256  $tool" | sha256sum -c - >/dev/null 2>&1; then
     echo "==> Fetching appimagetool $appimagetool_version"
     mkdir -p "$build_dir"
     tool_partial="$tool.partial"

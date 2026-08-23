@@ -40,11 +40,20 @@ treated the download as an unavoidable, unpinned exception to how this repo
 otherwise treats every third-party binary it trusts (the Gradle wrapper JAR
 checked against Gradle's published hashes plus a checksum-pinned
 distribution; every GitHub Action by full commit SHA). `git ls-remote --tags`
-against the upstream repo says otherwise: tag `1.9.1` exists, points at the
-same commit as `continuous` today, and is not going anywhere — GitHub tags
-are effectively immutable in practice the same way this repo already treats
-release tags. There was no supply-chain gap here, only a research gap: not
-checking past the "latest release" page for a numbered one underneath it.
+against the upstream repo says otherwise: tag `1.9.1` exists and points at
+the same commit as `continuous` today. There was no supply-chain gap here,
+only a research gap: not checking past the "latest release" page for a
+numbered one underneath it.
+
+A numbered tag is a much stronger signal than `continuous` — the project has
+no reason to move it — but a git tag ref is not cryptographically immutable
+the way a Gradle distribution's published hash is: whoever holds push access
+upstream could in principle repoint it or replace the release asset under it.
+The actual protection isn't "the tag can't move," it's the SHA-256 check
+below, which fails the build if the bytes at that URL ever stop matching
+what was verified — including on a *cached* copy from a previous run, not
+just a fresh download (`appimage/build.sh` re-verifies the cache every time,
+so a stale or tampered cached binary doesn't get a free pass).
 
 ## Decision
 
@@ -53,7 +62,10 @@ Pin `appimagetool` the same way everything else here is pinned:
 - `appimage/build.sh` downloads `appimagetool` from its numbered `1.9.1`
   release tag (not `continuous`) and verifies it against a hardcoded SHA-256
   before `chmod +x`-ing it, refusing to proceed on a mismatch
-  (`sha256sum -c`). Cached under `build/appimage/`; override with
+  (`sha256sum -c`). Cached under `build/appimage/`, but the cache is
+  re-verified against the same checksum on every run, not trusted just
+  because the path exists — a stale or tampered cached file re-downloads and
+  re-verifies rather than getting used as-is. Override with
   `APPIMAGETOOL=/path/to/tool` to supply a locally-vetted copy instead and
   skip the download/verify step entirely.
 - It repackages the same `createReleaseDistributable` tree Flatpak uses into
