@@ -13,10 +13,10 @@ name: Release on tag
 # with M6.
 #
 # The AppImage (appimage/build.sh, ADR 0019) repackages that same tree into a
-# single `chmod +x`-and-run file instead of an archive to unpack. Unlike
-# everything else this workflow trusts, `appimagetool` has no pinnable,
-# checksummed release upstream — see the ADR for why that's an accepted,
-# scoped exception rather than an oversight.
+# single `chmod +x`-and-run file instead of an archive to unpack. Its
+# `appimagetool` download is pinned to a numbered release and SHA-256
+# verified, same posture as everything else this workflow trusts — see the
+# ADR for the version/checksum and why that wasn't obvious at first.
 #
 # The APK's own versionCode/versionName come from the tag being built, derived
 # at build time by the version block in the root build.gradle.kts — which is
