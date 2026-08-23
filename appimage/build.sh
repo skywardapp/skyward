@@ -10,10 +10,21 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-echo "==> Building the self-contained desktop distributable"
-./gradlew :desktopApp:createReleaseDistributable
-
 tree="desktopApp/build/compose/binaries/main-release/app/skyward"
+
+# release-on-tag.yml already built this tree in an earlier step (and needed
+# the release signing secrets in its environment to do so, per
+# androidApp/build.gradle.kts's "all four or none" check). Re-running Gradle
+# here would pull those secrets into this step's environment too, right
+# before it downloads and executes appimagetool — set SKIP_GRADLE_BUILD=1 to
+# reuse that tree instead and keep this step secret-free.
+if [ "${SKIP_GRADLE_BUILD:-}" = "1" ]; then
+  echo "==> Reusing the existing desktop distributable (SKIP_GRADLE_BUILD=1)"
+else
+  echo "==> Building the self-contained desktop distributable"
+  ./gradlew :desktopApp:createReleaseDistributable
+fi
+
 if [ ! -d "$tree" ]; then
   echo "expected the jlinked tree at $tree — did createReleaseDistributable change its output layout?" >&2
   exit 1
@@ -41,18 +52,24 @@ install -Dm644 flatpak/icon.svg "$appdir/usr/share/icons/hicolor/scalable/apps/d
 # of a second, divergeable copy.
 install -Dm644 flatpak/icon.svg "$appdir/dev.fritze.Skyward.svg"
 
+# Pinned to the numbered `1.9.1` tag (ADR 0019), not the rolling `continuous`
+# one — same commit today, but a numbered tag's asset doesn't get replaced
+# out from under this checksum the way `continuous`'s does.
+appimagetool_version="1.9.1"
+appimagetool_sha256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+
 tool="${APPIMAGETOOL:-}"
 if [ -z "$tool" ]; then
-  tool="$build_dir/appimagetool.AppImage"
+  tool="$build_dir/appimagetool-$appimagetool_version.AppImage"
   if [ ! -x "$tool" ]; then
-    # ADR 0019: no pinned, checksummed release exists upstream for this tool
-    # — the `continuous` tag is intentionally rolling. Set APPIMAGETOOL to a
-    # locally-vetted copy to avoid this download.
-    echo "==> Fetching appimagetool (see ADR 0019 for why this isn't checksum-pinned)"
+    echo "==> Fetching appimagetool $appimagetool_version"
     mkdir -p "$build_dir"
+    tool_partial="$tool.partial"
     curl --fail --silent --show-error --location --max-time 120 \
-      -o "$tool" \
-      https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+      -o "$tool_partial" \
+      "https://github.com/AppImage/appimagetool/releases/download/$appimagetool_version/appimagetool-x86_64.AppImage"
+    echo "$appimagetool_sha256  $tool_partial" | sha256sum -c -
+    mv "$tool_partial" "$tool"
     chmod +x "$tool"
   fi
 fi

@@ -28,21 +28,25 @@ There's no local `.desktop`/icon/metainfo copy here — `build.sh` installs
 straight from `flatpak/`, so those stay a single source of truth instead of
 two files that can quietly drift apart.
 
-## The `appimagetool` download — read before touching this
+## The `appimagetool` download
 
-Unlike everything else this repo pins (the Gradle wrapper's
-`distributionSha256Sum`, every GitHub Action by commit SHA), `appimagetool`
-has no numbered, checksummed release to pin against — see
-[ADR 0019](../docs/adr/0019-appimage-desktop-packaging.md) for why, and for
-what would change that. `build.sh` downloads `AppImage/appimagetool`'s
-rolling `continuous` build and caches it under `build/appimage/`. Set
-`APPIMAGETOOL=/path/to/a/vetted/appimagetool` to skip the download entirely
-and use a copy you trust instead.
+Pinned the same way everything else this repo trusts is pinned (the Gradle
+wrapper's `distributionSha256Sum`, every GitHub Action by commit SHA):
+`build.sh` downloads `AppImage/appimagetool`'s numbered `1.9.1` release tag
+(not the rolling `continuous` one) and verifies it against a hardcoded
+SHA-256 before using it, cached under `build/appimage/`. Set
+`APPIMAGETOOL=/path/to/a/vetted/appimagetool` to skip the download and
+verification entirely and use a copy you trust instead. Bumping the version
+means updating both `appimagetool_version` and `appimagetool_sha256` in
+`build.sh` — see [ADR 0019](../docs/adr/0019-appimage-desktop-packaging.md).
 
 `appimagetool` itself also fetches the AppImage runtime it embeds in the
 output over the network at packaging time (from `AppImage/type2-runtime`)
-unless `--runtime-file` is passed — same unpinned-supply-chain trade-off,
-accepted for the same reason in the ADR.
+unless `--runtime-file` is passed. That fetch isn't pinned here; see the ADR.
+
+`build.sh` never has the release signing secrets in its environment when it
+runs `appimagetool` — see `SKIP_GRADLE_BUILD` in the ADR's Decision section
+for why that matters and how it's kept that way.
 
 ## Running the output
 

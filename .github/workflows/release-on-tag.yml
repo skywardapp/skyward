@@ -269,18 +269,17 @@ jobs:
 
           echo "path=$asset" >> "$GITHUB_OUTPUT"
 
-      # appimage/build.sh (ADR 0019) repackages the same jlinked tree above
-      # into a single-file AppImage. It re-runs createReleaseDistributable,
-      # which Gradle treats as up to date and skips almost instantly — kept
-      # rather than special-cased so this step works standalone the same way
-      # it does locally. desktop-file-validate, mksquashfs and the AppImage
-      # runtime it embeds all come from the downloaded appimagetool/its own
-      # network fetch, not from anything installed on this runner.
-      #
-      # Same "all four or none" reason as "Build desktop distributable" above
-      # for repeating the three secrets here: any Gradle invocation
-      # configures androidApp/build.gradle.kts too, and STORE_FILE alone
-      # (already in the environment via GITHUB_ENV) trips that check.
+      # appimage/build.sh (ADR 0019) repackages the same jlinked tree "Build
+      # desktop distributable" above already produced into a single-file
+      # AppImage. SKIP_GRADLE_BUILD=1 tells it to reuse that tree rather than
+      # invoking Gradle again — deliberately, not just to save time: any
+      # Gradle invocation configures androidApp/build.gradle.kts too, which
+      # would trip its "all four or none" signing check on STORE_FILE alone
+      # (already in the environment via GITHUB_ENV from "Decode release
+      # signing key" above) unless the other three secrets were repeated
+      # here. Keeping this step Gradle-free keeps it secret-free, which
+      # matters more here than in the other steps that need the secrets:
+      # this is also the step that downloads and executes appimagetool.
       #
       # Smoke-tested the same way as the flat pack above: extract-and-run the
       # AppImage that's about to be published, not just the tree it was built
@@ -290,9 +289,7 @@ jobs:
       - name: Build and smoke-test the AppImage
         id: appimage
         env:
-          SKYWARD_RELEASE_STORE_PASSWORD: ${{ secrets.SKYWARD_RELEASE_STORE_PASSWORD }}
-          SKYWARD_RELEASE_KEY_ALIAS: ${{ secrets.SKYWARD_RELEASE_KEY_ALIAS }}
-          SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}
+          SKIP_GRADLE_BUILD: "1"
           APPIMAGE_OUTPUT: ${{ runner.temp }}/skyward-${{ env.TAG }}-x86_64.AppImage
         run: |
           set -euo pipefail

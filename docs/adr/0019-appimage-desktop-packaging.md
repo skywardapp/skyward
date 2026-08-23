@@ -31,84 +31,92 @@ single file a user can `chmod +x` and run, which is exactly the "no
 installer, no package manager" niche the flat-pack tarball already serves,
 just as one executable instead of an archive to unpack.
 
-### The supply-chain gap this repo doesn't otherwise have
+### `appimagetool` *is* pinnable — check before assuming otherwise
 
-Every third-party binary this repo's build/release pipeline trusts is
-pinned and verifiable: the Gradle wrapper JAR is checked against Gradle's
-published hashes (`validate-wrappers: true`) and the distribution itself is
-checksum-pinned (`distributionSha256Sum`); every GitHub Action is a full
-commit SHA. `appimagetool` has no equivalent to pin against:
-
-- The old, fixed-tag release (`AppImage/AppImageKit`, tag `13`, 2020) is
-  flagged obsolete by its own publisher ("should not be used anymore") and
-  is stale enough that using it deliberately would trade one problem for a
-  worse one.
-- The maintained tool (`AppImage/appimagetool`) only publishes a rolling
-  `continuous` release — its asset is overwritten on every upstream commit,
-  so the download URL points at different bytes over time by design. There
-  is no numbered release and no published checksum to pin against; "pin a
-  hash today" would just mean the build starts failing the next time
-  upstream ships a commit, for no security benefit (a bad update is not
-  caught, since the pin would immediately go stale).
-
-This is a real gap against §15.4's reproducibility posture, not a shortcut
-taken for convenience: `checkDependencyLicenses` and the Gradle/Actions
-pinning exist because this repo can *usually* get a pinnable artifact, and
-here it cannot.
+An earlier draft of this ADR assumed `AppImage/appimagetool` only publishes
+a rolling `continuous` release (its GitHub "Releases" page shows that one as
+latest, and its asset is genuinely overwritten on every upstream commit) and
+treated the download as an unavoidable, unpinned exception to how this repo
+otherwise treats every third-party binary it trusts (the Gradle wrapper JAR
+checked against Gradle's published hashes plus a checksum-pinned
+distribution; every GitHub Action by full commit SHA). `git ls-remote --tags`
+against the upstream repo says otherwise: tag `1.9.1` exists, points at the
+same commit as `continuous` today, and is not going anywhere — GitHub tags
+are effectively immutable in practice the same way this repo already treats
+release tags. There was no supply-chain gap here, only a research gap: not
+checking past the "latest release" page for a numbered one underneath it.
 
 ## Decision
 
-Ship it anyway, using `AppImage/appimagetool`'s `continuous` build, and
-accept the unpinned download as a documented, scoped exception rather than
-pretend it doesn't exist:
+Pin `appimagetool` the same way everything else here is pinned:
 
-- `appimage/build.sh` downloads `appimagetool` (cached under
-  `build/appimage/`, override with `APPIMAGETOOL=/path/to/tool` to supply a
-  locally-vetted copy instead) and repackages the same
-  `createReleaseDistributable` tree Flatpak uses into an AppDir, reusing
-  `flatpak/dev.fritze.Skyward.desktop`, `flatpak/dev.fritze.Skyward.metainfo.xml`
-  and `flatpak/icon.svg` rather than forking copies that could drift.
+- `appimage/build.sh` downloads `appimagetool` from its numbered `1.9.1`
+  release tag (not `continuous`) and verifies it against a hardcoded SHA-256
+  before `chmod +x`-ing it, refusing to proceed on a mismatch
+  (`sha256sum -c`). Cached under `build/appimage/`; override with
+  `APPIMAGETOOL=/path/to/tool` to supply a locally-vetted copy instead and
+  skip the download/verify step entirely.
+- It repackages the same `createReleaseDistributable` tree Flatpak uses into
+  an AppDir, reusing `flatpak/dev.fritze.Skyward.desktop`,
+  `flatpak/dev.fritze.Skyward.metainfo.xml` and `flatpak/icon.svg` rather
+  than forking copies that could drift.
 - It runs with `APPIMAGE_EXTRACT_AND_RUN=1` (both to invoke `appimagetool`
   itself, and inside `appimagetool` when it embeds the AppImage runtime),
   since GitHub-hosted runners are not guaranteed to have FUSE wired up for
   unprivileged mounts — the documented workaround for exactly this
   environment.
 - `.github/workflows/release-on-tag.yml` runs it after the flat pack step
-  (which already builds and smoke-tests the same tree), stages the result
+  (which already built and smoke-tested the same tree), stages the result
   the same way, and extracts+runs the AppImage's own `debug-matches` smoke
   test before publishing — so a broken `appimagetool` download or a broken
   AppDir fails the release job rather than shipping a dead download.
-- The download is scoped to that one packaging step: nothing about it
-  touches the release signing key, and the step does not receive the
-  `SKYWARD_RELEASE_*` secrets in its environment.
+- **The step that downloads and runs `appimagetool` never has the release
+  signing secrets in its process environment.** `appimage/build.sh` accepts
+  `SKIP_GRADLE_BUILD=1` to reuse the tree Gradle already built in an earlier
+  workflow step instead of invoking Gradle itself — deliberately, not just
+  to save a few seconds: any Gradle invocation configures
+  `androidApp/build.gradle.kts` too, which requires all four
+  `SKYWARD_RELEASE_*` signing values together or none (`STORE_FILE` alone,
+  already exported via `GITHUB_ENV` from an earlier step, would otherwise
+  trip that check and force the other three into this step's environment).
+  Keeping this step Gradle-free keeps it secret-free — the one step in the
+  job that downloads and executes a third-party binary is the one step that
+  must not be able to read the signing password, alias or key password even
+  if that binary were compromised. (An earlier version of this PR got this
+  wrong: it passed the three secrets into this step to satisfy Gradle's
+  check, in the same step that runs the freshly-downloaded tool. Caught in
+  review before merging — see the PR discussion.)
 
 ## Consequences
 
-- The AppImage release asset depends on an upstream artifact this repo
-  cannot pin or verify the way it does everything else in the release
-  pipeline. If `appimagetool`'s `continuous` build ever regresses or is
-  compromised, that risk is not caught by any check here — only by the
-  smoke test failing outright (which would fail loudly, not silently ship a
-  broken or malicious asset with a passing build).
-- If `AppImage/appimagetool` ever cuts a numbered, checksummed release, or a
-  trustworthy checksum source becomes available another way, switch
-  `appimage/build.sh` to pin it and delete this paragraph.
+- The AppImage release asset now depends on a pinned, checksum-verified
+  upstream artifact, same posture as everything else in the release
+  pipeline. A build with a mismatched checksum fails loudly rather than
+  silently shipping different bytes than what was verified.
+- Bumping `appimagetool` is a two-line change in `appimage/build.sh`
+  (`appimagetool_version`, `appimagetool_sha256`), the same shape as bumping
+  the Gradle wrapper or a pinned Action.
 - §15.5 is left as written — the Compose-plugin statement it makes is still
-  correct — with this ADR referenced from `appimage/build.sh` at the point
-  of the download.
+  correct — with this ADR referenced from `appimage/build.sh` and
+  `desktopApp/build.gradle.kts` at the relevant points.
 
 ## Alternatives considered
 
-- **Use the old `AppImageKit` release 13 instead of `continuous`:** trades
-  an unpinnable-but-current binary for a pinnable-but-obsolete one; the
-  publisher's own "should not be used anymore" notice makes this the worse
-  trade, not a safer one.
+- **Use the old `AppImageKit` release 13 instead of `AppImage/appimagetool`:**
+  a fixed tag, but flagged obsolete by its own publisher ("should not be
+  used anymore") and stale enough (2020) that using it deliberately would
+  trade one problem for a worse one even with a valid pin.
+- **The rolling `continuous` tag, unpinned, as an accepted exception:** the
+  original shape of this ADR, superseded once `git ls-remote --tags` showed
+  a numbered release existed to pin against instead. Left out of the final
+  decision entirely rather than kept as a fallback, since there's no reason
+  to prefer it now.
 - **Vendor a locally-built `appimagetool`:** `AppImage/appimagetool` itself
-  depends on a squashfs/runtime toolchain that is its own unpinned-supply-
-  chain problem one layer down, for no net improvement.
-- **Skip AppImage, keep only the flat-pack tarball:** the safest option, and
-  the one to fall back to if the `continuous` download becomes unreliable in
-  practice — rejected for now because a single-file, `chmod +x`-and-run
-  artifact is a strictly better fit for the "no installer, no package
-  manager" audience than an archive to unpack, and the user explicitly asked
-  for it.
+  depends on a squashfs/runtime toolchain that is its own supply-chain
+  surface one layer down, for no net improvement over pinning the published
+  binary.
+- **Skip AppImage, keep only the flat-pack tarball:** rejected because a
+  single-file, `chmod +x`-and-run artifact is a strictly better fit for the
+  "no installer, no package manager" audience than an archive to unpack, and
+  the user explicitly asked for it — and once the checksum-pinning gap
+  turned out not to exist, there was no remaining reason not to.
