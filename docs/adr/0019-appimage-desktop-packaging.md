@@ -83,21 +83,26 @@ Pin `appimagetool` the same way everything else here is pinned:
   test before publishing — so a broken `appimagetool` download or a broken
   AppDir fails the release job rather than shipping a dead download.
 - **The step that downloads and runs `appimagetool` never has the release
-  signing secrets in its process environment.** `appimage/build.sh` accepts
-  `SKIP_GRADLE_BUILD=1` to reuse the tree Gradle already built in an earlier
-  workflow step instead of invoking Gradle itself — deliberately, not just
-  to save a few seconds: any Gradle invocation configures
-  `androidApp/build.gradle.kts` too, which requires all four
-  `SKYWARD_RELEASE_*` signing values together or none (`STORE_FILE` alone,
-  already exported via `GITHUB_ENV` from an earlier step, would otherwise
-  trip that check and force the other three into this step's environment).
-  Keeping this step Gradle-free keeps it secret-free — the one step in the
-  job that downloads and executes a third-party binary is the one step that
-  must not be able to read the signing password, alias or key password even
-  if that binary were compromised. (An earlier version of this PR got this
-  wrong: it passed the three secrets into this step to satisfy Gradle's
-  check, in the same step that runs the freshly-downloaded tool. Caught in
-  review before merging — see the PR discussion.)
+  signing material available to it, in its environment or on disk.**
+  `appimage/build.sh` accepts `SKIP_GRADLE_BUILD=1` to reuse the tree Gradle
+  already built in an earlier workflow step instead of invoking Gradle
+  itself — deliberately, not just to save a few seconds: any Gradle
+  invocation configures `androidApp/build.gradle.kts` too, which requires
+  all four `SKYWARD_RELEASE_*` signing values together or none, and Gradle
+  is the only reason this step would otherwise need any of them. On top of
+  that, a dedicated "Remove the decoded release signing key" step deletes
+  the JKS file and blanks `SKYWARD_RELEASE_STORE_FILE` in `GITHUB_ENV`
+  immediately after the last step that needs it ("Build desktop
+  distributable") — GitHub Actions runs every step of a job in the same
+  VM with no filesystem isolation between them, so avoiding Gradle alone
+  would still have left the keystore bytes on disk at a path named in the
+  workflow's own source for any later step to read. Together these mean the
+  one step in the job that downloads and executes a third-party binary has
+  no signing password, alias, key password, or keystore file to find even
+  if that binary were compromised. (An earlier version of this PR got the
+  first half right and missed the second: it stopped passing the three
+  secrets into this step, but left the JKS on disk and `STORE_FILE` pointing
+  at it. Caught in review before merging — see the PR discussion.)
 
 ## Consequences
 

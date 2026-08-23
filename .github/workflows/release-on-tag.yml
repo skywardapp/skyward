@@ -228,6 +228,22 @@ jobs:
           SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :desktopApp:createReleaseDistributable --stacktrace
 
+      # Nothing after this point needs the signing key: the remaining steps
+      # only repackage the tree just built (flat pack, AppImage) and publish.
+      # ADR 0019 keeps the AppImage step itself free of the three password/
+      # alias/key secrets, but STORE_FILE's *path* was still sitting in every
+      # later step's environment via GITHUB_ENV, and the decoded JKS was
+      # still on disk for any of them to read — including the step that
+      # downloads and executes a third-party binary. Delete the file and
+      # blank the env var here, before that step runs, rather than leave
+      # either around for a process that has no legitimate reason to need
+      # them.
+      - name: Remove the decoded release signing key
+        run: |
+          set -euo pipefail
+          rm -f "$SKYWARD_RELEASE_STORE_FILE"
+          echo "SKYWARD_RELEASE_STORE_FILE=" >> "$GITHUB_ENV"
+
       # Same check ci.yml's `check` job runs on every push (see ADR 0007): a
       # missing jlink module compiles fine and only breaks at first launch,
       # so this is what actually catches a bad packaging config — worth
@@ -274,12 +290,13 @@ jobs:
       # AppImage. SKIP_GRADLE_BUILD=1 tells it to reuse that tree rather than
       # invoking Gradle again — deliberately, not just to save time: any
       # Gradle invocation configures androidApp/build.gradle.kts too, which
-      # would trip its "all four or none" signing check on STORE_FILE alone
-      # (already in the environment via GITHUB_ENV from "Decode release
-      # signing key" above) unless the other three secrets were repeated
-      # here. Keeping this step Gradle-free keeps it secret-free, which
-      # matters more here than in the other steps that need the secrets:
-      # this is also the step that downloads and executes appimagetool.
+      # requires all four SKYWARD_RELEASE_* signing values together or none.
+      # Keeping this step Gradle-free keeps it secret-free, which matters
+      # more here than in the other steps that need the secrets: this is
+      # also the step that downloads and executes appimagetool. By now
+      # "Remove the decoded release signing key" above has also deleted the
+      # JKS and blanked STORE_FILE, so there's nothing signing-related left
+      # on disk or in the environment for that binary to find either way.
       #
       # Smoke-tested the same way as the flat pack above: extract-and-run the
       # AppImage that's about to be published, not just the tree it was built
