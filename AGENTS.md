@@ -115,7 +115,16 @@ because that is the startup path a packaging mistake actually breaks (ADR
   recipients, and F-Droid does not distribute non-free data (P3). It binds a
   free app exactly as hard as a paid one — which is why comets come from JPL,
   not COBS (D12).
-  `checkDependencyLicenses` enforces the §16 allowlist/denylist.
+- **Know what the licence check does and does not cover.**
+  `checkDependencyLicenses` reads the POM-declared licence of every Maven
+  dependency on a shipped classpath and fails the build against §16's
+  allowlist/denylist. That is its whole scope: it never sees a bundled asset
+  (`showers.json`, the Natural Earth binary, the vendored `astronomy.kt`) or a
+  runtime data source (SWPC, JPL, EONET). Those are cleared by review against
+  §16's table before they land, and nothing automated will catch it if they
+  aren't. Don't read the CI check as covering them, and don't read its narrow
+  scope as a reason to drop it — it is the only thing standing between the
+  build and a transitively-added NonCommercial dependency.
 - **The `fossRelease` build must stay reproducible** (§15.4): it is what lets
   F-Droid republish the developer-signed APK, which is what lets users move
   between stores. No build timestamps, no nondeterministic codegen, versions
