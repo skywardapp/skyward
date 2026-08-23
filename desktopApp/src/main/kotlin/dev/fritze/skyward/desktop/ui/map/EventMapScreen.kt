@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -171,37 +172,49 @@ private fun MapHeader(zoom: Float, onResetView: () -> Unit) {
 /**
  * §14.1's "pan/zoom via transformable state" plus click-to-detail, as one
  * modifier so the screen body isn't three nested gesture blocks deep.
+ *
+ * The pan and scroll-zoom gestures are keyed on `Unit` so an in-progress
+ * drag or scroll isn't interrupted by a camera update; that means their
+ * `awaitPointerEventScope` blocks are launched once and never restarted, so
+ * they must read [camera] through [rememberUpdatedState] rather than
+ * capturing the parameter directly — otherwise every gesture after the
+ * first keeps computing from the stale camera it started with (visible as
+ * zoom never advancing past one `ZOOM_STEP`).
  */
+@Composable
 private fun Modifier.mapGestures(
     camera: MapCamera,
     onCameraChange: (MapCamera) -> Unit,
     hitTestKeys: Array<Any?>,
     onTap: (position: Offset, size: Size) -> Unit,
-): Modifier = this
-    .pointerInput(Unit) {
-        detectDragGestures { change, drag ->
-            change.consume()
-            onCameraChange(camera.panned(drag, size.toSize()))
-        }
-    }
-    .pointerInput(Unit) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.type != PointerEventType.Scroll) continue
-                val change = event.changes.firstOrNull() ?: continue
-                val scrollY = change.scrollDelta.y
-                if (scrollY == 0f) continue
-                // Wheel up (negative delta) zooms in, around the pointer.
-                val factor = if (scrollY < 0) ZOOM_STEP else 1f / ZOOM_STEP
-                onCameraChange(camera.zoomed(factor, change.position, size.toSize()))
+): Modifier {
+    val currentCamera = rememberUpdatedState(camera)
+    return this
+        .pointerInput(Unit) {
+            detectDragGestures { change, drag ->
                 change.consume()
+                onCameraChange(currentCamera.value.panned(drag, size.toSize()))
             }
         }
-    }
-    .pointerInput(keys = hitTestKeys) {
-        detectTapGestures { position -> onTap(position, size.toSize()) }
-    }
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    if (event.type != PointerEventType.Scroll) continue
+                    val change = event.changes.firstOrNull() ?: continue
+                    val scrollY = change.scrollDelta.y
+                    if (scrollY == 0f) continue
+                    // Wheel up (negative delta) zooms in, around the pointer.
+                    val factor = if (scrollY < 0) ZOOM_STEP else 1f / ZOOM_STEP
+                    onCameraChange(currentCamera.value.zoomed(factor, change.position, size.toSize()))
+                    change.consume()
+                }
+            }
+        }
+        .pointerInput(keys = hitTestKeys) {
+            detectTapGestures { position -> onTap(position, size.toSize()) }
+        }
+}
 
 private const val MAP_ASPECT = 2f
 private const val ZOOM_STEP = 1.2f
