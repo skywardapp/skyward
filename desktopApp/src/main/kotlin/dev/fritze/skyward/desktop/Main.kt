@@ -28,18 +28,25 @@ import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-/** Shown in the About section and written into §12 export files. Kept in step with `compose.desktop`'s `packageVersion`. */
-const val APP_VERSION = "0.1.0"
-
 /**
  * §14: single window, ~1280×800 default, left nav rail. §10.3: with
  * "Background mode" enabled, closing the window hides to tray instead of
  * exiting, and the in-process scheduler keeps running behind it.
  *
  * `debug-matches` keeps M2's CLI acceptance path working (§18) — it must
- * stay ahead of any windowing setup so it still runs headless.
+ * stay ahead of any windowing setup so it still runs headless. `--version`
+ * is headless for the same reason and one more: it is how the packaging
+ * scripts learn which version they are wrapping (ADR 0020). Asking the
+ * binary rather than re-deriving the tag means the AppStream release entry
+ * and the AppImage's `X-AppImage-Version` cannot disagree with what the app
+ * itself reports — they are read out of it.
  */
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == FLAG_VERSION) {
+        println("skyward $APP_VERSION")
+        return
+    }
+
     if (args.firstOrNull() == "debug-matches") {
         runDebugMatches()
         return
@@ -143,6 +150,14 @@ private fun FrameWindowScope.SkywardMenuBar(state: DesktopAppState) {
 private val digitKeys = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven)
 
 private const val FLAG_BACKGROUND = "--background"
+
+/**
+ * `appimage/build.sh` and `flatpak/build.sh` read the version back out of the
+ * packaged binary with this flag (ADR 0020), so it is part of the packaging
+ * contract and not only a convenience for people on a terminal — renaming it
+ * breaks the AppStream and AppImage metadata stamping.
+ */
+internal const val FLAG_VERSION = "--version"
 
 /**
  * The startup sequence, in the one order that works: seed defaults, load the

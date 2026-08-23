@@ -16,6 +16,15 @@
   <launchable type="desktop-id">dev.fritze.Skyward.desktop</launchable>
   <url type="homepage">https://github.com/skywardapp/skyward</url>
   <url type="bugtracker">https://github.com/skywardapp/skyward/issues</url>
+  <!-- Flathub asks specifically for vcs-browser on open-source submissions. -->
+  <url type="vcs-browser">https://github.com/skywardapp/skyward</url>
+  <!-- Flathub renders these behind the app page's banner. Both are taken from
+       icon.svg, so the page and the icon agree: the dark sky it sits on, and
+       the moon's pale blue for the light variant. -->
+  <branding>
+    <color type="primary" scheme_preference="light">#9fc6ff</color>
+    <color type="primary" scheme_preference="dark">#0b0e14</color>
+  </branding>
   <developer id="dev.fritze">
     <name>Skyward contributors</name>
   </developer>
@@ -35,6 +44,18 @@
   <requires>
     <display_length compare="ge">768</display_length>
   </requires>
+  <!-- MISSING, and a hard blocker for Flathub: "All graphical applications
+       must have one or more screenshots in the MetaInfo." Screenshots need a
+       stable public URL for the images, which this repository does not host
+       yet — see flatpak/README.md's "Before submitting to Flathub". Adding a
+       <screenshots> block pointing at URLs that do not resolve would fail
+       validation more confusingly than omitting it. -->
+
+  <!-- The version and date below are a PLACEHOLDER. tools/packaging/stamp-
+       metainfo.sh rewrites them from the version the packaged binary reports
+       (ADR 0020) on the way into both the Flatpak and the AppImage, because a
+       tag is cut on every push to main and a hand-maintained number here was
+       already 41 patch releases stale. Do not "fix" it by hand. -->
   <releases>
     <release version="0.1.0" date="2026-08-14">
       <description>

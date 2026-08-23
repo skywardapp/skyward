@@ -1,10 +1,11 @@
 name: Release on tag
 
 # Builds the fossRelease APK plus two Linux desktop downloads for a tag and
-# publishes a GitHub Release with auto-generated notes and all three
-# attached. RELEASE.md ties F-Droid's build recipe to "the fossRelease build
-# and this repo's tagged releases" — this is that half. playRelease is Play
-# Console's job, not GitHub's, so it isn't built here.
+# publishes a GitHub Release with auto-generated notes and all of them
+# attached (the APK, the flat pack, the AppImage, and the AppImage's .zsync).
+# RELEASE.md ties F-Droid's build recipe to "the fossRelease build and this
+# repo's tagged releases" — this is that half. playRelease is Play Console's
+# job, not GitHub's, so it isn't built here.
 #
 # The flat pack is `createReleaseDistributable`'s jlinked app tree — the same
 # one flatpak/build.sh repackages — tarred up as-is. No installer, no package
@@ -16,11 +17,17 @@ name: Release on tag
 # single `chmod +x`-and-run file instead of an archive to unpack. Its
 # `appimagetool` download is pinned to a numbered release and SHA-256
 # verified, same posture as everything else this workflow trusts — see the
-# ADR for the version/checksum and why that wasn't obvious at first.
+# ADR for the version/checksum and why that wasn't obvious at first. It ships
+# with AppImageUpdate update information and a companion `.zsync`, which is
+# how a download with no package manager behind it gets updates at all.
 #
-# The APK's own versionCode/versionName come from the tag being built, derived
-# at build time by the version block in the root build.gradle.kts — which is
-# why the checkout below needs tags present, not just the commit.
+# Every artefact's version comes from the tag being built, derived at build
+# time by the version block in the root build.gradle.kts: the APK's
+# versionCode/versionName directly, and the desktop side — About screen, §12
+# exports, AppStream <release>, X-AppImage-Version — via the constant that
+# block generates into the binary (ADR 0020). That is why the checkout below
+# needs tags present, not just the commit, and why two steps here assert the
+# built artefacts agree with `$TAG` before anything publishes.
 #
 # Three ways in:
 #   - `push: tags: v*` — push a tag yourself (`git tag vX.Y.Z && git push --tags`)
@@ -255,6 +262,29 @@ jobs:
             | tee /tmp/debug-matches.txt
           grep -q "occurrences in horizon" /tmp/debug-matches.txt
 
+      # The tag is the only place a version is recorded (§15.4), and every
+      # downstream artefact now derives from what this binary reports: the
+      # About section, §12 export files, the AppStream <release> entry and the
+      # AppImage's X-AppImage-Version are all read out of it (ADR 0020). So
+      # this one assertion is what stands behind all of them — and it is not
+      # hypothetical, it is the check that would have caught a desktop build
+      # shipping "0.1.0" from v0.1.0 through v0.1.41.
+      - name: Verify the packaged version matches the tag
+        run: |
+          set -euo pipefail
+          # Last field, the same way appimage/build.sh and flatpak/build.sh read
+          # it — a JVM that decides to print a notice of its own alongside the
+          # version should not fail the release.
+          reported=$(desktopApp/build/compose/binaries/main-release/app/skyward/bin/skyward --version | awk '{print $NF}')
+          expected="${TAG#v}"
+          if [ "$reported" != "$expected" ]; then
+            echo "The packaged binary reports version '$reported' but the tag says '$expected'." >&2
+            echo "The version derivation in the root build.gradle.kts and this tag" >&2
+            echo "disagree — refusing to publish a release that misreports itself." >&2
+            exit 1
+          fi
+          echo "Packaged binary reports version $reported"
+
       # Tarred as-is, no jpackage installer wrapper — that's what makes it a
       # "flat pack": unpack and run bin/skyward, no package manager involved.
       # Re-runs the same smoke test against the *extracted* archive, not just
@@ -303,6 +333,22 @@ jobs:
       # from, so a packaging mistake in appimage/build.sh itself (a missing
       # AppDir file, a broken AppRun) fails here instead of shipping a dead
       # download.
+      # desktop-file-utils gives appimage/build.sh the desktop-file-validate
+      # the AppImage packaging guide asks for; zsync gives it the zsyncmake
+      # appimagetool shells out to when update information is set (below).
+      # Neither is preinstalled, and build.sh treats a missing zsyncmake as
+      # fatal rather than shipping an AppImage that advertises updates it
+      # published no .zsync for. Kept to two packages deliberately —
+      # appstreamcli's check there is advisory, and apt on these runners has
+      # been slow enough before to be worth not asking for (see the mirror
+      # note in android-ui-tests.yml). The AppStream metadata is checked
+      # anyway, by the version assertions below.
+      - name: Install AppImage packaging tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils zsync
+
       - name: Build and smoke-test the AppImage
         id: appimage
         env:
@@ -310,11 +356,54 @@ jobs:
           APPIMAGE_OUTPUT: ${{ runner.temp }}/skyward-${{ env.TAG }}-x86_64.AppImage
         run: |
           set -euo pipefail
+
+          # AppImageUpdate's "gh-releases-zsync" transport: it re-reads the
+          # named release, finds the asset matching the glob, and fetches only
+          # the changed blocks via the .zsync published beside it. `latest`
+          # rather than this tag, or an AppImage would only ever find the
+          # release it came from. Delivering updates this way is the AppImage
+          # ecosystem's own answer to having no package manager behind it;
+          # without it a user's only update path is noticing a new release by
+          # hand.
+          export APPIMAGE_UPDATE_INFO="gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|skyward-*-x86_64.AppImage.zsync"
           appimage/build.sh
+
           asset="$APPIMAGE_OUTPUT"
           APPIMAGE_EXTRACT_AND_RUN=1 "$asset" debug-matches | tee /tmp/debug-matches-appimage.txt
           grep -q "occurrences in horizon" /tmp/debug-matches-appimage.txt
+
+          # Nothing above proves the *metadata inside* the AppImage matches the
+          # tag — the filename is set by this workflow, so it agrees with the
+          # tag by construction whatever the contents say. Unpack the published
+          # file and check the two places a version actually lives.
+          # (--appimage-extract is handled by the embedded runtime and needs no
+          # FUSE, same as the extract-and-run above.)
+          extract_dir="${RUNNER_TEMP}/appimage-verify"
+          rm -rf "$extract_dir"
+          mkdir -p "$extract_dir"
+          (cd "$extract_dir" && "$asset" --appimage-extract >/dev/null)
+          root="$extract_dir/squashfs-root"
+
+          expected="${TAG#v}"
+          embedded=$(sed -n 's/^X-AppImage-Version=//p' "$root/dev.fritze.Skyward.desktop")
+          if [ "$embedded" != "$expected" ]; then
+            echo "AppImage desktop entry says X-AppImage-Version='$embedded', tag says '$expected'" >&2
+            exit 1
+          fi
+          released=$(sed -n 's/.*<release version="\([^"]*\)".*/\1/p' \
+            "$root/usr/share/metainfo/dev.fritze.Skyward.metainfo.xml" | head -1)
+          if [ "$released" != "$expected" ]; then
+            echo "AppStream metadata says release version '$released', tag says '$expected'" >&2
+            exit 1
+          fi
+
+          if [ ! -s "$asset.zsync" ]; then
+            echo "no $asset.zsync produced — the AppImage advertises updates it cannot serve" >&2
+            exit 1
+          fi
+
           echo "path=$asset" >> "$GITHUB_OUTPUT"
+          echo "zsync=$asset.zsync" >> "$GITHUB_OUTPUT"
 
       # gh (pre-installed on GitHub-hosted runners) rather than a third-party
       # release action — one less external action to trust/pin. --generate-notes
@@ -344,6 +433,10 @@ jobs:
           APK: ${{ steps.apk.outputs.path }}
           FLATPACK: ${{ steps.flatpack.outputs.path }}
           APPIMAGE: ${{ steps.appimage.outputs.path }}
+          # Published beside the AppImage, not instead of anything: the
+          # gh-releases-zsync update information embedded above names this file
+          # by glob, and AppImageUpdate cannot do a delta update without it.
+          APPIMAGE_ZSYNC: ${{ steps.appimage.outputs.zsync }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -353,7 +446,7 @@ jobs:
             echo "already published." >&2
             exit 1
           fi
-          gh release create "$TAG" "$APK" "$FLATPACK" "$APPIMAGE" \
+          gh release create "$TAG" "$APK" "$FLATPACK" "$APPIMAGE" "$APPIMAGE_ZSYNC" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "$TAG" \

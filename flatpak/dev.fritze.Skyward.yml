@@ -12,7 +12,13 @@
 
 app-id: dev.fritze.Skyward
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+# Flathub requires the runtime to be the latest available at submission time,
+# and a freedesktop branch is EOL two years after its August release — 24.08
+# runs out in August 2026. Bumping is safe for this app in a way it would not
+# be for most: the jlinked tree carries its own JRE, so the runtime only has to
+# supply the display/GL/DBus stack. Still verify with `flatpak/build.sh` after
+# changing it — nothing in CI runs flatpak-builder.
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 command: skyward
 
@@ -23,6 +29,15 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
+  # Not optional alongside fallback-x11: without it the X11 shared-memory
+  # extension is unavailable, which flatpak's own docs call "very bad for X11
+  # performance". Costs nothing on Wayland.
+  - --share=ipc
+  # Compose Desktop renders through Skiko, which uses OpenGL on Linux. Without
+  # /dev/dri the sandbox has no GPU node and Mesa silently falls back to
+  # llvmpipe — the app still starts, so this is the kind of omission that only
+  # shows up as "the map and sky chart are inexplicably slow".
+  - --device=dri
   # §10.3's notification path: two-slices talks to this over DBus, and
   # `notify-send` (in the runtime) falls back onto the same interface.
   - --talk-name=org.freedesktop.Notifications
@@ -61,7 +76,12 @@ modules:
         path: skyward.sh
       - type: file
         path: dev.fritze.Skyward.desktop
+      # Stamped with the packaged version by tools/packaging/stamp-metainfo.sh
+      # (ADR 0020), which flatpak/build.sh runs before flatpak-builder — the
+      # checked-in flatpak/dev.fritze.Skyward.metainfo.xml carries a
+      # placeholder version on purpose. Outside the manifest directory for the
+      # same reason the `dir` source above is: it is a build output.
       - type: file
-        path: dev.fritze.Skyward.metainfo.xml
+        path: ../build/packaging/dev.fritze.Skyward.metainfo.xml
       - type: file
         path: icon.svg
