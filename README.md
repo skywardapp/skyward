@@ -36,6 +36,7 @@ aurora dashboard, rules/settings, tray/autostart/notifications).
 ./gradlew :desktopApp:run                        # from source
 ./gradlew :desktopApp:createReleaseDistributable # self-contained tree
 flatpak/build.sh                                 # Flatpak bundle (§15.5)
+appimage/build.sh                                # AppImage bundle (§15.5, ADR 0019)
 ```
 
 ## Project layout
@@ -49,6 +50,7 @@ skyward/
 ├── tools/        Build-time data converters (dev only)
 ├── fastlane/     F-Droid/Play store listing metadata
 ├── flatpak/      Flatpak manifest for desktop packaging
+├── appimage/     AppImage packaging for desktop (ADR 0019)
 └── docs/         Design doc and ADRs for any deviations
 ```
 

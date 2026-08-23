@@ -1,0 +1,9 @@
+#!/bin/sh
+# AppImage entry point (§15.5, ADR 0019). The AppImage runtime sets $APPDIR
+# to wherever it mounted or extracted this bundle, which moves on every
+# run — so this cannot assume the tree lives next to this script the way
+# flatpak/skyward.sh can assume /app. Falling back to resolving our own
+# location covers running AppRun directly out of an extracted AppDir (e.g.
+# after `--appimage-extract`), where $APPDIR isn't set.
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "${APPDIR:-$HERE}/usr/skyward/bin/skyward" "$@"
