@@ -32,10 +32,11 @@ doesn't start is a day added to the critical path.
   dependency's licence can't be read that way, or reads clearly but isn't on
   the allowlist (expect EPL-2.0, whose GPL-compatibility election lives in its
   LICENSE file rather than its POM), verify it by hand against §16 and record
-  the verdict in `licenseUnknownExceptions`. That written verdict is the only
-  thing that lets either case through, and a *denylisted* licence it will not
-  save. There is no warn-and-pass path: nothing passes on silence, only on a
-  decision someone wrote down.
+  the verdict in `licenseUnknownExceptions`, keyed on the exact `group:module`
+  — deliberately not on version, so a relicensing forces a fresh review. That
+  written verdict is the only thing that lets either case through, and a
+  *denylisted* licence it will not save. There is no warn-and-pass path:
+  nothing passes on silence, only on a decision someone wrote down.
 - **`tools/ci/check-reproducible-build.sh`** — builds `fossRelease` twice from
   a clean workspace and asserts the two APKs are reproducible (§15.4/§17.5b):
   byte-for-byte identical first, and only if that fails, identical *content*
