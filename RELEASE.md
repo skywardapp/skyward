@@ -44,9 +44,10 @@ doesn't start is a day added to the critical path.
   ```
   It works with or without a real signing key configured — see below.
 - **Versioning from git tags** (root `build.gradle.kts`) — `versionCode`,
-  `versionName` and the desktop `packageVersion` are all derived from the
-  latest `vMAJOR.MINOR.PATCH` tag reachable from the build's commit, so a
-  release is cut by pushing a tag and no build file has a version to bump.
+  `versionName`, the desktop `packageVersion` and the desktop app's own
+  `APP_VERSION` are all derived from the latest `vMAJOR.MINOR.PATCH` tag
+  reachable from the build's commit, so a release is cut by pushing a tag and
+  no build file has a version to bump.
   `versionCode` is `MAJOR * 1000000 + MINOR * 1000 + PATCH` (`v0.1.0` → 1000),
   which keeps it monotonic and decodable; an untagged build gets `0.0.0-dev`
   and `versionCode` 1, deliberately below any real release so it is rejected as
@@ -69,14 +70,26 @@ doesn't start is a day added to the critical path.
   real version needs the tags fetched — CI checkouts use `fetch-depth: 0` for
   exactly this reason. It stays reproducible (§15.4/§17.5b) because it is a
   pure function of the commit: working-tree dirtiness is not part of it.
+
+  On the desktop side the tag reaches the packaging metadata too
+  ([ADR 0020](docs/adr/0020-package-metadata-version-from-the-packaged-binary.md)):
+  `:desktopApp:generateAppVersion` writes the version into the binary, and
+  `appimage/build.sh` and `flatpak/build.sh` read it back out with
+  `bin/skyward --version` to stamp the AppStream `<release>` entry and the
+  AppImage's `X-AppImage-Version`. `release-on-tag.yml` asserts both against
+  `$TAG` before publishing. Nothing on that path is maintained by hand, which
+  is the fix for the three places that used to be and had all drifted to
+  0.1.0.
 - **Release automation** (`.github/workflows/`) — `auto-tag-main.yml` pushes an
   incrementing patch tag on every push to `main` and calls
   `release-on-tag.yml`, which builds the `fossRelease` APK and two Linux
   desktop downloads — a "flat pack" (the `createReleaseDistributable`
   jlinked tree, tarred up as-is — no installer, unpack and run
   `bin/skyward`) and an AppImage (`appimage/build.sh`, ADR 0019 — same tree,
-  repackaged as a single `chmod +x`-and-run file) — for that tag and
-  publishes a GitHub Release with generated notes and all three attached.
+  repackaged as a single `chmod +x`-and-run file, published with
+  AppImageUpdate update information and a companion `.zsync`) — for that tag
+  and publishes a GitHub Release with generated notes and all of them
+  attached.
   Pushing a `v*` tag by hand does the same thing on its own. The publish job
   refuses to run without all four `SKYWARD_RELEASE_*` secrets (item 1 below)
   — an unsigned APK can't be installed on Android at all, so until the key
@@ -225,8 +238,12 @@ sign-off before registering, not just before the deadline.
 
 ### 5. Flatpak submission
 
-`flatpak/` is ready (manifest, `.desktop`, AppStream metainfo, icon — see
-`flatpak/README.md`). Submitting to Flathub is a separate PR against
+`flatpak/` is ready *except for screenshots*, which Flathub requires of every
+graphical application and which need a stable public URL this repository does
+not host — see "Before submitting to Flathub" in `flatpak/README.md` for that
+and the rest of the pre-submission checklist (runtime currency,
+`flatpak-builder-lint`). Everything else is in place: manifest, `.desktop`,
+AppStream metainfo, icon, `flathub.json`. Submitting is a separate PR against
 [`flathub/flathub`](https://github.com/flathub/flathub) proposing
 `dev.fritze.Skyward.yml` (or the final app id from item 0), reviewed by
 Flathub maintainers. Verify locally first:

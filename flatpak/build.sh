@@ -17,6 +17,18 @@ if [ ! -d "$tree" ]; then
   exit 1
 fi
 
+# ADR 0020: the AppStream <release> entry is stamped from the version the
+# binary itself reports, not from a number kept up to date by hand — which it
+# never was. Asking the tree that is about to be packaged means the metadata
+# cannot disagree with the app it describes.
+version="$("$tree/bin/skyward" --version | awk '{print $NF}')"
+if [ -z "$version" ]; then
+    echo "'$tree/bin/skyward --version' printed nothing — cannot stamp the AppStream metadata" >&2
+    exit 1
+fi
+echo "==> Stamping AppStream metadata for $version"
+tools/packaging/stamp-metainfo.sh "$version" build/packaging/dev.fritze.Skyward.metainfo.xml >/dev/null
+
 echo "==> Packaging with flatpak-builder"
 # --disable-download: everything the manifest needs is already on disk, and
 # saying so makes an accidental network dependency fail here rather than on
