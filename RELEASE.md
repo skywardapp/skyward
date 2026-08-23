@@ -24,10 +24,11 @@ doesn't start is a day added to the critical path.
   (§17.5b(c)/D13). Runs as part of `./gradlew check`.
 - **`checkDependencyLicenses`** (root `build.gradle.kts`) — fails the build on
   any shipped dependency whose licence isn't on the §16 allowlist. The
-  allowlist enforces both of §16's constraints: commercial use must stay
-  possible (P6/D12) *and* the licence must be GPL-3-compatible (D8), which is
-  why EPL and MPL-1.1 are not on it. Licences are read from each dependency's
-  POM, following `<parent>` when a POM declares none of its own. If a
+  allowlist enforces both of §16's constraints: the licence must be free, with
+  no field-of-use restriction such as NonCommercial (P6/D12), *and* it must be
+  GPL-3-compatible (D8), which is why EPL and MPL-1.1 are not on it. Licences
+  are read from each dependency's POM, following `<parent>` when a POM declares
+  none of its own. If a
   dependency's licence genuinely can't be read that way, verify it by hand
   against §16 and record the verdict in `licenseUnknownExceptions`; there is
   no warn-and-pass path.
