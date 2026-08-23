@@ -118,7 +118,11 @@ because that is the startup path a packaging mistake actually breaks (ADR
 - **Know what the licence check does and does not cover.**
   `checkDependencyLicenses` reads the POM-declared licence of every Maven
   dependency on a shipped classpath and fails the build against §16's
-  allowlist/denylist. That is its whole scope: it never sees a bundled asset
+  allowlist/denylist. A licence it cannot place fails too — unless that exact
+  `group:module` carries a recorded manual verdict in `licenseUnknownExceptions`
+  (root `build.gradle.kts`), which is the escape hatch for an unreadable POM,
+  not for an unwanted licence; a denylisted licence is never exceptable. That is
+  its whole scope: it never sees a bundled asset
   (`showers.json`, the Natural Earth binary, the vendored `astronomy.kt`) or a
   runtime data source (SWPC, JPL, EONET). Those are cleared by review against
   §16's table before they land, and nothing automated will catch it if they
