@@ -119,10 +119,12 @@ because that is the startup path a packaging mistake actually breaks (ADR
   `checkDependencyLicenses` reads the POM-declared licence of every Maven
   dependency on a shipped classpath and fails the build against §16's
   allowlist/denylist. A licence it cannot place fails too — unless that exact
-  `group:module` carries a recorded manual verdict in `licenseUnknownExceptions`
-  (root `build.gradle.kts`), which is the escape hatch for an unreadable POM,
-  not for an unwanted licence; a denylisted licence is never exceptable. That is
-  its whole scope: it never sees a bundled asset
+  `group:module` carries a recorded verdict in `licenseUnknownExceptions` (root
+  `build.gradle.kts`). That verdict rescues both failure modes: a POM declaring
+  no licence at all, and one declaring a perfectly readable licence the
+  allowlist doesn't carry — EPL-2.0, whose GPL-compatibility election lives in
+  its LICENSE file rather than its POM, is the case to expect. It never rescues
+  a denylisted licence. That is its whole scope: it never sees a bundled asset
   (`showers.json`, the Natural Earth binary, the vendored `astronomy.kt`) or a
   runtime data source (SWPC, JPL, EONET). Those are cleared by review against
   §16's table before they land, and nothing automated will catch it if they
