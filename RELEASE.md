@@ -71,15 +71,18 @@ doesn't start is a day added to the critical path.
   pure function of the commit: working-tree dirtiness is not part of it.
 - **Release automation** (`.github/workflows/`) — `auto-tag-main.yml` pushes an
   incrementing patch tag on every push to `main` and calls
-  `release-on-tag.yml`, which builds the `fossRelease` APK and a Linux desktop
-  "flat pack" (the `createReleaseDistributable` jlinked tree, tarred up
-  as-is — no installer, unpack and run `bin/skyward`) for that tag and
-  publishes a GitHub Release with generated notes and both attached.
+  `release-on-tag.yml`, which builds the `fossRelease` APK and two Linux
+  desktop downloads — a "flat pack" (the `createReleaseDistributable`
+  jlinked tree, tarred up as-is — no installer, unpack and run
+  `bin/skyward`) and an AppImage (`appimage/build.sh`, ADR 0019 — same tree,
+  repackaged as a single `chmod +x`-and-run file) — for that tag and
+  publishes a GitHub Release with generated notes and all three attached.
   Pushing a `v*` tag by hand does the same thing on its own. The publish job
   refuses to run without all four `SKYWARD_RELEASE_*` secrets (item 1 below)
   — an unsigned APK can't be installed on Android at all, so until the key
   exists this job fails loudly instead of publishing a broken download (this
-  currently blocks the flat pack too, since it's built in the same job).
+  currently blocks both desktop downloads too, since they're built in the
+  same job).
   It also only ever *creates* a release: once a tag has one, the workflow
   refuses to touch its assets rather than overwrite them, matching item 6
   below (and, once that setting is on, required by it) — a tag whose release

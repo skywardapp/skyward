@@ -89,7 +89,9 @@ compose.desktop {
         nativeDistributions {
             // §15.5: jpackage targets. No AppImage support in the Compose plugin —
             // Flatpak (primary) repackages the jlinked createReleaseDistributable
-            // tree separately; see flatpak/.
+            // tree separately; see flatpak/. appimage/ repackages the same tree
+            // the same way for an AppImage release asset — see ADR 0019 for why
+            // that doesn't reopen this line.
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
 
             // jlink strips the runtime image down to what it can *see* being

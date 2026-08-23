@@ -46,6 +46,7 @@ tools/        Dev-only build scripts and CI helpers
 docs/         design-doc.md + ADRs
 fastlane/     Store listing metadata (F-Droid reads this directly)
 flatpak/      Flatpak manifest for desktop packaging
+appimage/     AppImage packaging for desktop (ADR 0019)
 ```
 
 Three Gradle modules, and only three (§4.1). Do **not** split `:core`;

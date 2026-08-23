@@ -1,16 +1,22 @@
 name: Release on tag
 
-# Builds the fossRelease APK plus a Linux desktop "flat pack" for a tag and
-# publishes a GitHub Release with auto-generated notes and both attached.
-# RELEASE.md ties F-Droid's build recipe to "the fossRelease build and this
-# repo's tagged releases" — this is that half. playRelease is Play Console's
-# job, not GitHub's, so it isn't built here.
+# Builds the fossRelease APK plus two Linux desktop downloads for a tag and
+# publishes a GitHub Release with auto-generated notes and all three
+# attached. RELEASE.md ties F-Droid's build recipe to "the fossRelease build
+# and this repo's tagged releases" — this is that half. playRelease is Play
+# Console's job, not GitHub's, so it isn't built here.
 #
 # The flat pack is `createReleaseDistributable`'s jlinked app tree — the same
 # one flatpak/build.sh repackages — tarred up as-is. No installer, no package
 # manager: unpack it and run bin/skyward. It's a Linux x64 build (the runner
 # this job builds on), same as the Deb/Rpm/Flatpak outputs already shipped
 # with M6.
+#
+# The AppImage (appimage/build.sh, ADR 0019) repackages that same tree into a
+# single `chmod +x`-and-run file instead of an archive to unpack. Unlike
+# everything else this workflow trusts, `appimagetool` has no pinnable,
+# checksummed release upstream — see the ADR for why that's an accepted,
+# scoped exception rather than an oversight.
 #
 # The APK's own versionCode/versionName come from the tag being built, derived
 # at build time by the version block in the root build.gradle.kts — which is
@@ -263,6 +269,39 @@ jobs:
 
           echo "path=$asset" >> "$GITHUB_OUTPUT"
 
+      # appimage/build.sh (ADR 0019) repackages the same jlinked tree above
+      # into a single-file AppImage. It re-runs createReleaseDistributable,
+      # which Gradle treats as up to date and skips almost instantly — kept
+      # rather than special-cased so this step works standalone the same way
+      # it does locally. desktop-file-validate, mksquashfs and the AppImage
+      # runtime it embeds all come from the downloaded appimagetool/its own
+      # network fetch, not from anything installed on this runner.
+      #
+      # Same "all four or none" reason as "Build desktop distributable" above
+      # for repeating the three secrets here: any Gradle invocation
+      # configures androidApp/build.gradle.kts too, and STORE_FILE alone
+      # (already in the environment via GITHUB_ENV) trips that check.
+      #
+      # Smoke-tested the same way as the flat pack above: extract-and-run the
+      # AppImage that's about to be published, not just the tree it was built
+      # from, so a packaging mistake in appimage/build.sh itself (a missing
+      # AppDir file, a broken AppRun) fails here instead of shipping a dead
+      # download.
+      - name: Build and smoke-test the AppImage
+        id: appimage
+        env:
+          SKYWARD_RELEASE_STORE_PASSWORD: ${{ secrets.SKYWARD_RELEASE_STORE_PASSWORD }}
+          SKYWARD_RELEASE_KEY_ALIAS: ${{ secrets.SKYWARD_RELEASE_KEY_ALIAS }}
+          SKYWARD_RELEASE_KEY_PASSWORD: ${{ secrets.SKYWARD_RELEASE_KEY_PASSWORD }}
+          APPIMAGE_OUTPUT: ${{ runner.temp }}/skyward-${{ env.TAG }}-x86_64.AppImage
+        run: |
+          set -euo pipefail
+          appimage/build.sh
+          asset="$APPIMAGE_OUTPUT"
+          APPIMAGE_EXTRACT_AND_RUN=1 "$asset" debug-matches | tee /tmp/debug-matches-appimage.txt
+          grep -q "occurrences in horizon" /tmp/debug-matches-appimage.txt
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
+
       # gh (pre-installed on GitHub-hosted runners) rather than a third-party
       # release action — one less external action to trust/pin. --generate-notes
       # asks GitHub to build categorized notes from merged PRs since the
@@ -290,6 +329,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APK: ${{ steps.apk.outputs.path }}
           FLATPACK: ${{ steps.flatpack.outputs.path }}
+          APPIMAGE: ${{ steps.appimage.outputs.path }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -299,7 +339,7 @@ jobs:
             echo "already published." >&2
             exit 1
           fi
-          gh release create "$TAG" "$APK" "$FLATPACK" \
+          gh release create "$TAG" "$APK" "$FLATPACK" "$APPIMAGE" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "$TAG" \
