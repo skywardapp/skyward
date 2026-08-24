@@ -1,6 +1,5 @@
-package dev.fritze.skyward.desktop.ui.aurora
+package dev.fritze.skyward.core.chart
 
-import androidx.compose.ui.geometry.Offset
 import dev.fritze.skyward.core.model.GeoPoint
 import kotlin.math.abs
 import kotlin.test.Test
@@ -10,19 +9,19 @@ import kotlin.test.assertTrue
 /** §14.4 Row 2's north-polar azimuthal plot. */
 class AuroraPolarPlotTest {
 
-    private val center = Offset(150f, 150f)
+    private val center = ChartPoint(150f, 150f)
     private val radius = 140f
 
     @Test
     fun thePoleIsTheCentreAndTheRimIsFortyFiveDegrees() {
         val pole = AuroraPolarPlot.project(GeoPoint(90.0, 0.0), center, radius, north = true)!!
-        assertTrue((pole - center).getDistance() < 0.01f, "pole projected to $pole")
+        assertTrue(pole.distanceTo(center) < 0.01f, "pole projected to $pole")
 
         val rim = AuroraPolarPlot.project(GeoPoint(45.0, 40.0), center, radius, north = true)!!
-        assertTrue(abs((rim - center).getDistance() - radius) < 0.01f, "45N projected to $rim")
+        assertTrue(abs(rim.distanceTo(center) - radius) < 0.01f, "45N projected to $rim")
 
         val midway = AuroraPolarPlot.project(GeoPoint(67.5, 0.0), center, radius, north = true)!!
-        assertTrue(abs((midway - center).getDistance() - radius / 2f) < 0.01f, "67.5N should be half way out")
+        assertTrue(abs(midway.distanceTo(center) - radius / 2f) < 0.01f, "67.5N should be half way out")
     }
 
     @Test
@@ -53,7 +52,7 @@ class AuroraPolarPlotTest {
         for (latitude in listOf(50.0, 65.0, 80.0)) {
             for (longitude in listOf(-170.0, -30.0, 0.0, 45.0, 179.0)) {
                 val point = GeoPoint(latitude, longitude)
-                val projected = AuroraPolarPlot.project(point, Offset(0f, 0f), 1f, north = true)!!
+                val projected = AuroraPolarPlot.project(point, ChartPoint(0f, 0f), 1f, north = true)!!
                 val back = AuroraPolarPlot.unproject(projected.x.toDouble(), projected.y.toDouble(), north = true)!!
                 assertTrue(abs(back.latDeg - latitude) < 0.01, "lat $latitude round-tripped to ${back.latDeg}")
                 assertTrue(abs(back.lonDeg - longitude) < 0.01, "lon $longitude round-tripped to ${back.lonDeg}")

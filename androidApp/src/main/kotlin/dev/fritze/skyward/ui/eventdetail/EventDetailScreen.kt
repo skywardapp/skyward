@@ -70,11 +70,12 @@ import dev.fritze.skyward.core.model.CometPayload
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.LocalDetails
 import dev.fritze.skyward.core.model.Occurrence
-import dev.fritze.skyward.core.model.OccurrencePayload
 import dev.fritze.skyward.core.model.SavedLocation
+import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TerrestrialPayload
 import dev.fritze.skyward.core.model.VisibilityResult
 import dev.fritze.skyward.data.AppContainer
+import dev.fritze.skyward.ui.chart.EclipsePathMiniMap
 import dev.fritze.skyward.ui.common.qualityColor
 import dev.fritze.skyward.ui.rules.LEAD_PRESETS
 import dev.fritze.skyward.ui.rules.formatLead
@@ -123,7 +124,15 @@ fun EventDetailScreen(container: AppContainer, occurrenceId: String, onBack: () 
                     LocationCard(location, visres, zone)
                 }
             }
-            item { PayloadExtras(occurrence.payload, state.perLocation.firstOrNull()?.second, zone, context) }
+            item {
+                PayloadExtras(
+                    occurrence = occurrence,
+                    primaryVisres = state.perLocation.firstOrNull()?.second,
+                    locations = state.perLocation.map { it.first },
+                    zone = zone,
+                    context = context,
+                )
+            }
             item {
                 EventDetailActions(
                     state.isMuted,
@@ -204,9 +213,25 @@ private fun tickingNow(anchor: Instant): State<Instant> = produceState(Clock.Sys
     }
 }
 
-/** The comet-compliance block and/or EONET link, depending on which payload type this occurrence carries. */
+/**
+ * §13.3's per-phenomenon extras: the eclipse path mini-map, the
+ * comet-compliance block and/or the EONET link, depending on which payload
+ * type this occurrence carries.
+ */
 @Composable
-private fun PayloadExtras(payload: OccurrencePayload, primaryVisres: VisibilityResult?, zone: TimeZone, context: Context) {
+private fun PayloadExtras(
+    occurrence: Occurrence,
+    primaryVisres: VisibilityResult?,
+    locations: List<SavedLocation>,
+    zone: TimeZone,
+    context: Context,
+) {
+    val payload = occurrence.payload
+    // §13.3's eclipse block. Draws nothing for a partial, which has no
+    // sampled central path (§7.1.3).
+    if (payload is SolarEclipsePayload) {
+        EclipsePathMiniMap(occurrence, locations)
+    }
     if (payload is CometPayload) {
         CometComplianceBlock(payload, primaryVisres, zone)
     }

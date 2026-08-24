@@ -15,11 +15,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import dev.fritze.skyward.core.persistence.ThemeChoice
+import dev.fritze.skyward.ui.chart.LocalChartDarkTheme
 
 /**
  * §13: "Material 3, Jetpack Compose, dynamic color; […] dark theme
@@ -63,7 +65,13 @@ fun SkywardTheme(theme: ThemeChoice, content: @Composable () -> Unit) {
         }
     }
 
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    // The drawn views (§14.1-§14.4) opt out of dynamic colour but must still
+    // follow an explicit ThemeChoice override, so they get the same resolved
+    // darkness Material does rather than reading the OS themselves
+    // (ADR 0024).
+    CompositionLocalProvider(LocalChartDarkTheme provides dark) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }
 
 private val NavigationBarLightScrim = AndroidColor.argb(0xe6, 0xFF, 0xFF, 0xFF)

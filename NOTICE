@@ -47,9 +47,9 @@ Source:    https://www.naturalearthdata.com/downloads/
 License:   Public domain
 Bundled:   Yes — the 1:50m land layer is vendored as
            tools/naturalearth/ne_50m_land.geojson.gz and converted at build
-           time (:core's convertNaturalEarth task) into natural-earth.bin on
-           the desktop target's resource path, for the event map (§14.1).
-           The Android artifact does not carry it.
+           time (:core's convertNaturalEarth task) into natural-earth.bin,
+           for the event map (§14.1). Both the desktop distributable and the
+           Android APK carry it: the map is drawn on both (ADR 0022).
 Notes:     Courtesy credit: "Made with Natural Earth."
 
 ================================================================================

@@ -6,13 +6,13 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -31,8 +31,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -43,15 +41,31 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import dev.fritze.skyward.core.chart.EclipsePathPolyline
+import dev.fritze.skyward.core.chart.EonetMarker
+import dev.fritze.skyward.core.chart.MapCamera
+import dev.fritze.skyward.core.chart.MapLayer
+import dev.fritze.skyward.core.chart.eclipsePathPolylines
+import dev.fritze.skyward.core.chart.eonetMarkers
+import dev.fritze.skyward.core.chart.mapHitTest
+import dev.fritze.skyward.core.chart.travelRadiiKm
 import dev.fritze.skyward.core.format.formatDayAndMonth
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
+import dev.fritze.skyward.desktop.ui.common.panned
+import dev.fritze.skyward.desktop.ui.common.project
+import dev.fritze.skyward.desktop.ui.common.toChartPoint
+import dev.fritze.skyward.desktop.ui.common.toChartSize
+import dev.fritze.skyward.desktop.ui.common.travelCircleRadii
+import dev.fritze.skyward.desktop.ui.common.zoomed
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import dev.fritze.skyward.desktop.ui.theme.SkywardPalette
 import kotlin.math.roundToInt
@@ -383,10 +397,9 @@ private fun DrawScope.drawLocations(camera: MapCamera, locations: List<SavedLoca
 }
 
 /**
- * Click targets, nearest-first within a pixel threshold. Locations are
- * checked first only to give them priority when a pin sits on a path; a
- * location is not an occurrence, so a hit there returns null and simply
- * swallows the click rather than selecting whatever is underneath it.
+ * Click targets. The picking rules — nearest within a threshold, and which
+ * layer outranks which — are `:core`'s [mapHitTest]; the radii stay here,
+ * since a cursor is finer than a fingertip.
  */
 private fun hitTest(
     position: Offset,
@@ -394,32 +407,18 @@ private fun hitTest(
     camera: MapCamera,
     layers: Set<MapLayer>,
     content: MapContent,
-): String? {
-    if (MapLayer.LOCATIONS in layers && content.locations.any { camera.isWithin(it.point, position, size, PIN_HIT_RADIUS) }) {
-        return null
-    }
-    if (MapLayer.EONET in layers) {
-        val marker = content.eonet
-            .filter { camera.isWithin(it.point, position, size, MARKER_HIT_RADIUS) }
-            .minByOrNull { distance(camera.project(it.point, size), position) }
-        if (marker != null) return marker.occurrenceId
-    }
-    if (MapLayer.ECLIPSE_PATHS in layers) {
-        return content.eclipsePaths
-            .mapNotNull { path ->
-                path.allPoints
-                    .minOfOrNull { distance(camera.project(it, size), position) }
-                    ?.takeIf { it <= PATH_HIT_RADIUS }
-                    ?.let { path.occurrenceId to it }
-            }
-            .minByOrNull { it.second }
-            ?.first
-    }
-    return null
-}
-
-private fun MapCamera.isWithin(point: GeoPoint, position: Offset, size: Size, radiusPx: Float): Boolean =
-    distance(project(point, size), position) <= radiusPx
+): String? = mapHitTest(
+    position = position.toChartPoint(),
+    size = size.toChartSize(),
+    camera = camera,
+    layers = layers,
+    locations = content.locations.map { it.point },
+    eonet = content.eonet,
+    eclipsePaths = content.eclipsePaths,
+    pinRadiusPx = PIN_HIT_RADIUS,
+    markerRadiusPx = MARKER_HIT_RADIUS,
+    pathRadiusPx = PATH_HIT_RADIUS,
+)
 
 private const val PIN_HIT_RADIUS = 10f
 private const val MARKER_HIT_RADIUS = 10f

@@ -29,8 +29,21 @@ object KpNowcast {
 
     const val URL = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
 
-    suspend fun fetchLatest(httpClient: HttpClient = createHttpClient()): KpEstimate? =
-        parseEstimatedKp1m(httpClient.getText(URL)).maxByOrNull { it.time }
+    suspend fun fetchLatest(
+        // Nullable rather than a `createHttpClient()` default, for the reason
+        // AuroraSource.fetchOvationGridNow gives: a client created here owns an
+        // engine with its own threads and selector, and must be closed. A
+        // caller-provided one stays the caller's to close. Every caller of this
+        // used the default and so leaked one client per fetch.
+        httpClient: HttpClient? = null,
+    ): KpEstimate? {
+        val client = httpClient ?: createHttpClient()
+        return try {
+            parseEstimatedKp1m(client.getText(URL)).maxByOrNull { it.time }
+        } finally {
+            if (httpClient == null) client.close()
+        }
+    }
 
     /**
      * §7.3.1's "parser warning": files under `/json/` are conventional object

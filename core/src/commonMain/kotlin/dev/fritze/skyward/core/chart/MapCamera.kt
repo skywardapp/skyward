@@ -1,7 +1,5 @@
-package dev.fritze.skyward.desktop.ui.map
+package dev.fritze.skyward.core.chart
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import dev.fritze.skyward.core.model.GeoPoint
 import kotlin.math.abs
 
@@ -17,16 +15,16 @@ import kotlin.math.abs
  * [offset] is in pixels and applies after scaling, so the world is
  * `zoom × size` pixels and [offset] is where its top-left corner sits.
  */
-data class MapCamera(val zoom: Float = 1f, val offset: Offset = Offset.Zero) {
+data class MapCamera(val zoom: Float = 1f, val offset: ChartPoint = ChartPoint.Zero) {
 
-    fun project(point: GeoPoint, size: Size): Offset = project(point.lonDeg, point.latDeg, size)
+    fun project(point: GeoPoint, size: ChartSize): ChartPoint = project(point.lonDeg, point.latDeg, size)
 
-    fun project(lonDeg: Double, latDeg: Double, size: Size): Offset = Offset(
+    fun project(lonDeg: Double, latDeg: Double, size: ChartSize): ChartPoint = ChartPoint(
         x = ((lonDeg + 180.0) / 360.0).toFloat() * size.width * zoom + offset.x,
         y = ((90.0 - latDeg) / 180.0).toFloat() * size.height * zoom + offset.y,
     )
 
-    fun unproject(screen: Offset, size: Size): GeoPoint {
+    fun unproject(screen: ChartPoint, size: ChartSize): GeoPoint {
         val worldX = (screen.x - offset.x) / (size.width * zoom)
         val worldY = (screen.y - offset.y) / (size.height * zoom)
         return GeoPoint(
@@ -36,23 +34,23 @@ data class MapCamera(val zoom: Float = 1f, val offset: Offset = Offset.Zero) {
     }
 
     /** Pixels per degree of longitude at the current zoom — also the basis for the lat-scaled travel circles. */
-    fun pixelsPerLonDegree(size: Size): Float = size.width * zoom / 360f
+    fun pixelsPerLonDegree(size: ChartSize): Float = size.width * zoom / 360f
 
-    fun pixelsPerLatDegree(size: Size): Float = size.height * zoom / 180f
+    fun pixelsPerLatDegree(size: ChartSize): Float = size.height * zoom / 180f
 
     /**
      * Pans by [delta] and re-clamps. Panning past the edge is not blocked at
      * the gesture level but corrected here, so a fast drag decelerates into
      * the edge instead of stopping dead partway through the gesture.
      */
-    fun panned(delta: Offset, size: Size): MapCamera = copy(offset = offset + delta).clamped(size)
+    fun panned(delta: ChartPoint, size: ChartSize): MapCamera = copy(offset = offset + delta).clamped(size)
 
     /**
      * Zooms around [focus] (the pointer position) so the geographic point
      * under the cursor stays under the cursor — the behaviour every map has
      * and the only one that doesn't feel broken with a scroll wheel.
      */
-    fun zoomed(factor: Float, focus: Offset, size: Size): MapCamera {
+    fun zoomed(factor: Float, focus: ChartPoint, size: ChartSize): MapCamera {
         val newZoom = (zoom * factor).coerceIn(MIN_ZOOM, MAX_ZOOM)
         if (newZoom == zoom) return this
         val scale = newZoom / zoom
@@ -66,13 +64,13 @@ data class MapCamera(val zoom: Float = 1f, val offset: Offset = Offset.Zero) {
      * beyond that the visible window stays inside the map rather than
      * revealing background beyond the poles or the antimeridian.
      */
-    fun clamped(size: Size): MapCamera {
+    fun clamped(size: ChartSize): MapCamera {
         val worldWidth = size.width * zoom
         val worldHeight = size.height * zoom
         val minX = size.width - worldWidth
         val minY = size.height - worldHeight
         return copy(
-            offset = Offset(
+            offset = ChartPoint(
                 x = offset.x.coerceIn(minOf(minX, 0f), maxOf(minX, 0f)),
                 y = offset.y.coerceIn(minOf(minY, 0f), maxOf(minY, 0f)),
             ),

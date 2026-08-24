@@ -13,10 +13,15 @@ needs has to already be in the repository.
 
 `:core`'s `convertNaturalEarth` Gradle task (see `core/build.gradle.kts`)
 converts it into `natural-earth.bin` — a flat big-endian float array of
-polygon rings — and puts that on the **desktop** target's resource path only.
-`NaturalEarthMap` (core, desktopMain) reads it back. Nothing parses GeoJSON at
-runtime, and the Android artifact never carries the data at all (§18 puts an
-Android map tab in the v1.1 backlog).
+polygon rings — and puts that on the **android and desktop** targets' resource
+paths. `NaturalEarthMap` (core, commonMain) reads it back. Nothing parses
+GeoJSON at runtime.
+
+Both frontends draw the map (ADR 0022), so both need the data. The one
+generated file is wired into two source sets rather than copied into them,
+because AGP does not merge `commonMain` resources into the APK — ADR 0023 has
+the detail, and `ShowersResource.android.kt` documents the same finding for a
+file that *is* checked in twice.
 
 Coastlines are not a separate layer here: the land polygons' own outlines are
 the coastline, so drawing them stroked and filled gives §14.1's "land +
@@ -33,6 +38,21 @@ rm ne_50m_land.geojson
 
 The converter reads whatever `Polygon`/`MultiPolygon` features the file
 contains, so a newer vintage needs no code change — but do re-run
-`./gradlew :desktopApp:test` afterwards: `NaturalEarthMapTest` asserts the
-decoded geometry still covers the whole globe and stays within valid
-lon/lat bounds.
+`NaturalEarthMapTest` afterward, on **both** targets:
+
+```sh
+./gradlew :core:desktopTest :core:testDebugUnitTest
+```
+
+It asserts the decoded geometry still covers the whole globe and stays within
+valid lon/lat bounds. Run both because they decode from different classpaths:
+the desktop task reads the KMP source set, the Android one reads AGP's.
+
+Neither proves the file reaches the *packaged* APK — a unit test sees the test
+classpath, not the archive. That check is separate, and it is the one that
+caught the resource going missing while the build stayed green (ADR 0023):
+
+```sh
+./gradlew :androidApp:assembleFossDebug
+unzip -l androidApp/build/outputs/apk/foss/debug/*.apk | grep natural-earth
+```

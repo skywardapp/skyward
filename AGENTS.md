@@ -39,7 +39,8 @@ the device to NOAA SWPC, NASA EONET and NASA/JPL. GPL-3.0-or-later.
 
 ```text
 core/         Kotlin Multiplatform domain logic — model, astro, sources,
-              visibility, rules, planner, persistence, sync, net, format
+              visibility, rules, planner, persistence, sync, net, format,
+              chart, map
 androidApp/   Jetpack Compose app; foss + play flavours
 desktopApp/   Compose for Desktop (Linux)
 tools/        Dev-only build scripts and CI helpers
@@ -153,6 +154,20 @@ because that is the startup path a packaging mistake actually breaks (ADR
 - **`showers.json` exists twice** (`core/src/commonMain/resources/` and
   `core/src/androidMain/resources/`) because AGP needs its own copy. Update
   both together; `verifyShowerCatalogsMatch` fails the build if they diverge.
+- **A resource only reaches the APK from AGP's own source set.** The same
+  asymmetry bites twice: `commonMain/resources/` is not merged into the APK
+  (hence the `showers.json` duplicate above), and neither is the KMP
+  `androidMain` source set's `resources`. `natural-earth.bin` is registered
+  in the `android { }` block instead —
+  `sourceSets.getByName("main").resources.srcDir(convertNaturalEarth)` — and
+  because AGP flattens that srcDir to plain `File`s and drops the producing
+  task, the dependency is declared separately by matching the
+  `process<Variant>JavaRes` tasks (neither a bare provider nor
+  `.map { it.outputs.files }` survives the flattening, and `check` fails
+  validation without it). Neither mistake breaks the build: you get an APK
+  that silently lacks the file. **Verify a bundled
+  resource with `unzip -l app.apk`, never by observing that the build
+  passed.** ADR 0023 records both traps.
 - **Never commit signing material.** `keystore.properties`, `*.jks`,
   `*.keystore` are gitignored; the key reaches a build via that file or the
   `SKYWARD_RELEASE_*` env vars. See `keystore.properties.example` and

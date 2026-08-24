@@ -1,4 +1,4 @@
-package dev.fritze.skyward.desktop.ui.timeline
+package dev.fritze.skyward.core.chart
 
 import kotlin.math.abs
 import kotlin.test.Test

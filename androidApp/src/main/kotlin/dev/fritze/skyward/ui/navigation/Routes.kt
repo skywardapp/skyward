@@ -6,6 +6,17 @@ import android.net.Uri
 object Routes {
     const val ONBOARDING = "onboarding"
     const val UPCOMING = "upcoming"
+
+    /**
+     * §14.1-§14.4's drawn views, behind one bottom-bar item.
+     *
+     * §13.1's sketch reserved this slot for a Map tab; ADR 0022 puts all
+     * four visualizations on Android, and Material 3's NavigationBar tops
+     * out around five items, so they share one destination with a tab row
+     * rather than taking four slots. The item count is §13.1's; what sits
+     * behind one of them is broader.
+     */
+    const val SKY = "sky"
     const val RULES = "rules"
     const val SETTINGS = "settings"
     const val LOCATIONS = "settings/locations"
@@ -38,6 +49,6 @@ object Routes {
     const val RULE_EDITOR_EDIT = "rules/edit/{$RULE_EDITOR_ARG}"
     fun ruleEditor(ruleId: String) = "rules/edit/$ruleId"
 
-    /** Routes that show the bottom nav bar (§13.1: Upcoming/Rules/Settings only). */
-    val BOTTOM_BAR_ROUTES = setOf(UPCOMING, RULES, SETTINGS)
+    /** Routes that show the bottom nav bar (§13.1: Upcoming/Sky/Rules/Settings). */
+    val BOTTOM_BAR_ROUTES = setOf(UPCOMING, SKY, RULES, SETTINGS)
 }

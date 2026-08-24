@@ -20,12 +20,15 @@ plugins {
  * toolchain on the build machine — `tools/naturalearth/` holds the vendored
  * input and documents how to refresh it.
  *
- * The output is wired into the **desktop** target's resources only, not
- * commonMain's as §15.1's layout shows: the map is a desktop view (§14.1;
- * Android's Map tab is explicitly v1.1 backlog, §18), and half a megabyte of
- * coastlines has no business inside the APK. See
- * docs/adr/0010-natural-earth-binary-in-desktop-resources.md, which also says
- * what to change when Android grows a map.
+ * The output is wired into the android *and* desktop targets' resources, not
+ * commonMain's as §15.1's layout shows: AGP does not merge commonMain
+ * resources into the packaged APK (the `showers.json` duplication in
+ * `ShowersResource.android.kt` is the same finding), so a commonMain
+ * placement alone would leave Android's map (ADR 0022) looking for a
+ * resource that is not there. Pointing both source sets at the one task
+ * output keeps a single source of truth, so — unlike `showers.json` — there
+ * is no second copy to guard. See
+ * docs/adr/0023-natural-earth-on-android.md, which supersedes ADR 0010.
  *
  * Binary layout, big-endian:
  *   magic "SKNE" (4 bytes) · version u16 · ringCount i32
@@ -131,11 +134,34 @@ android {
     defaultConfig {
         minSdk = 26
     }
+    // The generated map resource has to be registered on *AGP's* main source
+    // set, not the KMP `androidMain` one. They are different objects, and only
+    // this one reaches the packaged APK -- verified by
+    // `unzip -l app.apk | grep natural-earth`, which came back empty when the
+    // srcDir was on `androidMain` instead. That is the same asymmetry
+    // ShowersResource.android.kt records for commonMain/resources; ADR 0023
+    // has the detail.
+    sourceSets.getByName("main").resources.srcDir(convertNaturalEarth)
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+/**
+ * AGP flattens an `AndroidSourceDirectorySet.srcDir` to plain `File`s, so the
+ * `convertNaturalEarth` wiring above registers the *directory* but loses the
+ * task that fills it. Neither a bare provider nor `.map { it.outputs.files }`
+ * survives that flattening, and Gradle's validation then fails the build with
+ * "process<Variant>JavaRes uses this output ... without declaring an explicit
+ * or implicit dependency" — correctly, because without this the resource can
+ * be packaged before it has been generated.
+ *
+ * Matched by name rather than by type: the task class is AGP-internal, and a
+ * string match keeps this out of an API that is not ours to depend on.
+ */
+tasks.matching { it.name.startsWith("process") && it.name.endsWith("JavaRes") }
+    .configureEach { dependsOn(convertNaturalEarth) }
 
 sqldelight {
     databases {

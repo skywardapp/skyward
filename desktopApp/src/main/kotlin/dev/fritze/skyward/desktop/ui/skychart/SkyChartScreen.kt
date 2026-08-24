@@ -5,9 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,8 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -41,31 +39,30 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import dev.fritze.skyward.core.astro.darknessWindow
-import dev.fritze.skyward.core.astro.toAstroTime
-import dev.fritze.skyward.core.astro.toInstant
+import dev.fritze.skyward.core.chart.SkyObject
+import dev.fritze.skyward.core.chart.SkyObjectKind
+import dev.fritze.skyward.core.chart.SkyProjection
+import dev.fritze.skyward.core.chart.SkyScene
+import dev.fritze.skyward.core.chart.SkySceneBuilder
+import dev.fritze.skyward.core.chart.skyChartHitTest
+import dev.fritze.skyward.core.chart.skyChartRadius
+import dev.fritze.skyward.core.chart.nightAnchor
+import dev.fritze.skyward.core.chart.nightWindow
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDegrees
-import dev.fritze.skyward.core.format.formatTime
-import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.desktop.ui.DesktopAppState
+import dev.fritze.skyward.desktop.ui.common.project
+import dev.fritze.skyward.desktop.ui.common.toChartPoint
+import dev.fritze.skyward.desktop.ui.common.toChartSize
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
-import io.github.cosinekitty.astronomy.Observer
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.minus
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
-import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Instant
 
 /**
  * §14.3's sky chart: a stereographic all-sky view for a chosen saved
@@ -104,7 +101,7 @@ fun SkyChartScreen(state: DesktopAppState) {
     // search at whatever time the chart happened to be opened would give the
     // same night a different window depending on when you looked.
     val anchor = remember(now, state.zone) { nightAnchor(now, state.zone) }
-    val night = remember(location, anchor) { nightWindow(location, anchor) }
+    val night = remember(location, anchor, state.zone) { nightWindow(location, anchor, state.zone) }
     var fraction by remember(night) { mutableStateOf(0.5f) }
     val instant = night.start + (night.end - night.start) * fraction.toDouble()
 
@@ -127,7 +124,7 @@ fun SkyChartScreen(state: DesktopAppState) {
             }
 
             Text(
-                "${formatDateTime(instant, state.zone)} · ${night.describe(state)}",
+                "${formatDateTime(instant, state.zone)} · ${night.describe(state.zone)}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Slider(value = fraction, onValueChange = { fraction = it })
@@ -159,7 +156,7 @@ fun SkyChartScreen(state: DesktopAppState) {
                             // objects that are actually below the horizon and
                             // silently skipped.
                             .semantics {
-                                val aboveHorizon = currentScene?.objects?.count { it.altitudeDeg >= 0.0 } ?: 0
+                                val aboveHorizon = currentScene?.aboveHorizon?.size ?: 0
                                 contentDescription = "Sky chart with $aboveHorizon objects above the horizon"
                             }
                             .pointerInput(currentScene) {
@@ -196,7 +193,7 @@ fun SkyChartScreen(state: DesktopAppState) {
 private fun SkyLabels(scene: SkyScene?, canvasSize: Size) {
     if (canvasSize.minDimension <= 0f) return
     val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
-    val radius = canvasSize.minDimension / 2f - 12f
+    val radius = skyChartRadius(canvasSize.toChartSize())
 
     for ((label, azimuth) in SkyProjection.CARDINALS) {
         // Pulled a little inside the rim so the glyph sits on the horizon
@@ -225,44 +222,6 @@ private fun SkyLabels(scene: SkyScene?, canvasSize: Size) {
 private fun Modifier.absoluteOffsetPx(xPx: Float, yPx: Float): Modifier =
     this.then(Modifier.offset { IntOffset(xPx.roundToInt(), yPx.roundToInt()) })
 
-/** The window the slider spans, and whether it is real astronomical darkness or the fallback. */
-private data class NightWindow(val start: Instant, val end: Instant, val isAstronomicalDarkness: Boolean) {
-    fun describe(state: DesktopAppState): String = if (isAstronomicalDarkness) {
-        "astronomical darkness ${formatTime(start, state.zone)}–${formatTime(end, state.zone)}"
-    } else {
-        "no astronomical darkness tonight — showing ${formatTime(start, state.zone)}–${formatTime(end, state.zone)}"
-    }
-}
-
-/**
- * Local noon of the day whose *night* the chart is showing — today's if it is
- * already afternoon, yesterday's otherwise, so someone looking at 01:00 gets
- * the night in progress rather than the next one.
- *
- * Noon is the useful anchor: searching forward from it lands on tonight's
- * darkness whatever the hour, and the value is constant for a whole
- * noon-to-noon period, which is what keeps the slider still.
- */
-internal fun nightAnchor(now: Instant, zone: TimeZone): Instant {
-    val local = now.toLocalDateTime(zone)
-    val day = if (local.hour >= 12) local.date else local.date.minus(1, DateTimeUnit.DAY)
-    return LocalDateTime(day, LocalTime(12, 0)).toInstant(zone)
-}
-
-/** [anchor] is local noon (see [nightAnchor]), never the current instant. */
-private fun nightWindow(location: SavedLocation, anchor: Instant): NightWindow {
-    val observer = Observer(location.point.latDeg, location.point.lonDeg, 0.0)
-    val darkness = darknessWindow(anchor.toAstroTime(), observer)
-    return if (darkness != null) {
-        NightWindow(darkness.start.toInstant(), darkness.end.toInstant(), isAstronomicalDarkness = true)
-    } else {
-        // High-summer latitudes: no astronomical night to span, so show the
-        // conventional 18:00–06:00 evening instead. Derived from the anchor,
-        // so it is the same window all night.
-        NightWindow(anchor + 6.hours, anchor + 18.hours, isAstronomicalDarkness = false)
-    }
-}
-
 /** §14.3: "background gradient by sun altitude (day/twilight/night)". */
 private fun skyBackground(sunAltitudeDeg: Double): Brush {
     val colors = when {
@@ -277,7 +236,7 @@ private fun skyBackground(sunAltitudeDeg: Double): Brush {
 
 private fun DrawScope.drawSky(scene: SkyScene?, selectedOccurrenceId: String?) {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = size.minDimension / 2f - 12f
+    val radius = skyChartRadius(size.toChartSize())
 
     // Horizon circle and the 30°/60° altitude rings (§14.3).
     drawCircle(HORIZON, radius = radius, center = center, style = Stroke(width = 2f))
@@ -350,23 +309,17 @@ private fun DrawScope.drawCrosshair(center: Offset, color: Color, selected: Bool
 }
 
 /**
- * Hit-tests against the same geometry [drawSky] uses — centre and radius are
- * derived from the canvas size identically in both, so a click lands where
- * the marker was drawn.
+ * Only occurrence-backed objects lead anywhere here: a planet is not an
+ * event, and every marker already carries a label beside it (see
+ * [SkyLabels]), so there is nothing a click on one would reveal.
  */
-private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? {
-    val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
-    val radius = canvasSize.minDimension / 2f - 12f
-    return scene.objects
-        // Only occurrence-backed objects lead anywhere; a planet is not an event.
-        .filter { it.occurrenceId != null }
-        .mapNotNull { obj ->
-            val projected = SkyProjection.project(obj.altitudeDeg, obj.azimuthDeg, center, radius) ?: return@mapNotNull null
-            obj to (projected - position).getDistance()
-        }
-        .filter { it.second <= HIT_RADIUS }
-        .minByOrNull { it.second }
-        ?.first
-}
+private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? =
+    skyChartHitTest(
+        position = position.toChartPoint(),
+        scene = scene,
+        canvasSize = canvasSize.toChartSize(),
+        hitRadiusPx = HIT_RADIUS,
+        occurrenceBackedOnly = true,
+    )
 
 private const val HIT_RADIUS = 14f
