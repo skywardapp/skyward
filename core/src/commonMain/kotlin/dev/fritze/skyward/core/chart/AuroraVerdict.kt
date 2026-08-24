@@ -31,10 +31,21 @@ fun auroraVerdict(point: GeoPoint, currentKp: Double?): AuroraVerdict {
     return AuroraVerdict(geomagneticLat, kpNeeded, currentKp?.let { it - kpNeeded })
 }
 
-/** "Geomagnetic latitude 58.2° — visible from here when Kp ≥ 3.9". */
-fun auroraThresholdSentence(verdict: AuroraVerdict): String =
-    "Geomagnetic latitude ${formatDegrees(verdict.geomagneticLatitudeDeg, 1)} — " +
-        "visible from here when Kp ≥ ${formatKp(verdict.kpNeeded)}"
+/**
+ * "Geomagnetic latitude 58.2° — visible from here when Kp ≥ 3.9".
+ *
+ * Above |λgm| 66° the inverted threshold goes negative, and there is no such
+ * thing as Kp −0.5: inside the oval the answer is "always", the same case
+ * [auroraNowSentence] already spells out.
+ */
+fun auroraThresholdSentence(verdict: AuroraVerdict): String {
+    val latitude = "Geomagnetic latitude ${formatDegrees(verdict.geomagneticLatitudeDeg, 1)}"
+    return if (verdict.kpNeeded <= 0) {
+        "$latitude — inside the auroral oval, visible at any Kp"
+    } else {
+        "$latitude — visible from here when Kp ≥ ${formatKp(verdict.kpNeeded)}"
+    }
+}
 
 /**
  * What to say about right now, given the live reading and the best slot in

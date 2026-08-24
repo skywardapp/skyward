@@ -11,6 +11,12 @@
 > some small presentational helpers (formatting, colors for quality levels)
 > want sharing, put them in `:core/format/` as pure functions.
 
+(The `(D1 note: frontends may differ)` parenthetical is a dangling citation:
+`D1` appears exactly twice in the design doc — its §2 row and this reference —
+and its rationale column says nothing about frontends differing. Raised on PR
+#127; this ADR quotes §4.1 as written and does not depend on the parenthetical,
+only on the rule itself.)
+
 When M6 built §14's four visualizations, everything they needed went into
 `:desktopApp` — including the parts that are not drawing at all. Five of
 those files had already been written to avoid the Compose *runtime* on

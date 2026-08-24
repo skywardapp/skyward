@@ -44,6 +44,11 @@ class AuroraVerdictTest {
         val verdict = auroraVerdict(GeoPoint(85.0, 0.0), currentKp = null)
         assertTrue(verdict.kpNeeded <= 0, "expected a non-positive threshold, got ${verdict.kpNeeded}")
         assertEquals("Above the auroral boundary at any Kp.", auroraNowSentence(verdict, peakForecastKp = null))
+        // And the threshold line agrees rather than printing "Kp ≥ -7.5".
+        assertEquals(
+            "Geomagnetic latitude 81.0° — inside the auroral oval, visible at any Kp",
+            auroraThresholdSentence(verdict),
+        )
     }
 
     @Test

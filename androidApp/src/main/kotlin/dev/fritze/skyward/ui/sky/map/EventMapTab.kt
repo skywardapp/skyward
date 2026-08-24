@@ -40,8 +40,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -93,6 +95,7 @@ fun EventMapTab(state: SkyUiState, onOpenEvent: (String) -> Unit) {
     var camera by remember { mutableStateOf(MapCamera()) }
     var enabledLayers by remember { mutableStateOf(MapLayer.entries.toSet()) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
+    val density = LocalDensity.current
 
     // Decoding the coastlines and walking 60 000 points into a Path is not
     // UI-thread work on a phone (§19 R1). Until it lands the event layers
@@ -146,7 +149,8 @@ fun EventMapTab(state: SkyUiState, onOpenEvent: (String) -> Unit) {
                             onCameraChange = { camera = it },
                             hitTestKeys = arrayOf(state.occurrences, state.locations, enabledLayers, camera),
                             onTap = { position, size ->
-                                hitTest(position, size, camera, enabledLayers, content)?.let(onOpenEvent)
+                                hitTest(position, size, camera, enabledLayers, content, density)
+                                    ?.let(onOpenEvent)
                             },
                         ),
                 ) {
@@ -353,25 +357,32 @@ private fun hitTest(
     camera: MapCamera,
     layers: Set<MapLayer>,
     content: MapContent,
-): String? = mapHitTest(
-    position = position.toChartPoint(),
-    size = size.toChartSize(),
-    camera = camera,
-    layers = layers,
-    locations = content.locations.map { it.point },
-    eonet = content.eonet,
-    eclipsePaths = content.eclipsePaths,
-    pinRadiusPx = PIN_HIT_RADIUS,
-    markerRadiusPx = MARKER_HIT_RADIUS,
-    pathRadiusPx = PATH_HIT_RADIUS,
-)
+    density: Density,
+): String? = with(density) {
+    mapHitTest(
+        position = position.toChartPoint(),
+        size = size.toChartSize(),
+        camera = camera,
+        layers = layers,
+        locations = content.locations.map { it.point },
+        eonet = content.eonet,
+        eclipsePaths = content.eclipsePaths,
+        pinRadiusPx = PIN_HIT_RADIUS.toPx(),
+        markerRadiusPx = MARKER_HIT_RADIUS.toPx(),
+        pathRadiusPx = PATH_HIT_RADIUS.toPx(),
+    )
+}
 
 private const val MAP_ASPECT = 2f
 
-// Touch targets, not cursor targets — roughly 48 dp at typical densities.
-private const val PIN_HIT_RADIUS = 28f
-private const val MARKER_HIT_RADIUS = 28f
-private const val PATH_HIT_RADIUS = 24f
+// Touch targets, not cursor targets — the desktop picks within 10/10/8 raw
+// pixels of a mouse. Density-independent, because a raw-pixel radius shrinks
+// as the screen gets denser: 28 px is 9 dp of reach at density 3 and 28 dp at
+// density 1. 24 dp of radius is Material's 48 dp minimum touch target; a path
+// is a line rather than a dot, so it keeps the desktop's tighter ratio.
+private val PIN_HIT_RADIUS = 24.dp
+private val MARKER_HIT_RADIUS = 24.dp
+private val PATH_HIT_RADIUS = 20.dp
 
 private val ECLIPSE_PATH = Color(0xFFFFC65C)
 private val EONET_MARKER = Color(0xFFE0705F)

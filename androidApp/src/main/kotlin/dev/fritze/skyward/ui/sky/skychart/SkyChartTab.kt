@@ -155,7 +155,7 @@ fun SkyChartTab(state: SkyUiState, zone: TimeZone, now: Instant, onOpenEvent: (S
                     .pointerInput(scene) {
                         detectTapGestures { position ->
                             val current = scene ?: return@detectTapGestures
-                            selected = hitTest(position, current, size.toSize())
+                            selected = hitTest(position, current, size.toSize(), HIT_RADIUS.toPx())
                         }
                     },
             ) {
@@ -284,14 +284,22 @@ private fun DrawScope.drawCrosshair(center: Offset, color: Color) {
  * beside each marker, so the sheet is the only way to find out what a dot
  * is. Objects without an occurrence simply offer no "Open event".
  */
-private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? =
+private fun hitTest(
+    position: Offset,
+    scene: SkyScene,
+    canvasSize: Size,
+    hitRadiusPx: Float,
+): SkyObject? =
     skyChartHitTest(
         position = position.toChartPoint(),
         scene = scene,
         canvasSize = canvasSize.toChartSize(),
-        hitRadiusPx = HIT_RADIUS,
+        hitRadiusPx = hitRadiusPx,
         occurrenceBackedOnly = false,
     )
 
-// A fingertip, not a cursor — the desktop uses 14f.
-private const val HIT_RADIUS = 28f
+// A fingertip, not a cursor — the desktop picks within 14 raw pixels of a
+// mouse. Density-independent, because a raw-pixel radius shrinks as the screen
+// gets denser: 28 px is 9 dp of reach at density 3 and 28 dp at density 1.
+// 24 dp of radius is Material's 48 dp minimum touch target.
+private val HIT_RADIUS = 24.dp
