@@ -11,9 +11,9 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 /** The window the sky chart's slider spans, and whether it is real astronomical darkness or the fallback. */
@@ -40,16 +40,33 @@ fun nightAnchor(now: Instant, zone: TimeZone): Instant {
     return LocalDateTime(day, LocalTime(12, 0)).toInstant(zone)
 }
 
-/** [anchor] is local noon (see [nightAnchor]), never the current instant. */
-fun nightWindow(location: SavedLocation, anchor: Instant): NightWindow {
+/**
+ * [anchor] is local noon (see [nightAnchor]), never the current instant.
+ * [zone] must be the one the anchor was built in: the fallback window below
+ * is a pair of civil times, and only the zone can turn those into instants.
+ */
+fun nightWindow(location: SavedLocation, anchor: Instant, zone: TimeZone): NightWindow {
     val observer = Observer(location.point.latDeg, location.point.lonDeg, 0.0)
     val darkness = darknessWindow(anchor.toAstroTime(), observer)
     return if (darkness != null) {
         NightWindow(darkness.start.toInstant(), darkness.end.toInstant(), isAstronomicalDarkness = true)
     } else {
         // High-summer latitudes: no astronomical night to span, so show the
-        // conventional 18:00–06:00 evening instead. Derived from the anchor,
-        // so it is the same window all night.
-        NightWindow(anchor + 6.hours, anchor + 18.hours, isAstronomicalDarkness = false)
+        // conventional 18:00–06:00 evening instead. Derived from the anchor's
+        // date, so it is the same window all night.
+        //
+        // Built from civil times rather than `anchor + 6.hours`/`+ 18.hours`:
+        // a fixed offset is elapsed time, and a night that contains a DST
+        // transition is 23 or 25 hours long, so the arithmetic would label
+        // the window 17:00–05:00 or 19:00–07:00. Reachable, not hypothetical:
+        // in late March this branch starts somewhere between 71° and 75°, and
+        // Svalbard is at 78° on Oslo time — so it is inside the fallback on
+        // the night Europe's clocks go forward.
+        val evening = anchor.toLocalDateTime(zone).date
+        NightWindow(
+            LocalDateTime(evening, LocalTime(18, 0)).toInstant(zone),
+            LocalDateTime(evening.plus(1, DateTimeUnit.DAY), LocalTime(6, 0)).toInstant(zone),
+            isAstronomicalDarkness = false,
+        )
     }
 }

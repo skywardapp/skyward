@@ -101,7 +101,7 @@ fun SkyChartScreen(state: DesktopAppState) {
     // search at whatever time the chart happened to be opened would give the
     // same night a different window depending on when you looked.
     val anchor = remember(now, state.zone) { nightAnchor(now, state.zone) }
-    val night = remember(location, anchor) { nightWindow(location, anchor) }
+    val night = remember(location, anchor, state.zone) { nightWindow(location, anchor, state.zone) }
     var fraction by remember(night) { mutableStateOf(0.5f) }
     val instant = night.start + (night.end - night.start) * fraction.toDouble()
 

@@ -1,8 +1,13 @@
 package dev.fritze.skyward.core.chart
 
+import dev.fritze.skyward.core.format.formatTime
+import dev.fritze.skyward.core.model.GeoPoint
+import dev.fritze.skyward.core.model.SavedLocation
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 /**
@@ -54,6 +59,45 @@ class NightAnchorTest {
         val after = nightAnchor(Instant.parse("2026-08-15T10:01:00Z"), berlin) // 12:01 local
         assertEquals(Instant.parse("2026-08-14T10:00:00Z"), before)
         assertEquals(Instant.parse("2026-08-15T10:00:00Z"), after)
+    }
+
+    /**
+     * The fallback window is a pair of civil times — 18:00 to 06:00 — not a
+     * pair of offsets from noon. A night containing a DST transition is 23 or
+     * 25 hours long, so `anchor + 18.hours` would label the window 05:00 or
+     * 07:00.
+     *
+     * The two halves have to coincide for this to be reachable at all, and
+     * they do: the fallback runs only where there is no astronomical darkness,
+     * which in late March starts somewhere between 71° and 75°, and Svalbard
+     * is at 78° on Oslo time. Tromsø, at 69.65°, still has a real window on
+     * this date and would have tested nothing.
+     */
+    @Test
+    fun theFallbackWindowKeepsItsCivilHoursAcrossADstTransition() {
+        val longyearbyen = SavedLocation(
+            id = "longyearbyen",
+            name = "Longyearbyen",
+            point = GeoPoint(78.22, 15.65),
+            isPrimary = true,
+            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+            modifiedAt = Instant.parse("2026-01-01T00:00:00Z"),
+        )
+        val oslo = TimeZone.of("Europe/Oslo")
+        // Clocks go forward 02:00 → 03:00 on Sunday 29 March 2026, so this
+        // night is 23 hours long.
+        val anchor = nightAnchor(Instant.parse("2026-03-28T20:00:00Z"), oslo)
+        val night = nightWindow(longyearbyen, anchor, oslo)
+
+        assertFalse(
+            night.isAstronomicalDarkness,
+            "Svalbard has no astronomical darkness in late March; without this " +
+                "the test would not reach the fallback branch at all",
+        )
+        assertEquals("18:00", formatTime(night.start, oslo))
+        assertEquals("06:00", formatTime(night.end, oslo))
+        // Twelve civil hours, eleven elapsed: the hour the transition removed.
+        assertEquals(11.hours, night.end - night.start)
     }
 
     @Test

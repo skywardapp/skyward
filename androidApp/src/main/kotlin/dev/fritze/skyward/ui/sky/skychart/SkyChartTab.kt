@@ -98,7 +98,7 @@ fun SkyChartTab(state: SkyUiState, zone: TimeZone, now: Instant, onOpenEvent: (S
     // keying on a ticking instant would rebuild the window and snap the
     // slider back under the user's thumb.
     val anchor = remember(now, zone) { nightAnchor(now, zone) }
-    val night = remember(location, anchor) { nightWindow(location, anchor) }
+    val night = remember(location, anchor, zone) { nightWindow(location, anchor, zone) }
     var fraction by remember(night) { mutableStateOf(0.5f) }
     val instant = night.start + (night.end - night.start) * fraction.toDouble()
 
