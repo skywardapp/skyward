@@ -45,6 +45,14 @@ contains, so a newer vintage needs no code change — but do re-run
 ```
 
 It asserts the decoded geometry still covers the whole globe and stays within
-valid lon/lat bounds. Run both because they exercise different packaging: the
-desktop task reads the KMP source set, the Android one reads AGP's, and only
-the second can catch the resource failing to reach the APK (ADR 0023).
+valid lon/lat bounds. Run both because they decode from different classpaths:
+the desktop task reads the KMP source set, the Android one reads AGP's.
+
+Neither proves the file reaches the *packaged* APK — a unit test sees the test
+classpath, not the archive. That check is separate, and it is the one that
+caught the resource going missing while the build stayed green (ADR 0023):
+
+```sh
+./gradlew :androidApp:assembleFossDebug
+unzip -l androidApp/build/outputs/apk/foss/debug/*.apk | grep natural-earth
+```

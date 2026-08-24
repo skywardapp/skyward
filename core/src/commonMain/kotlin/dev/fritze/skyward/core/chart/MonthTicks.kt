@@ -39,7 +39,20 @@ fun monthTicks(
         val x = scale.xOf(instant)
         val isYearStart = date.monthNumber == 1
         val labelled = isYearStart || (x - lastLabelledX) >= minLabelSpacing
-        if (labelled) lastLabelledX = x
+        if (labelled) {
+            // A January label is forced regardless of spacing, so in the
+            // compressed far end it can land a few pixels after a December
+            // label that passed the spacing check — and the axis draws both,
+            // overprinting. The year outranks the month, so drop the earlier
+            // label rather than the year's.
+            if (isYearStart) {
+                val previous = ticks.indexOfLast { it.labelled }
+                if (previous >= 0 && x - ticks[previous].x < minLabelSpacing) {
+                    ticks[previous] = ticks[previous].copy(labelled = false)
+                }
+            }
+            lastLabelledX = x
+        }
         ticks += MonthTick(
             x = x,
             label = if (isYearStart) date.year.toString() else monthAbbreviation(date.monthNumber),

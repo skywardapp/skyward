@@ -124,9 +124,16 @@ The reader's three JVM-only pieces went as ADR 0010 said they must:
   threaten reproducibility.
 - **`NaturalEarthMapTest` now exists.** `tools/naturalearth/README.md` had
   told anyone refreshing the data to re-run it since M6; the test was never
-  written. It is now in `commonTest`, so it runs on Android too — which is
-  also the check that the resource reaches the APK at all, since a missing
-  file decodes to zero rings rather than throwing.
+  written. It is now in `commonTest`, so it runs on Android too and catches a
+  resource missing from either decode path, since a missing file yields zero
+  rings rather than throwing.
+- **A unit test is still not APK verification**, and it is worth being exact
+  about that here, because the looser claim is what this ADR exists to warn
+  against. `:core:testDebugUnitTest` reads the *test* classpath, not the
+  archive. The first attempt at this change shipped an APK with no map data
+  in it while every task stayed green, and the only thing that said so was
+  `unzip -l app.apk`. Run that after `assembleFossDebug`; do not substitute a
+  passing test for it.
 - **The decoder is testable for the first time.** The `DataInputStream`
   version needed a file on disk; a `ByteArray` decode can be handed a
   hand-built resource, so the big-endian contract with the Gradle task's
