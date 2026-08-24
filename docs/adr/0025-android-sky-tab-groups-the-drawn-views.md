@@ -6,7 +6,7 @@
 
 §13.1's Android navigation map is:
 
-```
+```text
 BottomBar: [Upcoming] [Map*] [Rules] [Settings]        *Map tab is v1.1 on Android; hide behind flag
 ```
 

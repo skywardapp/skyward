@@ -29,6 +29,8 @@ import dev.fritze.skyward.core.chart.eclipsePathPolylines
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.SolarEclipsePayload
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -69,7 +71,7 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Path of totality", style = MaterialTheme.typography.titleSmall)
+        Text("Central eclipse path", style = MaterialTheme.typography.titleSmall)
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -96,10 +98,13 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
  * actually shows — the latitude band the track crosses is the one fact the
  * drawing conveys that the times table above it does not.
  */
-private fun buildContentDescription(polyline: EclipsePathPolyline, locations: List<SavedLocation>): String {
+internal fun buildContentDescription(polyline: EclipsePathPolyline, locations: List<SavedLocation>): String {
     val points = polyline.allPoints
-    val north = points.maxOfOrNull { it.latDeg }?.toInt()
-    val south = points.minOfOrNull { it.latDeg }?.toInt()
+    // Rounded outward, not truncated: toInt() rounds toward zero, so a track
+    // from -0.7° to 20.7° would be announced as "between 0 and 20 degrees" —
+    // narrower than the truth, and on the wrong side of the equator.
+    val north = points.maxOfOrNull { ceil(it.latDeg).toInt() }
+    val south = points.minOfOrNull { floor(it.latDeg).toInt() }
     val band = if (north != null && south != null) " between latitudes $south and $north degrees" else ""
     val pins = if (locations.isEmpty()) "" else ", with ${locations.size} saved location markers"
     return "Map of the eclipse central path$band$pins"

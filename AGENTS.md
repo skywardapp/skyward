@@ -159,10 +159,13 @@ because that is the startup path a packaging mistake actually breaks (ADR
   (hence the `showers.json` duplicate above), and neither is the KMP
   `androidMain` source set's `resources`. `natural-earth.bin` is registered
   in the `android { }` block instead —
-  `sourceSets.getByName("main").resources.srcDir(convertNaturalEarth.map { it.outputs.files })`
-  — with the `.map` there because a bare provider loses the producing task
-  and fails `check`'s dependency validation. Neither mistake breaks the
-  build: you get an APK that silently lacks the file. **Verify a bundled
+  `sourceSets.getByName("main").resources.srcDir(convertNaturalEarth)` — and
+  because AGP flattens that srcDir to plain `File`s and drops the producing
+  task, the dependency is declared separately by matching the
+  `process<Variant>JavaRes` tasks (neither a bare provider nor
+  `.map { it.outputs.files }` survives the flattening, and `check` fails
+  validation without it). Neither mistake breaks the build: you get an APK
+  that silently lacks the file. **Verify a bundled
   resource with `unzip -l app.apk`, never by observing that the build
   passed.** ADR 0023 records both traps.
 - **Never commit signing material.** `keystore.properties`, `*.jks`,

@@ -38,6 +38,13 @@ rm ne_50m_land.geojson
 
 The converter reads whatever `Polygon`/`MultiPolygon` features the file
 contains, so a newer vintage needs no code change — but do re-run
-`./gradlew :core:desktopTest` afterwards: `NaturalEarthMapTest` asserts the
-decoded geometry still covers the whole globe and stays within valid
-lon/lat bounds.
+`NaturalEarthMapTest` afterward, on **both** targets:
+
+```sh
+./gradlew :core:desktopTest :core:testDebugUnitTest
+```
+
+It asserts the decoded geometry still covers the whole globe and stays within
+valid lon/lat bounds. Run both because they exercise different packaging: the
+desktop task reads the KMP source set, the Android one reads AGP's, and only
+the second can catch the resource failing to reach the APK (ADR 0023).

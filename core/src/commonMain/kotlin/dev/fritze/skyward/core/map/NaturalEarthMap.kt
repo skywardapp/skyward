@@ -93,4 +93,4 @@ private fun ByteArray.readUnsignedShort(at: Int): Int =
  * targets even though both happen to run on a JVM), hence expect/actual —
  * the same seam, for the same reason, as `loadShowersJsonText`.
  */
-expect fun loadNaturalEarthBytes(): ByteArray?
+internal expect fun loadNaturalEarthBytes(): ByteArray?

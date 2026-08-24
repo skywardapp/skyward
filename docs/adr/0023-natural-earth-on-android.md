@@ -41,7 +41,8 @@ blank base map.
 **Unknown at the time: the size.** ADR 0010 said "roughly half a megabyte".
 The generated file is 491,050 bytes (1,422 rings, 60,669 points), and APK
 entries are deflated. Measured in the built `fossDebug` APK: **393,500
-bytes**, a 20 % compression ratio.
+bytes** — about 80 % of the original size, so packaging saves roughly 20 %.
+Float coordinates compress poorly, which is why the saving is small.
 
 ## Decision
 

@@ -41,11 +41,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.fritze.skyward.core.chart.MonthTick
 import dev.fritze.skyward.core.chart.TimelineScale
+import dev.fritze.skyward.core.chart.monthTicks
 import dev.fritze.skyward.core.format.formatDate
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatRelative
-import dev.fritze.skyward.core.format.monthAbbreviation
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.model.Occurrence
@@ -57,14 +58,7 @@ import dev.fritze.skyward.data.AppContainer
 import dev.fritze.skyward.ui.chart.ChartPalette
 import dev.fritze.skyward.ui.sky.SkyUiState
 import dev.fritze.skyward.ui.sky.rememberUpcomingItems
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -310,39 +304,6 @@ private fun DetailSheet(item: TimelineItem, now: Instant, zone: TimeZone, onOpen
     }
 }
 
-private data class MonthTick(val x: Float, val label: String, val isYearStart: Boolean, val labelled: Boolean)
-
-/**
- * §14.2's "month/year grid lines". Month labels are dropped where the
- * compressed far end would overprint them — a year label every January is
- * still readable there, and an unreadable axis is worse than a sparse one.
- */
-private fun monthTicks(scale: TimelineScale, zone: TimeZone): List<MonthTick> {
-    val ticks = mutableListOf<MonthTick>()
-    // `.month.number` / `.day` are the non-deprecated kotlinx-datetime
-    // spellings but don't resolve against this project's version — see the
-    // note in core/format/Presentation.kt. Keep these in step with it.
-    var date = scale.now.toLocalDateTime(zone).date.let { LocalDate(it.year, it.monthNumber, 1) }.plus(1, DateTimeUnit.MONTH)
-    var lastLabelledX = Float.NEGATIVE_INFINITY
-    while (true) {
-        val instant = LocalDateTime(date, LocalTime(0, 0)).toInstant(zone)
-        if (instant > scale.end) break
-        val x = scale.xOf(instant)
-        val isYearStart = date.monthNumber == 1
-        val labelled = isYearStart || (x - lastLabelledX) >= MIN_LABEL_SPACING
-        if (labelled) lastLabelledX = x
-        ticks += MonthTick(
-            x = x,
-            label = if (isYearStart) date.year.toString() else monthAbbreviation(date.monthNumber),
-            isYearStart = isYearStart,
-            labelled = labelled,
-        )
-        date = date.plus(1, DateTimeUnit.MONTH)
-    }
-    return ticks
-}
-
-private const val MIN_LABEL_SPACING = 46f
 private const val DEFAULT_HORIZON_YEARS = 3
 
 /** Nearest item in the tapped lane, within a fingertip's reach of the tap. */
@@ -379,6 +340,12 @@ private fun DrawScope.drawTimeline(
     selectedOccurrenceId: String?,
 ) {
     val lanesHeight = lanes * laneHeightPx
+    // The canvas is transparent and drawLaneBands paints only every other
+    // lane, so in light theme the rest showed the Material surface — while
+    // TODAY_COLOR, the selection ring and the grid are all fixed colours
+    // chosen for a dark ground, leaving a near-white "today" line invisible
+    // on white. The desktop never hit this: it draws on a dark app surface.
+    drawRect(CHART_SURFACE)
     drawLaneBands(lanes, axisHeightPx, laneHeightPx)
     drawMonthGrid(monthTicks, axisHeightPx, lanesHeight)
     // The gradient change is real information about the axis; showing it beats
@@ -450,6 +417,7 @@ private fun darkQuality(quality: Quality): Color = when (quality) {
     Quality.EXCELLENT -> Color(0xFF6FE3A8)
 }
 
+private val CHART_SURFACE = Color(0xFF101622)
 private val GRID_COLOR = Color(0xFF2A3346)
 private val LANE_BAND_COLOR = Color(0xFF161C29)
 private val BOUNDARY_COLOR = Color(0xFF54617A)

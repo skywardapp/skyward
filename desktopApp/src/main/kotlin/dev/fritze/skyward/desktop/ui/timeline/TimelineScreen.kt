@@ -48,11 +48,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import dev.fritze.skyward.core.chart.MonthTick
 import dev.fritze.skyward.core.chart.TimelineScale
+import dev.fritze.skyward.core.chart.monthTicks
 import dev.fritze.skyward.core.format.formatDate
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatRelative
-import dev.fritze.skyward.core.format.monthAbbreviation
 import dev.fritze.skyward.core.format.phenomenonLabel
 import dev.fritze.skyward.core.format.qualityLabel
 import dev.fritze.skyward.core.model.Occurrence
@@ -71,13 +72,6 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.plus
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 
 /** One drawn item: either a point marker (peak) or a segment (window), per §14.2. */
 private data class TimelineItem(
@@ -367,36 +361,6 @@ private fun HoverCard(state: DesktopAppState, item: TimelineItem, position: Offs
     }
 }
 
-private data class MonthTick(val x: Float, val label: String, val isYearStart: Boolean, val labelled: Boolean)
-
-/**
- * §14.2's "month/year grid lines". Month labels are dropped where the
- * compressed far end would overprint them — a year label every January is
- * still readable there, and an unreadable axis is worse than a sparse one.
- */
-private fun monthTicks(scale: TimelineScale, zone: kotlinx.datetime.TimeZone): List<MonthTick> {
-    val ticks = mutableListOf<MonthTick>()
-    var date = scale.now.toLocalDateTime(zone).date.let { LocalDate(it.year, it.monthNumber, 1) }.plus(1, DateTimeUnit.MONTH)
-    var lastLabelledX = Float.NEGATIVE_INFINITY
-    while (true) {
-        val instant = LocalDateTime(date, LocalTime(0, 0)).toInstant(zone)
-        if (instant > scale.end) break
-        val x = scale.xOf(instant)
-        val isYearStart = date.monthNumber == 1
-        val labelled = isYearStart || (x - lastLabelledX) >= MIN_LABEL_SPACING
-        if (labelled) lastLabelledX = x
-        ticks += MonthTick(
-            x = x,
-            label = if (isYearStart) date.year.toString() else monthAbbreviation(date.monthNumber),
-            isYearStart = isYearStart,
-            labelled = labelled,
-        )
-        date = date.plus(1, DateTimeUnit.MONTH)
-    }
-    return ticks
-}
-
-private const val MIN_LABEL_SPACING = 46f
 
 private fun DrawScope.drawTimeline(
     lanes: Int,

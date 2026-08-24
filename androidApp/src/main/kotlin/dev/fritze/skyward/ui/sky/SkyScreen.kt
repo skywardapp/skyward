@@ -17,7 +17,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,10 +55,12 @@ fun SkyScreen(container: AppContainer, onOpenEvent: (String) -> Unit) {
     // screen turned is a small betrayal.
     var tab by rememberSaveable { mutableStateOf(SkyTab.MAP) }
 
-    // Sampled once per composition rather than per tab: these views span
-    // days and years, so a live tick would only re-run three-year horizon
-    // passes for no visible change.
-    val now = remember { viewModel.now() }
+    // Advanced at each five-minute recompute boundary, not per frame: these
+    // views span days and years, so a live tick would re-run three-year
+    // horizon passes for no visible change — but freezing it outright would
+    // leave the aurora forecast and darkness windows stale on a screen left
+    // open.
+    val now by rememberChartNow(viewModel::now)
 
     // §14.4: "Refresh: dashboard-open forces active polling tier (§7.3.2)."
     // Keyed on the tab, so opening Aurora refreshes and switching away and

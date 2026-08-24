@@ -39,12 +39,13 @@ import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.chart.AuroraPolarPlot
+import dev.fritze.skyward.core.chart.ForecastSlot
+import dev.fritze.skyward.core.chart.forecastSlots
 import dev.fritze.skyward.core.format.auroraLookDirection
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDegrees
 import dev.fritze.skyward.core.format.formatKp
 import dev.fritze.skyward.core.format.formatTime
-import dev.fritze.skyward.core.model.AuroraForecastKind
 import dev.fritze.skyward.core.model.AuroraPayload
 import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
@@ -162,29 +163,6 @@ private fun KpGaugeCard(estimate: KpEstimate?, zone: TimeZone) {
     }
 }
 
-/** One 3-hour bucket of §14.4's "24×3h bar strip". */
-private data class ForecastSlot(val start: Instant, val kp: Double?)
-
-/**
- * The next three days in 3-hour buckets. Buckets with no stored forecast are
- * left null on purpose: §7.3.3 only persists slots at or above the rules'
- * own Kp threshold, so an empty bucket means "below everything you asked
- * about", not "no data" — and the caption says so rather than drawing a
- * confident zero.
- */
-private fun forecastSlots(auroraOccurrences: List<Occurrence>, now: Instant): List<ForecastSlot> {
-    val byStart = auroraOccurrences
-        .filter { (it.payload as? AuroraPayload)?.forecastKind == AuroraForecastKind.THREE_DAY }
-        .associateBy({ it.window.start.epochSeconds / SLOT_SECONDS }) { (it.payload as AuroraPayload).kpForecast }
-    val firstSlot = (now.epochSeconds / SLOT_SECONDS) * SLOT_SECONDS
-    return (0 until SLOT_COUNT).map { index ->
-        val start = Instant.fromEpochSeconds(firstSlot + index * SLOT_SECONDS)
-        ForecastSlot(start, byStart[start.epochSeconds / SLOT_SECONDS])
-    }
-}
-
-private const val SLOT_SECONDS = 3 * 3600L
-private const val SLOT_COUNT = 24
 private val EMPTY_SLOT_HEIGHT = 6.dp
 
 @Composable

@@ -1,6 +1,7 @@
 package dev.fritze.skyward.ui.sky
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import dev.fritze.skyward.core.planner.UpcomingFilter
@@ -9,8 +10,10 @@ import dev.fritze.skyward.core.planner.cachedUpcomingItems
 import dev.fritze.skyward.core.visibility.VisibilityContext
 import dev.fritze.skyward.data.AppContainer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 data class UpcomingItemsState(val items: List<UpcomingItem>, val isLoading: Boolean)
@@ -64,3 +67,27 @@ fun rememberUpcomingItems(
 }
 
 private const val RECOMPUTE_BUCKET_SECONDS = 300L
+
+/**
+ * The instant the drawn views are computed for, advanced at each recompute
+ * boundary.
+ *
+ * A plain `remember { now() }` freezes the clock for as long as the screen
+ * stays composed, so [rememberUpcomingItems] would never see a new
+ * [RECOMPUTE_BUCKET_SECONDS] bucket and the aurora dashboard's forecast slots
+ * and darkness windows would go stale on a screen left open.
+ *
+ * It sleeps to the next boundary rather than polling on an interval, in the
+ * same spirit as `upcomingStatesOverTime`: one wake per bucket, not one per
+ * tick. Aligning to the boundary also means the value only ever changes when
+ * `recomputeAt` actually would.
+ */
+@Composable
+fun rememberChartNow(now: () -> Instant): State<Instant> = produceState(now()) {
+    while (true) {
+        val current = now()
+        value = current
+        val nextBoundary = (current.epochSeconds / RECOMPUTE_BUCKET_SECONDS + 1) * RECOMPUTE_BUCKET_SECONDS
+        delay((nextBoundary - current.epochSeconds).seconds)
+    }
+}

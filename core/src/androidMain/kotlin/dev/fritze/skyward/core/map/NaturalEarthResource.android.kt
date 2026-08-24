@@ -9,5 +9,5 @@ private class ResourceMarker
  * output into both the android and desktop resource paths, and there is no
  * second copy to keep in step. ADR 0023 has the reasoning.
  */
-actual fun loadNaturalEarthBytes(): ByteArray? =
+internal actual fun loadNaturalEarthBytes(): ByteArray? =
     ResourceMarker::class.java.classLoader?.getResourceAsStream("natural-earth.bin")?.use { it.readBytes() }

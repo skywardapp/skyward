@@ -242,10 +242,16 @@ private fun Modifier.mapGestures(
     return this
         .pointerInput(Unit) {
             detectTransformGestures { centroid, pan, zoom, _ ->
-                val panned = currentCamera.value.panned(pan, size.toSize())
-                onCameraChange(
-                    if (zoom == 1f) panned else panned.zoomed(zoom, centroid, size.toSize()),
-                )
+                // Zoom first, then pan. `zoomed` solves
+                // `offset = focus - (focus - offset) * scale`, so an offset that
+                // already carries this frame's pan gets that pan multiplied by
+                // the scale factor — a systematic drift under the fingers on
+                // any pinch that also moves the centroid. Applying the pan
+                // after the zoom keeps it in screen space, where the gesture
+                // measured it.
+                val camera = currentCamera.value
+                val zoomed = if (zoom == 1f) camera else camera.zoomed(zoom, centroid, size.toSize())
+                onCameraChange(zoomed.panned(pan, size.toSize()))
             }
         }
         .pointerInput(keys = hitTestKeys) {
