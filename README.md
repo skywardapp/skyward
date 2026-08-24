@@ -44,7 +44,8 @@ appimage/build.sh                                # AppImage bundle (§15.5, ADR 
 ```
 skyward/
 ├── core/         Kotlin Multiplatform domain logic (model, astro, sources,
-│                 visibility, rules, planner, persistence, sync, net)
+│                 visibility, rules, planner, persistence, sync, net,
+│                 chart, map)
 ├── androidApp/   Jetpack Compose Android app (foss + play flavours)
 ├── desktopApp/   Compose for Desktop Linux app
 ├── tools/        Build-time data converters (dev only)

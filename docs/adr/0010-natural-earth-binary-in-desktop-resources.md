@@ -1,6 +1,8 @@
 # ADR 0010: The Natural Earth binary is generated into the desktop target's resources, not `commonMain`
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0023](0023-natural-earth-on-android.md), which carried out the
+migration this ADR specified — and corrects its claim that
+`commonMain/resources/` reaches the APK. It does not.
 
 ## Context
 

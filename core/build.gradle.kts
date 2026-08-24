@@ -20,12 +20,15 @@ plugins {
  * toolchain on the build machine — `tools/naturalearth/` holds the vendored
  * input and documents how to refresh it.
  *
- * The output is wired into the **desktop** target's resources only, not
- * commonMain's as §15.1's layout shows: the map is a desktop view (§14.1;
- * Android's Map tab is explicitly v1.1 backlog, §18), and half a megabyte of
- * coastlines has no business inside the APK. See
- * docs/adr/0010-natural-earth-binary-in-desktop-resources.md, which also says
- * what to change when Android grows a map.
+ * The output is wired into the android *and* desktop targets' resources, not
+ * commonMain's as §15.1's layout shows: AGP does not merge commonMain
+ * resources into the packaged APK (the `showers.json` duplication in
+ * `ShowersResource.android.kt` is the same finding), so a commonMain
+ * placement alone would leave Android's map (ADR 0022) looking for a
+ * resource that is not there. Pointing both source sets at the one task
+ * output keeps a single source of truth, so — unlike `showers.json` — there
+ * is no second copy to guard. See
+ * docs/adr/0023-natural-earth-on-android.md, which supersedes ADR 0010.
  *
  * Binary layout, big-endian:
  *   magic "SKNE" (4 bytes) · version u16 · ringCount i32
@@ -105,6 +108,7 @@ kotlin {
             }
         }
         val androidMain by getting {
+            resources.srcDir(convertNaturalEarth)
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)

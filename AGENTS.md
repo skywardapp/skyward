@@ -39,7 +39,8 @@ the device to NOAA SWPC, NASA EONET and NASA/JPL. GPL-3.0-or-later.
 
 ```text
 core/         Kotlin Multiplatform domain logic — model, astro, sources,
-              visibility, rules, planner, persistence, sync, net, format
+              visibility, rules, planner, persistence, sync, net, format,
+              chart, map
 androidApp/   Jetpack Compose app; foss + play flavours
 desktopApp/   Compose for Desktop (Linux)
 tools/        Dev-only build scripts and CI helpers
