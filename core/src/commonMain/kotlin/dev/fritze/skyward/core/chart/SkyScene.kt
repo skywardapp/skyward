@@ -41,7 +41,15 @@ data class SkyScene(
     val time: Instant,
     val sunAltitudeDeg: Double,
     val objects: List<SkyObject>,
-)
+) {
+    /**
+     * The subset the chart can actually draw. [objects] carries every body the
+     * builder computed, set or not, so a count of it is not a count of what is
+     * on screen — which is what a screen reader is being told.
+     */
+    val aboveHorizon: List<SkyObject>
+        get() = objects.filter { SkyProjection.isAboveHorizon(it.altitudeDeg) }
+}
 
 /**
  * §14.3's scene, computed with Astronomy Engine's `equator`→`horizon` pair

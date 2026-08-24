@@ -19,9 +19,19 @@ import kotlin.math.tan
  */
 object SkyProjection {
 
+    /**
+     * True when a body is up, and so has a place on the chart at all.
+     *
+     * Named rather than inlined because two things outside the projection ask
+     * the same question — the screen reader's object count, on both frontends
+     * — and a second literal cutoff is a second thing to keep in step with
+     * [project].
+     */
+    fun isAboveHorizon(altitudeDeg: Double): Boolean = altitudeDeg >= 0.0
+
     /** Null when [altitudeDeg] is below the horizon: there is nothing to draw for a body that has set. */
     fun project(altitudeDeg: Double, azimuthDeg: Double, center: ChartPoint, radiusPx: Float): ChartPoint? {
-        if (altitudeDeg < 0.0) return null
+        if (!isAboveHorizon(altitudeDeg)) return null
         val zenithDistance = (90.0 - altitudeDeg) * PI / 180.0
         val r = tan(zenithDistance / 2.0).toFloat() * radiusPx
         val azimuth = azimuthDeg * PI / 180.0

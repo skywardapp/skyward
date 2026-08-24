@@ -2,8 +2,10 @@ package dev.fritze.skyward.core.chart
 
 import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /** §14.3's stereographic all-sky projection. */
 class SkyProjectionTest {
@@ -54,4 +56,31 @@ class SkyProjectionTest {
         // half-radius an equidistant projection would put it at.
         assertTrue(thirty > radius * 0.5f, "expected stereographic spacing, got $thirty for radius $radius")
     }
+    /**
+     * The screen reader's object count and the projection have to agree on
+     * what "above the horizon" means. `objects` holds every body the builder
+     * computed — the Sun and every planet, set or not — so counting it would
+     * announce roughly twice what is drawn.
+     */
+    @Test
+    fun aboveHorizonCountsOnlyWhatTheProjectionWillDraw() {
+        val scene = SkyScene(
+            time = Instant.parse("2026-08-14T22:00:00Z"),
+            sunAltitudeDeg = -30.0,
+            objects = listOf(
+                SkyObject("up", 45.0, 90.0, SkyObjectKind.PLANET),
+                SkyObject("on the horizon", 0.0, 180.0, SkyObjectKind.PLANET),
+                SkyObject("set", -1.0, 270.0, SkyObjectKind.PLANET),
+                SkyObject("well set", -40.0, 0.0, SkyObjectKind.SUN),
+            ),
+        )
+
+        assertEquals(listOf("up", "on the horizon"), scene.aboveHorizon.map { it.label })
+        // The invariant that matters: exactly the objects the chart can place.
+        assertEquals(
+            scene.aboveHorizon,
+            scene.objects.filter { SkyProjection.project(it.altitudeDeg, it.azimuthDeg, center, radius) != null },
+        )
+    }
+
 }

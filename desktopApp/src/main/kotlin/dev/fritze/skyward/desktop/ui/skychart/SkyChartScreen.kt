@@ -156,7 +156,7 @@ fun SkyChartScreen(state: DesktopAppState) {
                             // objects that are actually below the horizon and
                             // silently skipped.
                             .semantics {
-                                val aboveHorizon = currentScene?.objects?.count { it.altitudeDeg >= 0.0 } ?: 0
+                                val aboveHorizon = currentScene?.aboveHorizon?.size ?: 0
                                 contentDescription = "Sky chart with $aboveHorizon objects above the horizon"
                             }
                             .pointerInput(currentScene) {

@@ -148,9 +148,14 @@ fun SkyChartTab(state: SkyUiState, zone: TimeZone, now: Instant, onOpenEvent: (S
                     .aspectRatio(1f)
                     .clip(CircleShape)
                     .onSizeChanged { canvasSize = it.toSize() }
+                    // Counted from what the projection will actually draw, not
+                    // from every body the builder computed: half of them have
+                    // set, and the count is the only thing a screen reader
+                    // gets to go on.
                     .semantics {
                         contentDescription =
-                            "All-sky chart for ${location.name}: ${scene?.objects?.size ?: 0} objects above the horizon"
+                            "All-sky chart for ${location.name}: " +
+                                "${scene?.aboveHorizon?.size ?: 0} objects above the horizon"
                     }
                     .pointerInput(scene) {
                         detectTapGestures { position ->
