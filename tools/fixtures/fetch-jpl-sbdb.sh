@@ -8,7 +8,7 @@
 # elements, and the propagator tests downstream care about the digits.
 #
 # D12: comet elements come from JPL, not COBS -- JPL's data is public domain,
-# COBS' licence forbids commercial use (§16).
+# while COBS' CC BY-NC-SA terms are GPL-incompatible and non-free (§16).
 #
 # Usage: tools/fixtures/fetch-jpl-sbdb.sh
 set -euo pipefail

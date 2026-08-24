@@ -11,7 +11,8 @@ import kotlin.test.assertTrue
  * `tools/fixtures/fetch-jpl-sbdb.sh`.
  *
  * D12: these elements come from JPL rather than COBS because JPL's data is
- * public domain and COBS' licence forbids commercial use (§16).
+ * public domain and COBS' CC BY-NC-SA terms are GPL-incompatible and non-free
+ * (§16).
  */
 class JplSbdbFixtureTest {
 

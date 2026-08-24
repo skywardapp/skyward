@@ -100,10 +100,14 @@ Notes:     "Eclipse predictions courtesy of Fred Espenak and Jean Meeus,
 ~~COBS comet data~~ — EXCLUDED, not bundled or fetched (D12)
 ================================================================================
 COBS (Comet OBServation database) is licensed CC BY-NC-SA 4.0. Its
-NonCommercial term would foreclose future monetization (P6) and its
-ShareAlike term is incompatible with GPL-3.0. It is deliberately not used
-anywhere in this project. Do not reintroduce it — see docs/design-doc.md
-§7.4 and §19 (R12) for the rationale and the permitted path forward.
+NonCommercial term cannot be carried into a GPL-3.0 release: the GPL grants
+every recipient the right to use and redistribute commercially, and we cannot
+convey a freedom the source data withholds. Creative Commons designated GPLv3
+as a compatible licence for plain CC BY-SA 4.0, but never for the
+NonCommercial variants, so no relicensing route exists either. It is
+deliberately not used anywhere in this project. Do not reintroduce it — see
+docs/design-doc.md §7.4 and §19 (R12) for the rationale and the permitted
+path forward.
 
 ================================================================================
 Trademark note

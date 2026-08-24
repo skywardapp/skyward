@@ -145,15 +145,21 @@ run {
 // down, so an unknown can never pass silently.
 //
 // Two independent constraints, both enforced here:
-//  - P6/D12 — commercial use must stay possible, so NonCommercial,
-//    ShareAlike-without-GPL, SSPL, Commons Clause and friends hard-fail.
-//    That is the class of mistake D12 exists to prevent from recurring as
-//    dependencies are added.
+//  - P6/D12 — every input must be *free*, with no field-of-use restriction,
+//    so NonCommercial, ShareAlike-without-GPL, SSPL, BUSL, Commons Clause and
+//    friends hard-fail. This is not a monetization hedge: D13 dropped
+//    monetization outright and this rule did not move an inch, because it is
+//    owed to D8 and P3 instead. A NonCommercial term is a further restriction
+//    GPLv3 forbids us to pass on to recipients, and F-Droid will not
+//    distribute non-free data — both of which bind a free app exactly as hard
+//    as a paid one. That is the class of mistake D12 exists to prevent from
+//    recurring as dependencies are added.
 //  - D8 — the app is GPL-3.0-or-later, so a bundled dependency's licence must
 //    also be *GPL-compatible*. This is why the allowlist is narrower than
-//    "any OSI-approved licence": EPL-1.0 and MPL-1.1 are commercial-use-clean
-//    but GPL-incompatible, and GPL-2.0-*only* is incompatible with GPL-3
-//    (hence the "or later" in the GPL patterns). EPL is deliberately absent:
+//    "any OSI-approved licence": EPL-1.0 and MPL-1.1 are free licences that
+//    clear the bar above but are GPL-incompatible, and GPL-2.0-*only* is
+//    incompatible with GPL-3 (hence the "or later" in the GPL patterns).
+//    EPL is deliberately absent:
 //    EPL-2.0 *can* be GPL-compatible, but only when the copyright holder
 //    elected the secondary-licence option, and that election lives in the
 //    LICENSE file rather than the POM's <name> text — so an EPL dependency
@@ -347,8 +353,8 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
 
         val problem = when {
             licenseNames.any { name -> licenseDenylistPatterns.any { it.containsMatchIn(name) } } -> {
-                // Denylisted is never exceptable: P6/D12 is a project
-                // constraint, not a metadata-quality question.
+                // Denylisted is never exceptable: P6/D12 is a constraint
+                // on what may ship at all, not a metadata-quality question.
                 denied += "$id -> $licenseNames"
                 null
             }
@@ -373,7 +379,7 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
     if (denied.isNotEmpty()) {
         throw GradleException(
             "checkDependencyLicenses (${configuration.name}): ${denied.size} dependencies matched a " +
-                "known commercial-use-incompatible licence term (P6/D12) — do not bundle:\n" +
+                "non-free or field-of-use-restricted licence term (P6/D12) — do not bundle:\n" +
                 denied.joinToString("\n") { "  - $it" }
         )
     }
@@ -386,7 +392,7 @@ fun Project.checkConfigurationLicenses(configuration: org.gradle.api.artifacts.C
                 unknown.joinToString("\n") { "  - $it" } +
                 "\n\nEither the licence is genuinely not allowlisted — in which case do not bundle it — " +
                 "or the POM metadata is unreadable, in which case verify the licence by hand (its LICENSE " +
-                "file, not its README) against §16's commercial-use and GPL-3-compatibility constraints " +
+                "file, not its README) against §16's free-licence and GPL-3-compatibility constraints " +
                 "and record the verdict in `licenseUnknownExceptions` in the root build.gradle.kts."
         )
     }

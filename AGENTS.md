@@ -104,10 +104,33 @@ because that is the startup path a packaging mistake actually breaks (ADR
   divergence no guard sees is one written into `productFlavors {}` itself (a
   per-flavour `buildConfigField`, say): those two blocks are one line each on
   purpose, and keeping them that way is a review obligation.
-- **No monetization machinery** (P6/D13): no billing, entitlements, licence
-  checks, ads or donation links. Equally, no dependency or data source whose
-  licence forbids commercial use (this is why comets come from JPL, not COBS
-  — D12). `checkDependencyLicenses` enforces the §16 allowlist/denylist.
+- **No monetization, and no machinery for it** (P6/D13): no billing,
+  entitlements, licence checks, ads or donation links. Skyward has no
+  commercial dimension and no paid successor being designed around — D13 says
+  "none, ever", not "none yet".
+- **Only free-licensed, GPL-3-compatible inputs** (P6/§16). This is a separate
+  rule from the one above, and it survived monetization being dropped
+  untouched: a NonCommercial (or SSPL, BUSL, Commons Clause) term is a further
+  restriction GPLv3's no-further-restrictions clause will not let us pass on to
+  recipients, and F-Droid does not distribute non-free data (P3). It binds a
+  free app exactly as hard as a paid one — which is why comets come from JPL,
+  not COBS (D12).
+- **Know what the licence check does and does not cover.**
+  `checkDependencyLicenses` reads the POM-declared licence of every Maven
+  dependency on a shipped classpath and fails the build against §16's
+  allowlist/denylist. A licence it cannot place fails too — unless that exact
+  `group:module` carries a recorded verdict in `licenseUnknownExceptions` (root
+  `build.gradle.kts`). That verdict rescues both failure modes: a POM declaring
+  no licence at all, and one declaring a perfectly readable licence the
+  allowlist doesn't carry — EPL-2.0, whose GPL-compatibility election lives in
+  its LICENSE file rather than its POM, is the case to expect. It never rescues
+  a denylisted licence. That is its whole scope: it never sees a bundled asset
+  (`showers.json`, the Natural Earth binary, the vendored `astronomy.kt`) or a
+  runtime data source (SWPC, JPL, EONET). Those are cleared by review against
+  §16's table before they land, and nothing automated will catch it if they
+  aren't. Don't read the CI check as covering them, and don't read its narrow
+  scope as a reason to drop it — it is the only thing standing between the
+  build and a transitively-added NonCommercial dependency.
 - **The `fossRelease` build must stay reproducible** (§15.4): it is what lets
   F-Droid republish the developer-signed APK, which is what lets users move
   between stores. No build timestamps, no nondeterministic codegen, versions

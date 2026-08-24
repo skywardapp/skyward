@@ -23,14 +23,20 @@ doesn't start is a day added to the critical path.
   foss/play release variants must resolve to identical dependency sets
   (§17.5b(c)/D13). Runs as part of `./gradlew check`.
 - **`checkDependencyLicenses`** (root `build.gradle.kts`) — fails the build on
-  any shipped dependency whose licence isn't on the §16 allowlist. The
-  allowlist enforces both of §16's constraints: commercial use must stay
-  possible (P6/D12) *and* the licence must be GPL-3-compatible (D8), which is
+  any shipped dependency whose licence isn't on the §16 allowlist, and on any
+  licence it cannot place at all. The allowlist enforces both of §16's
+  constraints: the licence must be free, with no field-of-use restriction such
+  as NonCommercial (P6/D12), *and* it must be GPL-3-compatible (D8), which is
   why EPL and MPL-1.1 are not on it. Licences are read from each dependency's
   POM, following `<parent>` when a POM declares none of its own. If a
-  dependency's licence genuinely can't be read that way, verify it by hand
-  against §16 and record the verdict in `licenseUnknownExceptions`; there is
-  no warn-and-pass path.
+  dependency's licence can't be read that way, or reads clearly but isn't on
+  the allowlist (expect EPL-2.0, whose GPL-compatibility election lives in its
+  LICENSE file rather than its POM), verify it by hand against §16 and record
+  the verdict in `licenseUnknownExceptions`, keyed on the exact `group:module`
+  — deliberately not on version, so a relicensing forces a fresh review. That
+  written verdict is the only thing that lets either case through, and a
+  *denylisted* licence it will not save. There is no warn-and-pass path:
+  nothing passes on silence, only on a decision someone wrote down.
 - **`tools/ci/check-reproducible-build.sh`** — builds `fossRelease` twice from
   a clean workspace and asserts the two APKs are reproducible (§15.4/§17.5b):
   byte-for-byte identical first, and only if that fails, identical *content*
