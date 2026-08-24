@@ -49,12 +49,16 @@ import dev.fritze.skyward.core.chart.SkyObjectKind
 import dev.fritze.skyward.core.chart.SkyProjection
 import dev.fritze.skyward.core.chart.SkyScene
 import dev.fritze.skyward.core.chart.SkySceneBuilder
+import dev.fritze.skyward.core.chart.skyChartHitTest
+import dev.fritze.skyward.core.chart.skyChartRadius
 import dev.fritze.skyward.core.chart.nightAnchor
 import dev.fritze.skyward.core.chart.nightWindow
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDegrees
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.project
+import dev.fritze.skyward.desktop.ui.common.toChartPoint
+import dev.fritze.skyward.desktop.ui.common.toChartSize
 import dev.fritze.skyward.desktop.ui.eventdetail.EventDetailPane
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -189,7 +193,7 @@ fun SkyChartScreen(state: DesktopAppState) {
 private fun SkyLabels(scene: SkyScene?, canvasSize: Size) {
     if (canvasSize.minDimension <= 0f) return
     val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
-    val radius = canvasSize.minDimension / 2f - 12f
+    val radius = skyChartRadius(canvasSize.toChartSize())
 
     for ((label, azimuth) in SkyProjection.CARDINALS) {
         // Pulled a little inside the rim so the glyph sits on the horizon
@@ -232,7 +236,7 @@ private fun skyBackground(sunAltitudeDeg: Double): Brush {
 
 private fun DrawScope.drawSky(scene: SkyScene?, selectedOccurrenceId: String?) {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = size.minDimension / 2f - 12f
+    val radius = skyChartRadius(size.toChartSize())
 
     // Horizon circle and the 30°/60° altitude rings (§14.3).
     drawCircle(HORIZON, radius = radius, center = center, style = Stroke(width = 2f))
@@ -305,23 +309,17 @@ private fun DrawScope.drawCrosshair(center: Offset, color: Color, selected: Bool
 }
 
 /**
- * Hit-tests against the same geometry [drawSky] uses — centre and radius are
- * derived from the canvas size identically in both, so a click lands where
- * the marker was drawn.
+ * Only occurrence-backed objects lead anywhere here: a planet is not an
+ * event, and every marker already carries a label beside it (see
+ * [SkyLabels]), so there is nothing a click on one would reveal.
  */
-private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? {
-    val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
-    val radius = canvasSize.minDimension / 2f - 12f
-    return scene.objects
-        // Only occurrence-backed objects lead anywhere; a planet is not an event.
-        .filter { it.occurrenceId != null }
-        .mapNotNull { obj ->
-            val projected = SkyProjection.project(obj.altitudeDeg, obj.azimuthDeg, center, radius) ?: return@mapNotNull null
-            obj to (projected - position).getDistance()
-        }
-        .filter { it.second <= HIT_RADIUS }
-        .minByOrNull { it.second }
-        ?.first
-}
+private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? =
+    skyChartHitTest(
+        position = position.toChartPoint(),
+        scene = scene,
+        canvasSize = canvasSize.toChartSize(),
+        hitRadiusPx = HIT_RADIUS,
+        occurrenceBackedOnly = true,
+    )
 
 private const val HIT_RADIUS = 14f

@@ -47,11 +47,14 @@ import dev.fritze.skyward.core.chart.SkyObjectKind
 import dev.fritze.skyward.core.chart.SkyProjection
 import dev.fritze.skyward.core.chart.SkyScene
 import dev.fritze.skyward.core.chart.SkySceneBuilder
+import dev.fritze.skyward.core.chart.skyChartHitTest
+import dev.fritze.skyward.core.chart.skyChartRadius
 import dev.fritze.skyward.core.chart.nightAnchor
 import dev.fritze.skyward.core.chart.nightWindow
 import dev.fritze.skyward.core.format.formatDateTime
-import dev.fritze.skyward.ui.chart.distance
 import dev.fritze.skyward.ui.chart.project
+import dev.fritze.skyward.ui.chart.toChartPoint
+import dev.fritze.skyward.ui.chart.toChartSize
 import dev.fritze.skyward.ui.sky.SkyUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -206,7 +209,7 @@ private fun skyBackground(sunAltitudeDeg: Double): Brush {
 
 private fun DrawScope.drawSky(scene: SkyScene?) {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = size.minDimension / 2f - 12f
+    val radius = skyChartRadius(size.toChartSize())
 
     drawRect(skyBackground(scene?.sunAltitudeDeg ?: -90.0))
     drawCircle(HORIZON, radius = radius, center = center, style = Stroke(width = 1.5f))
@@ -276,28 +279,19 @@ private fun DrawScope.drawCrosshair(center: Offset, color: Color) {
 }
 
 /**
- * Hit-tests against the same geometry [drawSky] uses — centre and radius are
- * derived from the canvas size identically in both, so a tap lands where the
- * marker was drawn.
- *
- * Unlike the desktop, every object is tappable rather than only the
- * occurrence-backed ones: the phone has no room for the labels the desktop
- * draws beside each marker, so the sheet is the only way to find out what a
- * dot is. Objects without an occurrence simply offer no "Open event".
+ * Every object is pickable here, not only the occurrence-backed ones the
+ * desktop allows: a phone has no room for the labels the desktop draws
+ * beside each marker, so the sheet is the only way to find out what a dot
+ * is. Objects without an occurrence simply offer no "Open event".
  */
-private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? {
-    val center = Offset(canvasSize.width / 2f, canvasSize.height / 2f)
-    val radius = canvasSize.minDimension / 2f - 12f
-    return scene.objects
-        .mapNotNull { obj ->
-            val projected = SkyProjection.project(obj.altitudeDeg, obj.azimuthDeg, center, radius)
-                ?: return@mapNotNull null
-            obj to distance(projected, position)
-        }
-        .filter { it.second <= HIT_RADIUS }
-        .minByOrNull { it.second }
-        ?.first
-}
+private fun hitTest(position: Offset, scene: SkyScene, canvasSize: Size): SkyObject? =
+    skyChartHitTest(
+        position = position.toChartPoint(),
+        scene = scene,
+        canvasSize = canvasSize.toChartSize(),
+        hitRadiusPx = HIT_RADIUS,
+        occurrenceBackedOnly = false,
+    )
 
 // A fingertip, not a cursor — the desktop uses 14f.
 private const val HIT_RADIUS = 28f

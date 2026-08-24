@@ -41,26 +41,14 @@ fun MapCamera.project(point: GeoPoint, size: Size): Offset =
 fun MapCamera.project(lonDeg: Double, latDeg: Double, size: Size): Offset =
     project(lonDeg, latDeg, size.toChartSize()).toOffset()
 
-fun MapCamera.unproject(screen: Offset, size: Size): GeoPoint =
-    unproject(screen.toChartPoint(), size.toChartSize())
-
-fun MapCamera.pixelsPerLonDegree(size: Size): Float = pixelsPerLonDegree(size.toChartSize())
-
-fun MapCamera.pixelsPerLatDegree(size: Size): Float = pixelsPerLatDegree(size.toChartSize())
-
 fun MapCamera.panned(delta: Offset, size: Size): MapCamera =
     panned(delta.toChartPoint(), size.toChartSize())
 
 fun MapCamera.zoomed(factor: Float, focus: Offset, size: Size): MapCamera =
     zoomed(factor, focus.toChartPoint(), size.toChartSize())
 
-fun MapCamera.clamped(size: Size): MapCamera = clamped(size.toChartSize())
-
 fun travelCircleRadii(center: GeoPoint, radiusKm: Double, camera: MapCamera, size: Size): Pair<Float, Float> =
     travelCircleRadii(center, radiusKm, camera, size.toChartSize())
-
-/** Screen-space distance, for hit-testing map features against a click. */
-fun distance(a: Offset, b: Offset): Float = a.toChartPoint().distanceTo(b.toChartPoint())
 
 // --- §14.3 sky chart ---
 

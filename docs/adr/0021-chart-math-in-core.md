@@ -52,9 +52,28 @@ the two `BufferedImage` rasterizers), `NightWindow`/`nightAnchor`/
 `eclipsePathPolylines`, `eonetMarkers`, `travelRadiiKm`,
 `travelCircleRadii`).
 
-What stayed: every `DrawScope` extension, `buildLandPath`/`landPath` (they
-return a Compose `Path`), and the two thin functions that turn an
-`IntArray` of ARGB pixels into the platform's own image type.
+A second pass, prompted by SonarCloud's duplication gate on the Android
+port, moved four more things the two frontends had been keeping their own
+copies of. Each is a decision rather than a drawing, so each belongs here on
+the same argument:
+
+- `buildLandOutline` — the walk over 60 000 Natural Earth points, the
+  world-coordinate mapping, and the antimeridian rule that stops Antarctica
+  being closed with a streak across the map. Emitted through `moveTo`/
+  `lineTo`/`close` callbacks, since the two apps build different `Path`
+  types; each `buildLandPath` is now five lines.
+- `mapHitTest` and `skyChartHitTest` — the "what did the user mean" rules:
+  nearest within a threshold, and which layer outranks which. The pick
+  *radii* stay per-frontend, because a fingertip is not a cursor.
+- `forecastSlots` and `monthTicks` — §14.4's 3-hour buckets and §14.2's
+  axis labels.
+- `auroraVerdict` and its two sentences — §14.4 Row 3's §8.4-inverted
+  threshold and the four-case `when` both dashboards printed.
+
+What stayed: every `DrawScope` extension, the `Path` and `ImageBitmap`
+containers those shared functions fill, and the per-frontend constants
+(hit radii, canvas widths, label spacing) that exist precisely because a
+phone and a desktop are not the same surface.
 
 This is the §4.1 paragraph above applied at a larger size than "colors for
 quality levels", not a departure from it: the drawing is still not shared,

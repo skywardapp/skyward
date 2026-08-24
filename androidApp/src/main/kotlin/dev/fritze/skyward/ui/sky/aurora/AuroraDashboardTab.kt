@@ -39,20 +39,23 @@ import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
 import dev.fritze.skyward.core.chart.AuroraPolarPlot
+import dev.fritze.skyward.core.chart.POLAR_GRATICULE_LATITUDES
+import dev.fritze.skyward.core.chart.auroraNowSentence
+import dev.fritze.skyward.core.chart.auroraThresholdSentence
+import dev.fritze.skyward.core.chart.auroraVerdict
+import dev.fritze.skyward.core.chart.forecastBarFraction
+import dev.fritze.skyward.core.chart.kpGaugeAngleRadians
+import dev.fritze.skyward.core.chart.polarRingRadius
 import dev.fritze.skyward.core.chart.ForecastSlot
 import dev.fritze.skyward.core.chart.forecastSlots
-import dev.fritze.skyward.core.format.auroraLookDirection
 import dev.fritze.skyward.core.format.formatDateTime
-import dev.fritze.skyward.core.format.formatDegrees
 import dev.fritze.skyward.core.format.formatKp
 import dev.fritze.skyward.core.format.formatTime
 import dev.fritze.skyward.core.model.AuroraPayload
-import dev.fritze.skyward.core.model.Occurrence
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.sources.KpEstimate
 import dev.fritze.skyward.core.visibility.OvationGrid
-import dev.fritze.skyward.core.visibility.geomagneticLatitudeDeg
 import dev.fritze.skyward.ui.chart.ChartPalette
 import dev.fritze.skyward.ui.chart.gScaleLabel
 import dev.fritze.skyward.ui.chart.polarRasterImage
@@ -62,7 +65,6 @@ import io.github.cosinekitty.astronomy.Observer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -135,8 +137,7 @@ private fun KpGaugeCard(estimate: KpEstimate?, zone: TimeZone) {
                             style = Stroke(width = 14f),
                         )
                     }
-                    val fraction = (estimate.estimatedKp / 9.0).coerceIn(0.0, 1.0)
-                    val angle = (180.0 + fraction * 180.0) * kotlin.math.PI / 180.0
+                    val angle = kpGaugeAngleRadians(estimate.estimatedKp)
                     drawLine(
                         color = needleColor,
                         start = center,
@@ -184,7 +185,7 @@ private fun ForecastStripCard(slots: List<ForecastSlot>, issuedAt: Instant?, zon
                             // slot with no stored forecast still gets a visible
                             // stub, so the strip reads as "24 quiet slots"
                             // rather than as a card that failed to draw.
-                            .height(if (kp == null) EMPTY_SLOT_HEIGHT else (kp / 9.0 * 80.0).dp.coerceAtLeast(3.dp))
+                            .height(if (kp == null) EMPTY_SLOT_HEIGHT else (forecastBarFraction(kp) * 80.0).dp.coerceAtLeast(3.dp))
                             .background(if (kp == null) MaterialTheme.colorScheme.surfaceVariant else ChartPalette.kp(kp)),
                     )
                 }
@@ -263,9 +264,13 @@ private fun DrawScope.drawPolarRaster(raster: ImageBitmap, center: Offset, radiu
 }
 
 private fun DrawScope.drawPolarGraticule(center: Offset, radius: Float) {
-    for (latitude in listOf(45.0, 60.0, 75.0)) {
-        val ringRadius = ((90.0 - latitude) / (90.0 - AuroraPolarPlot.RIM_LATITUDE)).toFloat() * radius
-        drawCircle(GRATICULE.copy(alpha = 0.7f), radius = ringRadius, center = center, style = Stroke(width = 1f))
+    for (latitude in POLAR_GRATICULE_LATITUDES) {
+        drawCircle(
+            GRATICULE.copy(alpha = 0.7f),
+            radius = polarRingRadius(latitude, radius),
+            center = center,
+            style = Stroke(width = 1f),
+        )
     }
     for (step in 0 until 4) {
         val angle = step * kotlin.math.PI / 2.0
@@ -330,9 +335,7 @@ private fun LocationVerdictCard(
     now: Instant,
     zone: TimeZone,
 ) {
-    val geomagneticLat = remember(location) { geomagneticLatitudeDeg(location.point) }
-    // §8.4 inverted: visible when |λgm| >= 66 - 2*Kp, so Kp_needed = (66 - |λgm|)/2.
-    val kpNeeded = (66.0 - abs(geomagneticLat)) / 2.0
+    val verdict = remember(location, estimate) { auroraVerdict(location.point, estimate?.estimatedKp) }
     val peakKp = slots.mapNotNull { it.kp }.maxOrNull()
     val darkness = remember(location, now) {
         // A handful of iterations, but it is still astronomy — keep it out of
@@ -343,26 +346,12 @@ private fun LocationVerdictCard(
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(location.name, style = MaterialTheme.typography.titleSmall)
+            Text(auroraThresholdSentence(verdict), style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Geomagnetic latitude ${formatDegrees(geomagneticLat, 1)} — visible from here when Kp ≥ ${formatKp(kpNeeded)}",
+                auroraNowSentence(verdict, peakKp),
                 style = MaterialTheme.typography.bodyMedium,
-            )
-            val current = estimate?.estimatedKp
-            val margin = current?.let { it - kpNeeded }
-            Text(
-                when {
-                    kpNeeded <= 0 -> "Above the auroral boundary at any Kp."
-                    margin == null && peakKp == null -> "No current Kp reading and no forecast slot above your thresholds."
-                    margin != null && margin >= 0 ->
-                        "Now: Kp ${formatKp(current)} — ${formatDegrees(margin * 2, 1)} of margin. " +
-                            "Look ${auroraLookDirection(geomagneticLat)} after dark."
-                    margin != null -> "Now: Kp ${formatKp(current)} — short by ${formatKp(abs(margin))} Kp."
-                    // Reached only when there is no live reading but a forecast slot exists.
-                    else -> "Forecast peak Kp ${formatKp(peakKp ?: 0.0)} over the next three days."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (margin != null && margin >= 0) {
-                    ChartPalette.kp(current)
+                color = if (verdict.isVisibleNow) {
+                    ChartPalette.kp(estimate?.estimatedKp ?: 0.0)
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },

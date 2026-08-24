@@ -52,13 +52,15 @@ import dev.fritze.skyward.core.chart.MapCamera
 import dev.fritze.skyward.core.chart.MapLayer
 import dev.fritze.skyward.core.chart.eclipsePathPolylines
 import dev.fritze.skyward.core.chart.eonetMarkers
+import dev.fritze.skyward.core.chart.mapHitTest
 import dev.fritze.skyward.core.chart.travelRadiiKm
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Phenomenon
 import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.ui.chart.ChartPalette
-import dev.fritze.skyward.ui.chart.distance
 import dev.fritze.skyward.ui.chart.landPath
+import dev.fritze.skyward.ui.chart.toChartPoint
+import dev.fritze.skyward.ui.chart.toChartSize
 import dev.fritze.skyward.ui.chart.ovationOverlayImage
 import dev.fritze.skyward.ui.chart.panned
 import dev.fritze.skyward.ui.chart.project
@@ -340,14 +342,10 @@ private fun DrawScope.drawLocations(camera: MapCamera, locations: List<SavedLoca
 }
 
 /**
- * Tap targets, nearest-first within a threshold. The radii are larger than
- * the desktop's click thresholds because a fingertip is not a cursor —
- * Material's 48 dp minimum is about this, and a 2.5 px eclipse track would
- * otherwise be untappable.
- *
- * Locations are checked first only to give them priority when a pin sits on
- * a path; a location is not an occurrence, so a hit there returns null and
- * swallows the tap rather than opening whatever is underneath it.
+ * Tap targets. The picking rules — nearest within a threshold, and which
+ * layer outranks which — are `:core`'s [mapHitTest]; the radii are this
+ * frontend's, because a fingertip is not a cursor and Material's 48 dp
+ * minimum is about exactly this.
  */
 private fun hitTest(
     position: Offset,
@@ -355,32 +353,18 @@ private fun hitTest(
     camera: MapCamera,
     layers: Set<MapLayer>,
     content: MapContent,
-): String? {
-    if (MapLayer.LOCATIONS in layers && content.locations.any { camera.isWithin(it.point, position, size, PIN_HIT_RADIUS) }) {
-        return null
-    }
-    if (MapLayer.EONET in layers) {
-        val marker = content.eonet
-            .filter { camera.isWithin(it.point, position, size, MARKER_HIT_RADIUS) }
-            .minByOrNull { distance(camera.project(it.point, size), position) }
-        if (marker != null) return marker.occurrenceId
-    }
-    if (MapLayer.ECLIPSE_PATHS in layers) {
-        return content.eclipsePaths
-            .mapNotNull { path ->
-                val nearest = path.allPoints
-                    .minOfOrNull { distance(camera.project(it, size), position) }
-                    ?: return@mapNotNull null
-                if (nearest <= PATH_HIT_RADIUS) path.occurrenceId to nearest else null
-            }
-            .minByOrNull { it.second }
-            ?.first
-    }
-    return null
-}
-
-private fun MapCamera.isWithin(point: GeoPoint, position: Offset, size: Size, radiusPx: Float): Boolean =
-    distance(project(point, size), position) <= radiusPx
+): String? = mapHitTest(
+    position = position.toChartPoint(),
+    size = size.toChartSize(),
+    camera = camera,
+    layers = layers,
+    locations = content.locations.map { it.point },
+    eonet = content.eonet,
+    eclipsePaths = content.eclipsePaths,
+    pinRadiusPx = PIN_HIT_RADIUS,
+    markerRadiusPx = MARKER_HIT_RADIUS,
+    pathRadiusPx = PATH_HIT_RADIUS,
+)
 
 private const val MAP_ASPECT = 2f
 
