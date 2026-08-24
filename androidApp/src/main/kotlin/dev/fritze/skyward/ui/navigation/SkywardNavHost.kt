@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -25,6 +26,7 @@ import dev.fritze.skyward.ui.eventdetail.EventDetailScreen
 import dev.fritze.skyward.ui.locations.LocationEditorScreen
 import dev.fritze.skyward.ui.locations.LocationsScreen
 import dev.fritze.skyward.ui.onboarding.OnboardingScreen
+import dev.fritze.skyward.ui.sky.SkyScreen
 import dev.fritze.skyward.ui.rules.RuleEditorScreen
 import dev.fritze.skyward.ui.rules.RulesScreen
 import dev.fritze.skyward.ui.settings.AboutScreen
@@ -81,6 +83,12 @@ fun SkywardNavHost(
                         label = { Text("Upcoming") },
                     )
                     NavigationBarItem(
+                        selected = currentRoute == Routes.SKY,
+                        onClick = { navController.navigateToTopLevel(Routes.SKY) },
+                        icon = { Icon(Icons.Filled.Place, contentDescription = null) },
+                        label = { Text("Sky") },
+                    )
+                    NavigationBarItem(
                         selected = currentRoute == Routes.RULES,
                         onClick = { navController.navigateToTopLevel(Routes.RULES) },
                         icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
@@ -114,6 +122,12 @@ fun SkywardNavHost(
                     // whole point is that the screen the user needs is two
                     // levels away from where they are looking (#71).
                     onOpenLocations = { navController.navigate(Routes.LOCATIONS) },
+                )
+            }
+            composable(Routes.SKY) {
+                SkyScreen(
+                    container,
+                    onOpenEvent = { navController.navigate(Routes.eventDetail(it)) },
                 )
             }
             composable(Routes.EVENT_DETAIL) { entry ->

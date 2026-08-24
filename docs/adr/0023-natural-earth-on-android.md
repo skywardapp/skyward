@@ -40,18 +40,61 @@ blank base map.
 
 **Unknown at the time: the size.** ADR 0010 said "roughly half a megabyte".
 The generated file is 491,050 bytes (1,422 rings, 60,669 points), and APK
-entries are deflated: **~384 KB** of actual APK growth.
+entries are deflated. Measured in the built `fossDebug` APK: **393,500
+bytes**, a 20 % compression ratio.
 
 ## Decision
 
-Move the reader to `commonMain` as ADR 0010 directed, and wire the
-`convertNaturalEarth` **task output** into both the `androidMain` and
-`desktopMain` resource paths:
+Move the reader to `commonMain` as ADR 0010 directed, and point both
+platforms' resource paths at the one `convertNaturalEarth` **task output**.
+
+The desktop half is the KMP source set, unchanged from before:
 
 ```kotlin
-val androidMain by getting { resources.srcDir(convertNaturalEarth) }
 val desktopMain by getting { resources.srcDir(convertNaturalEarth) }
 ```
+
+The Android half is **not** its KMP counterpart. Writing the symmetrical
+
+```kotlin
+val androidMain by getting { resources.srcDir(convertNaturalEarth) }   // does nothing
+```
+
+builds and fails silently: `unzip -l app.apk | grep natural-earth` comes
+back empty, the reader decodes zero rings, and the map draws ocean with no
+coastlines. AGP packages *its own* main source set, which is a different
+object from the Kotlin one, so the registration belongs in the `android`
+block:
+
+```kotlin
+android {
+    sourceSets.getByName("main").resources.srcDir(convertNaturalEarth)
+}
+```
+
+This is the same asymmetry `ShowersResource.android.kt` records for
+`commonMain/resources` — the KMP notion of "this target's resources" is not
+what ends up in the APK — and it cost a round of exactly the debugging that
+comment was written to save. Verify by unzipping the APK, never by observing
+that the build passed.
+
+That registration then needs a second, separate fix. AGP flattens an
+`AndroidSourceDirectorySet.srcDir` to plain `File`s, which registers the
+directory but drops the task that fills it, so `check` fails validation:
+*"`process<Variant>JavaRes` uses this output of task
+`:core:convertNaturalEarth` without declaring an explicit or implicit
+dependency"*. Neither a bare provider nor `.map { it.outputs.files }`
+survives the flattening — both were tried — so the dependency is declared by
+hand:
+
+```kotlin
+tasks.matching { it.name.startsWith("process") && it.name.endsWith("JavaRes") }
+    .configureEach { dependsOn(convertNaturalEarth) }
+```
+
+Matched by name rather than by type because the task class is AGP-internal.
+Gradle is right to fail here: without the edge, the resource can be packaged
+before it has been generated.
 
 Two source sets, one generated artifact. This is strictly better than
 `showers.json`'s arrangement: because the file is generated rather than
@@ -72,7 +115,8 @@ The reader's three JVM-only pieces went as ADR 0010 said they must:
 
 ## Consequences
 
-- **The `fossRelease` APK grows by ~384 KB.** That is the real cost, against
+- **The `fossRelease` APK grows by ~384 KB** (393,500 bytes, measured in
+  the packaged APK). That is the real cost, against
   §15.4's interest in a small reproducible build. `convertNaturalEarth` is
   deterministic — it walks the GeoJSON in file order and writes fixed-width
   big-endian floats — so pointing a second source set at it does not

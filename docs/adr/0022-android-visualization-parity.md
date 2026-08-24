@@ -53,9 +53,11 @@ tops out around five, so the four views do not each get a tab. The planned
 `Map` slot becomes a **Sky** tab holding all four behind a tab row. Item
 count matches §13.1; what sits behind one of them is broader.
 
-**§13.3's aurora hint changes.** It specifies, for the aurora block, an
-"open dashboard on desktop" hint. There is now a dashboard on the device, so
-that hint becomes a link to the Sky tab's Aurora view.
+**§13.3's aurora hint is moot.** It specifies, for the aurora block, an
+"open dashboard on desktop" hint. That hint was never built — it appears
+nowhere in `androidApp` — and it is now the wrong advice anyway, since the
+dashboard is on the device. Nothing is removed; the line simply stops being
+something the Android app owes.
 
 **§19 R10 still binds.** "Sky chart scope creep (star catalogs,
 constellations) … v1 explicitly starless (§14.3); resist." This is a port of
@@ -92,3 +94,13 @@ added, and `SkySceneBuilder`'s KDoc keeps saying so.
   cheap three would have been deferred behind the expensive one.
 - **Wait for v1 to ship.** The honest alternative, and the one this ADR is
   weakest against. See the ordering note above.
+
+## Related
+
+- [ADR 0021](0021-chart-math-in-core.md) — where the shared projections live.
+- [ADR 0023](0023-natural-earth-on-android.md) — getting the map data into
+  the APK, superseding ADR 0010.
+- [ADR 0024](0024-charts-opt-out-of-dynamic-colour.md) — why these four
+  screens are the app's only exception to §13's dynamic colour.
+- [ADR 0025](0025-android-sky-tab-groups-the-drawn-views.md) — how they fit
+  §13.1's four-item bottom bar.

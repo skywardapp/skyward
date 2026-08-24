@@ -108,7 +108,6 @@ kotlin {
             }
         }
         val androidMain by getting {
-            resources.srcDir(convertNaturalEarth)
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)
@@ -135,11 +134,34 @@ android {
     defaultConfig {
         minSdk = 26
     }
+    // The generated map resource has to be registered on *AGP's* main source
+    // set, not the KMP `androidMain` one. They are different objects, and only
+    // this one reaches the packaged APK -- verified by
+    // `unzip -l app.apk | grep natural-earth`, which came back empty when the
+    // srcDir was on `androidMain` instead. That is the same asymmetry
+    // ShowersResource.android.kt records for commonMain/resources; ADR 0023
+    // has the detail.
+    sourceSets.getByName("main").resources.srcDir(convertNaturalEarth)
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+/**
+ * AGP flattens an `AndroidSourceDirectorySet.srcDir` to plain `File`s, so the
+ * `convertNaturalEarth` wiring above registers the *directory* but loses the
+ * task that fills it. Neither a bare provider nor `.map { it.outputs.files }`
+ * survives that flattening, and Gradle's validation then fails the build with
+ * "process<Variant>JavaRes uses this output ... without declaring an explicit
+ * or implicit dependency" — correctly, because without this the resource can
+ * be packaged before it has been generated.
+ *
+ * Matched by name rather than by type: the task class is AGP-internal, and a
+ * string match keeps this out of an API that is not ours to depend on.
+ */
+tasks.matching { it.name.startsWith("process") && it.name.endsWith("JavaRes") }
+    .configureEach { dependsOn(convertNaturalEarth) }
 
 sqldelight {
     databases {

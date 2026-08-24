@@ -30,6 +30,14 @@ rules + planner, M3 Android MVP, M4 polled sources, M5 full RuleEditor +
 settings sync, M6 desktop app (Overview, event map, timeline, sky chart,
 aurora dashboard, rules/settings, tray/autostart/notifications).
 
+Android also carries all four of §14's drawn views — event map, timeline,
+sky chart and aurora dashboard — behind a Sky tab, plus §13.3's eclipse
+path mini-map in EventDetail. The projections and scene maths are shared
+with the desktop in `:core`'s `chart` package. §14 scopes those views to
+the desktop, so the deviation is recorded in
+[ADR 0022](docs/adr/0022-android-visualization-parity.md) and the four ADRs
+around it (0021, 0023-0025).
+
 ### Running the desktop app
 
 ```sh
