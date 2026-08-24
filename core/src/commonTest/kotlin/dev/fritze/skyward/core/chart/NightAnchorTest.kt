@@ -1,4 +1,4 @@
-package dev.fritze.skyward.desktop.ui.skychart
+package dev.fritze.skyward.core.chart
 
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test

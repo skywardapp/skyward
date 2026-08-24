@@ -1,6 +1,5 @@
-package dev.fritze.skyward.desktop.ui.skychart
+package dev.fritze.skyward.core.chart
 
-import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertNull
@@ -9,20 +8,20 @@ import kotlin.test.assertTrue
 /** §14.3's stereographic all-sky projection. */
 class SkyProjectionTest {
 
-    private val center = Offset(200f, 200f)
+    private val center = ChartPoint(200f, 200f)
     private val radius = 180f
 
     @Test
     fun theZenithIsTheCentre() {
         val zenith = SkyProjection.project(90.0, 123.0, center, radius)!!
-        assertTrue((zenith - center).getDistance() < 0.01f, "zenith projected to $zenith")
+        assertTrue(zenith.distanceTo(center) < 0.01f, "zenith projected to $zenith")
     }
 
     @Test
     fun theHorizonIsTheRim() {
         for (azimuth in 0..359 step 30) {
             val point = SkyProjection.project(0.0, azimuth.toDouble(), center, radius)!!
-            assertTrue(abs((point - center).getDistance() - radius) < 0.01f, "azimuth $azimuth landed at $point")
+            assertTrue(abs(point.distanceTo(center) - radius) < 0.01f, "azimuth $azimuth landed at $point")
         }
     }
 

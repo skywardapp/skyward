@@ -1,4 +1,4 @@
-package dev.fritze.skyward.desktop.ui.skychart
+package dev.fritze.skyward.core.chart
 
 import dev.fritze.skyward.core.astro.earthHeliocentricPositionEcliptic
 import dev.fritze.skyward.core.astro.heliocentricPosition

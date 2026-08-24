@@ -1,7 +1,5 @@
-package dev.fritze.skyward.desktop.ui.map
+package dev.fritze.skyward.core.chart
 
-import androidx.compose.ui.geometry.Size
-import dev.fritze.skyward.core.map.NaturalEarthMap
 import dev.fritze.skyward.core.model.Certainty
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.Occurrence
@@ -20,7 +18,13 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
-/** §14.1's layer preparation: the pure half of the map, and the bundled base data. */
+/**
+ * §14.1's layer preparation — the pure half of the map.
+ *
+ * The half that reads the bundled Natural Earth data, and the one that
+ * builds a Compose `Path` from it, stay in `:desktopApp`'s
+ * `MapBaseLayerTest`: both need something this source set cannot see.
+ */
 class MapLayersTest {
 
     private val now = Instant.parse("2027-08-02T10:00:00Z")
@@ -79,7 +83,7 @@ class MapLayersTest {
     @Test
     fun travelCirclesStretchInLongitudeAsLatitudeRises() {
         val camera = MapCamera()
-        val size = Size(1280f, 640f)
+        val size = ChartSize(1280f, 640f)
         val (equatorX, equatorY) = travelCircleRadii(GeoPoint(0.0, 0.0), 500.0, camera, size)
         val (arcticX, arcticY) = travelCircleRadii(GeoPoint(70.0, 0.0), 500.0, camera, size)
 
@@ -89,45 +93,6 @@ class MapLayersTest {
         assertTrue(kotlin.math.abs(equatorY - arcticY) < 0.01f, "vertical radius should not depend on latitude")
         assertTrue(arcticX > equatorX * 2.5f, "expected a much wider ellipse at 70N: $equatorX -> $arcticX")
         assertTrue(equatorX > 0f && equatorY > 0f)
-    }
-
-    @Test
-    fun theBundledBaseMapCoversTheWholeGlobe() {
-        val rings = NaturalEarthMap.landRings
-        assertTrue(rings.size > 100, "expected the Natural Earth 1:50m land layer, got ${rings.size} rings")
-
-        var minLon = Float.MAX_VALUE
-        var maxLon = -Float.MAX_VALUE
-        var minLat = Float.MAX_VALUE
-        var maxLat = -Float.MAX_VALUE
-        var points = 0
-        for (ring in rings) {
-            for (i in 0 until ring.pointCount) {
-                val lon = ring.lon(i)
-                val lat = ring.lat(i)
-                if (lon < minLon) minLon = lon
-                if (lon > maxLon) maxLon = lon
-                if (lat < minLat) minLat = lat
-                if (lat > maxLat) maxLat = lat
-                points++
-            }
-        }
-
-        assertTrue(points > 20_000, "expected 1:50m detail, got $points points")
-        // Coordinates must be plain degrees — a unit or sign mistake in the
-        // build-time converter would show up here rather than as a blank map.
-        assertTrue(minLon >= -180.1f && maxLon <= 180.1f, "longitudes out of range: $minLon..$maxLon")
-        assertTrue(minLat >= -90.1f && maxLat <= 90.1f, "latitudes out of range: $minLat..$maxLat")
-        assertTrue(minLat < -60f, "expected Antarctica in the base layer, southernmost was $minLat")
-        assertTrue(maxLat > 75f, "expected the high Arctic in the base layer, northernmost was $maxLat")
-    }
-
-    @Test
-    fun theBaseMapPathIsBuiltInWorldUnits() {
-        // Two units wide, one tall — the 2:1 world the map viewport draws.
-        val bounds = buildLandPath().getBounds()
-        assertTrue(bounds.left >= -0.01f && bounds.right <= 2.01f, "x out of world range: ${bounds.left}..${bounds.right}")
-        assertTrue(bounds.top >= -0.01f && bounds.bottom <= 1.01f, "y out of world range: ${bounds.top}..${bounds.bottom}")
     }
 
     private fun rule(id: String, enabled: Boolean, condition: Cond) = Rule(

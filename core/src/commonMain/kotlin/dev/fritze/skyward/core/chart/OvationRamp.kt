@@ -1,4 +1,4 @@
-package dev.fritze.skyward.desktop.ui.common
+package dev.fritze.skyward.core.chart
 
 /**
  * The one OVATION probability ramp, shared by §14.4's polar plot (and its

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import dev.fritze.skyward.core.astro.darknessWindow
 import dev.fritze.skyward.core.astro.toAstroTime
 import dev.fritze.skyward.core.astro.toInstant
+import dev.fritze.skyward.core.chart.AuroraPolarPlot
 import dev.fritze.skyward.core.format.auroraLookDirection
 import dev.fritze.skyward.core.format.formatDateTime
 import dev.fritze.skyward.core.format.formatDegrees
@@ -60,17 +61,18 @@ import dev.fritze.skyward.core.visibility.OvationGrid
 import dev.fritze.skyward.core.visibility.geomagneticLatitudeDeg
 import dev.fritze.skyward.desktop.ui.DesktopAppState
 import dev.fritze.skyward.desktop.ui.common.SectionCard
+import dev.fritze.skyward.desktop.ui.common.project
 import dev.fritze.skyward.desktop.ui.theme.gScaleLabel
 import dev.fritze.skyward.desktop.ui.theme.kpColor
 import io.github.cosinekitty.astronomy.Observer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * §14.4's aurora dashboard: Kp gauge and 3-day strip, the OVATION polar
@@ -272,7 +274,7 @@ private fun ForecastStripCard(slots: List<ForecastSlot>, issuedAt: Instant?, sta
 @Composable
 private fun PolarViewCard(state: DesktopAppState, grid: OvationGrid?, locations: List<SavedLocation>) {
     var north by remember { mutableStateOf(true) }
-    val raster = remember(grid, north) { grid?.let { AuroraPolarPlot.rasterize(it, north) } }
+    val raster = remember(grid, north) { grid?.let { polarRasterImage(it, north) } }
 
     SectionCard("OVATION nowcast") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

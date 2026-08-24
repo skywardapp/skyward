@@ -1,6 +1,8 @@
 package dev.fritze.skyward.desktop.ui.map
 
 import androidx.compose.ui.geometry.Size
+import dev.fritze.skyward.core.chart.MapCamera
+import dev.fritze.skyward.core.chart.eclipsePathPolylines
 import dev.fritze.skyward.core.model.GeoPoint
 import dev.fritze.skyward.core.model.SolarEclipseKind
 import dev.fritze.skyward.core.model.SolarEclipsePayload
@@ -10,6 +12,7 @@ import dev.fritze.skyward.core.sources.EclipseSource
 import dev.fritze.skyward.core.sources.RefreshRequest
 import dev.fritze.skyward.core.sources.SourceSettings
 import dev.fritze.skyward.core.visibility.haversineDistanceKm
+import dev.fritze.skyward.desktop.ui.common.project
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
