@@ -248,6 +248,10 @@ private fun Modifier.mapGestures(
     return this
         .pointerInput(Unit) {
             detectTransformGestures { centroid, pan, zoom, _ ->
+                // §14.1's pan/zoom, as one touch gesture rather than the
+                // desktop's separate drag and wheel (ADR 0022: same view, its
+                // own input model).
+                //
                 // Zoom first, then pan. `zoomed` solves
                 // `offset = focus - (focus - offset) * scale`, so an offset that
                 // already carries this frame's pan gets that pan multiplied by
@@ -375,6 +379,7 @@ private fun hitTest(
 
 private const val MAP_ASPECT = 2f
 
+// §14.1's picking, at ADR 0022's touch scale.
 // Touch targets, not cursor targets — the desktop picks within 10/10/8 raw
 // pixels of a mouse. Density-independent, because a raw-pixel radius shrinks
 // as the screen gets denser: 28 px is 9 dp of reach at density 3 and 28 dp at

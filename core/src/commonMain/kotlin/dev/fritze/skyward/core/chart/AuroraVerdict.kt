@@ -34,9 +34,9 @@ fun auroraVerdict(point: GeoPoint, currentKp: Double?): AuroraVerdict {
 /**
  * "Geomagnetic latitude 58.2° — visible from here when Kp ≥ 3.9".
  *
- * Above |λgm| 66° the inverted threshold goes negative, and there is no such
- * thing as Kp −0.5: inside the oval the answer is "always", the same case
- * [auroraNowSentence] already spells out.
+ * §8.4's visibility rule inverted: above |λgm| 66° the threshold goes
+ * negative, and there is no such thing as Kp −0.5. Inside the oval the answer
+ * is "always", the same case [auroraNowSentence] already spells out.
  */
 fun auroraThresholdSentence(verdict: AuroraVerdict): String {
     val latitude = "Geomagnetic latitude ${formatDegrees(verdict.geomagneticLatitudeDeg, 1)}"

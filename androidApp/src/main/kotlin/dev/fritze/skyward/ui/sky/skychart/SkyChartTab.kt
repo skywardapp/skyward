@@ -298,6 +298,7 @@ private fun hitTest(
         occurrenceBackedOnly = false,
     )
 
+// §14.3's picking, at ADR 0022's touch scale.
 // A fingertip, not a cursor — the desktop picks within 14 raw pixels of a
 // mouse. Density-independent, because a raw-pixel radius shrinks as the screen
 // gets denser: 28 px is 9 dp of reach at density 3 and 28 dp at density 1.
