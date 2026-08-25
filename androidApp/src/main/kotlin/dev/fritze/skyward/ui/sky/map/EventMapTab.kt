@@ -64,10 +64,9 @@ import dev.fritze.skyward.ui.chart.landPath
 import dev.fritze.skyward.ui.chart.toChartPoint
 import dev.fritze.skyward.ui.chart.toChartSize
 import dev.fritze.skyward.ui.chart.ovationOverlayImage
-import dev.fritze.skyward.ui.chart.panned
 import dev.fritze.skyward.ui.chart.project
+import dev.fritze.skyward.ui.chart.transformed
 import dev.fritze.skyward.ui.chart.travelCircleRadii
-import dev.fritze.skyward.ui.chart.zoomed
 import dev.fritze.skyward.ui.sky.SkyUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -228,7 +227,7 @@ private fun Legend(layers: Set<MapLayer>, hasGrid: Boolean, mapReady: Boolean) {
  *
  * `detectTransformGestures` is the touch counterpart of the desktop's
  * drag-plus-scroll pair: one gesture reports pan and zoom together, and its
- * centroid is exactly the focus `MapCamera.zoomed` wants, so the same
+ * centroid is exactly the focus `MapCamera.transformed` wants, so the same
  * camera call serves a pinch here and a wheel there.
  *
  * Keyed on `Unit` so an in-progress gesture is not interrupted by a camera
@@ -250,18 +249,10 @@ private fun Modifier.mapGestures(
             detectTransformGestures { centroid, pan, zoom, _ ->
                 // §14.1's pan/zoom, as one touch gesture rather than the
                 // desktop's separate drag and wheel (ADR 0022: same view, its
-                // own input model).
-                //
-                // Zoom first, then pan. `zoomed` solves
-                // `offset = focus - (focus - offset) * scale`, so an offset that
-                // already carries this frame's pan gets that pan multiplied by
-                // the scale factor — a systematic drift under the fingers on
-                // any pinch that also moves the centroid. Applying the pan
-                // after the zoom keeps it in screen space, where the gesture
-                // measured it.
-                val camera = currentCamera.value
-                val zoomed = if (zoom == 1f) camera else camera.zoomed(zoom, centroid, size.toSize())
-                onCameraChange(zoomed.panned(pan, size.toSize()))
+                // own input model). `MapCamera.transformed` owns the
+                // zoom-then-pan ordering the centroid drift depends on, and
+                // §13.3's mini-map goes through the same call (ADR 0026).
+                onCameraChange(currentCamera.value.transformed(zoom, centroid, pan, size.toSize()))
             }
         }
         .pointerInput(keys = hitTestKeys) {

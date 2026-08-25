@@ -1,17 +1,30 @@
 package dev.fritze.skyward.ui.chart
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -20,9 +33,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import dev.fritze.skyward.core.chart.EclipsePathPolyline
 import dev.fritze.skyward.core.chart.MapCamera
 import dev.fritze.skyward.core.chart.eclipsePathPolylines
@@ -31,6 +49,7 @@ import dev.fritze.skyward.core.model.SavedLocation
 import dev.fritze.skyward.core.model.SolarEclipsePayload
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,9 +57,13 @@ import kotlinx.coroutines.withContext
  * §13.3's eclipse block: "path mini-map for eclipses [static canvas drawing
  * of centralPath + location markers — no tile map needed]".
  *
- * Static is the point — no pan, no zoom, no hit-testing. It answers one
- * question ("does the track come anywhere near me?") at a glance; §14.1's
- * full map on the Sky tab is where a reader goes to explore.
+ * It still opens on the whole world and answers one question ("does the
+ * track come anywhere near me?") at a glance; §14.1's full map on the Sky
+ * tab remains where a reader goes to explore *several* events at once. What
+ * §13.3's "static" no longer means is that a totality track a few hundred
+ * kilometres wide has to stay four screen pixels wide: a two-finger pinch
+ * zooms this canvas through the same [MapCamera] the Sky tab's map uses
+ * (ADR 0026).
  *
  * "No tile map needed" rules out OSM tiles and their licensing burden, not
  * a base layer: without coastlines a bare curve on an empty rectangle says
@@ -60,6 +83,11 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
         eclipsePathPolylines(listOf(occurrence)).firstOrNull()
     } ?: return
 
+    // Keyed on the occurrence: the detail route is reused for every event, so
+    // an un-keyed camera would hand the next eclipse the zoom left over from
+    // the last one, pointed at a track that is somewhere else entirely.
+    var camera by remember(occurrence.id) { mutableStateOf(MapCamera()) }
+
     // Decoding half a megabyte of coastline and walking 60 000 points into a
     // Path is not UI-thread work on a phone (§19 R1 is the same concern for
     // path sampling). `landPath` is a process-wide lazy val, so this pays
@@ -71,7 +99,7 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Central eclipse path", style = MaterialTheme.typography.titleSmall)
+        MiniMapHeader(zoom = camera.zoom, onResetView = { camera = MapCamera() })
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -81,12 +109,14 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
                 .clip(RoundedCornerShape(8.dp))
                 .semantics {
                     contentDescription = buildContentDescription(polyline, locations)
-                },
+                }
+                .pinchZoom(camera) { camera = it },
         ) {
-            drawMiniMap(polyline, locations, land)
+            drawMiniMap(camera, polyline, locations, land)
         }
         Text(
-            "Central path across the globe; pins are your saved locations.",
+            "Central path across the globe; pins are your saved locations. " +
+                "Pinch with two fingers to zoom in; one finger scrolls the page.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -94,9 +124,132 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
 }
 
 /**
+ * ADR 0026's zoom readout and way back: the title, and — only once the view
+ * has left §13.3's whole-world default — the zoom factor and a Reset.
+ * Hidden at 1× because there is nothing
+ * to reset and the reading is always "1×": a permanent control for a state
+ * that cannot be wrong is noise on a detail screen that is mostly tables.
+ *
+ * The row keeps the button's height whether or not the button is there. It
+ * would otherwise grow by ~20 dp on the first pinch, shoving the map out
+ * from under the fingers that are still on it.
+ */
+@Composable
+private fun MiniMapHeader(zoom: Float, onResetView: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MinHeight),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Central eclipse path", style = MaterialTheme.typography.titleSmall)
+        if (zoom > MapCamera.MIN_ZOOM) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${(zoom * 10).roundToInt() / 10.0}×",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onResetView) { Text("Reset") }
+            }
+        }
+    }
+}
+
+/**
+ * Two fingers zoom and pan; one finger is left alone.
+ *
+ * §14.1's map tab can use the stock `detectTransformGestures`, because it
+ * fills a tab of its own and nothing behind it wants a drag. This canvas sits
+ * inside EventDetail's `LazyColumn`, where a one-finger drag is how the
+ * reader scrolls past it — so a detector that claimed every drag would trap
+ * the page under a map two thirds of a screen tall. Hence the pointer-count
+ * gate rather than `detectTransformGestures`: events are only read (and only
+ * consumed) while at least two pointers are down, so a single finger stays
+ * unconsumed and reaches the list.
+ *
+ * `canceled` follows the stock detector: once the list has claimed the drag,
+ * this gesture is over even if a second finger arrives, and the reader lifts
+ * off and pinches again. Fighting the parent for a drag it already won is
+ * the alternative, and it moves both.
+ *
+ * Keyed on `Unit` so an in-progress pinch is not interrupted by the camera
+ * update it just produced; the block therefore has to read [camera] through
+ * [rememberUpdatedState] rather than capture the parameter, or every gesture
+ * after the first would compute from the camera it started with.
+ */
+@Composable
+private fun Modifier.pinchZoom(camera: MapCamera, onCameraChange: (MapCamera) -> Unit): Modifier {
+    val currentCamera = rememberUpdatedState(camera)
+    return pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            while (true) {
+                val event = awaitPointerEvent()
+                when (event.pinchStep()) {
+                    PinchStep.END -> break
+                    PinchStep.IGNORE -> continue
+                    PinchStep.APPLY -> onCameraChange(applyPinch(event, currentCamera.value))
+                }
+            }
+        }
+    }
+}
+
+/** What one pointer event means to [pinchZoom]. */
+private enum class PinchStep { END, IGNORE, APPLY }
+
+/**
+ * ADR 0026's pointer-count gate, as a verdict on one event.
+ *
+ * The order of the branches is load-bearing: the two END cases are tested
+ * before the count, so a drag the list has already claimed ends this gesture
+ * rather than being ignored and then re-entered when a second finger lands
+ * on a scroll already in flight.
+ */
+private fun PointerEvent.pinchStep(): PinchStep = when {
+    // Somebody else took this drag — the list, almost always.
+    changes.any { it.isConsumed } -> PinchStep.END
+    // The last finger came off.
+    changes.none { it.pressed } -> PinchStep.END
+    // One finger is the list's; two are ours. This is the whole gate.
+    changes.count { it.pressed } < 2 -> PinchStep.IGNORE
+    // Two fingers resting still: nothing to apply, and nothing to consume
+    // either, or a two-finger tap would eat itself.
+    calculateZoom() == 1f && calculatePan() == Offset.Zero -> PinchStep.IGNORE
+    else -> PinchStep.APPLY
+}
+
+/**
+ * Folds one two-finger event into [camera] and claims it, so the list behind
+ * this canvas does not also act on it.
+ *
+ * The consumption happens last: `calculatePan` reads position *changes*, and
+ * a consumed change reports none, so consuming first would measure every
+ * pinch as motionless.
+ */
+private fun AwaitPointerEventScope.applyPinch(event: PointerEvent, camera: MapCamera): MapCamera {
+    // useCurrent = false: the centroid *before* this event is where the
+    // fingers were when the spread was measured, which is the point
+    // `transformed` has to hold still.
+    val moved = camera.transformed(
+        factor = event.calculateZoom(),
+        focus = event.calculateCentroid(useCurrent = false),
+        pan = event.calculatePan(),
+        size = size.toSize(),
+    )
+    event.changes.forEach { if (it.positionChanged()) it.consume() }
+    return moved
+}
+
+/**
  * A blind user gets nothing from "world map", so name what the picture
  * actually shows — the latitude band the track crosses is the one fact the
  * drawing conveys that the times table above it does not.
+ *
+ * Deliberately silent about the zoom (ADR 0026, Consequences): the pinch
+ * that changes it is not a gesture TalkBack can make, and announcing a state
+ * the listener cannot reach or alter is worse than not mentioning it. The
+ * band described here is the whole track's, at any zoom.
  */
 internal fun buildContentDescription(polyline: EclipsePathPolyline, locations: List<SavedLocation>): String {
     val points = polyline.allPoints
@@ -111,22 +264,29 @@ internal fun buildContentDescription(polyline: EclipsePathPolyline, locations: L
 }
 
 /**
- * Drawn at the identity camera: the whole world, exactly filling the 2:1
- * canvas. A camera fitted to the track would zoom a narrow path to fill the
- * frame, which reads as "this is happening everywhere" — the opposite of
- * what a mini-map is for.
+ * Drawn through [camera], which starts at the identity: the whole world,
+ * exactly filling the 2:1 canvas. A camera *fitted* to the track would zoom a
+ * narrow path to fill the frame, which reads as "this is happening
+ * everywhere" — the opposite of what a mini-map is for. Where the reader
+ * takes it from there is the reader's business.
  */
 private fun DrawScope.drawMiniMap(
+    camera: MapCamera,
     polyline: EclipsePathPolyline,
     locations: List<SavedLocation>,
     land: Path?,
 ) {
-    val camera = MapCamera()
     drawRect(ChartPalette.Ocean)
 
     if (land != null) {
-        val worldScale = size.height
-        withTransform({ scale(worldScale, worldScale, pivot = Offset.Zero) }) {
+        // The path is in world units, so one transform draws all 60 000
+        // points; the stroke width is divided back out so the coastline stays
+        // hairline-thin at every zoom instead of growing into a smear.
+        val worldScale = size.height * camera.zoom
+        withTransform({
+            translate(camera.offset.x, camera.offset.y)
+            scale(worldScale, worldScale, pivot = Offset.Zero)
+        }) {
             drawPath(land, ChartPalette.LandFill)
             drawPath(land, ChartPalette.LandStroke, style = Stroke(width = 1f / worldScale))
         }

@@ -46,6 +46,9 @@ fun MapCamera.panned(delta: Offset, size: Size): MapCamera =
 fun MapCamera.zoomed(factor: Float, focus: Offset, size: Size): MapCamera =
     zoomed(factor, focus.toChartPoint(), size.toChartSize())
 
+fun MapCamera.transformed(factor: Float, focus: Offset, pan: Offset, size: Size): MapCamera =
+    transformed(factor, focus.toChartPoint(), pan.toChartPoint(), size.toChartSize())
+
 fun travelCircleRadii(center: GeoPoint, radiusKm: Double, camera: MapCamera, size: Size): Pair<Float, Float> =
     travelCircleRadii(center, radiusKm, camera, size.toChartSize())
 

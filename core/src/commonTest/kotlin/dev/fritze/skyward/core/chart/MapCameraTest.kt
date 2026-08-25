@@ -66,6 +66,39 @@ class MapCameraTest {
         assertEquals(ChartPoint.Zero, camera.panned(ChartPoint(300f, -120f), size).offset)
     }
 
+    /**
+     * ADR 0026's drift regression, and the reason [MapCamera.transformed]
+     * exists at all: a pinch reports its zoom and its
+     * centroid movement in the same event, and folding the pan into the
+     * offset before the zoom multiplies it by the scale factor. Two fingers
+     * that spread by 2× while their centroid slides 100 px must move the map
+     * by exactly those 100 px, not 200.
+     */
+    @Test
+    fun aPinchThatAlsoDragsMovesTheMapByThePanItMeasured() {
+        val focus = ChartPoint(640f, 320f)
+        val pan = ChartPoint(-100f, -40f)
+
+        val transformed = camera.transformed(2f, focus, pan, size)
+        val zoomedOnly = camera.zoomed(2f, focus, size)
+
+        assertOffset(zoomedOnly.offset + pan, transformed.offset)
+    }
+
+    @Test
+    fun aTwoFingerDragWithNoSpreadIsAPlainPan() {
+        val panned = MapCamera(zoom = 2f).panned(ChartPoint(-70f, -30f), size)
+        val transformed = MapCamera(zoom = 2f).transformed(1f, ChartPoint(10f, 10f), ChartPoint(-70f, -30f), size)
+        assertEquals(panned, transformed)
+    }
+
+    /** Clamping still applies, so a pinch cannot walk the world off the viewport. */
+    @Test
+    fun aTransformNeverRevealsSpaceBeyondTheMap() {
+        val transformed = MapCamera(zoom = 2f).transformed(1.5f, ChartPoint(0f, 0f), ChartPoint(9000f, 9000f), size)
+        assertTrue(transformed.offset.x <= 0f && transformed.offset.y <= 0f, "escaped: ${transformed.offset}")
+    }
+
     @Test
     fun antimeridianCrossingIsDetectedOnlyForTheLongWayRound() {
         assertTrue(MapCamera.crossesAntimeridian(179.0, -179.0))
