@@ -60,6 +60,24 @@ data class MapCamera(val zoom: Float = 1f, val offset: ChartPoint = ChartPoint.Z
     }
 
     /**
+     * One touch transform gesture — a pinch that also drags the centroid —
+     * applied as a single camera step.
+     *
+     * The order is the whole content of this function. [zoomed] solves
+     * `offset = focus - (focus - offset) * scale`, so an offset that already
+     * carries this frame's [pan] gets that pan multiplied by the scale
+     * factor: a systematic drift under the fingers on any pinch whose
+     * centroid also moves. Panning after the zoom keeps the pan in screen
+     * space, where the gesture measured it.
+     *
+     * It lives here rather than in either frontend's gesture handler because
+     * two call sites copying an ordering rule is exactly how one of them
+     * ends up with the drift and the other does not.
+     */
+    fun transformed(factor: Float, focus: ChartPoint, pan: ChartPoint, size: ChartSize): MapCamera =
+        (if (factor == 1f) this else zoomed(factor, focus, size)).panned(pan, size)
+
+    /**
      * Keeps the world filling the viewport: at 1× it exactly covers it, and
      * beyond that the visible window stays inside the map rather than
      * revealing background beyond the poles or the antimeridian.

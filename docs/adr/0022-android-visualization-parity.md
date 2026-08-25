@@ -104,3 +104,5 @@ added, and `SkySceneBuilder`'s KDoc keeps saying so.
   screens are the app's only exception to §13's dynamic colour.
 - [ADR 0025](0025-android-sky-tab-groups-the-drawn-views.md) — how they fit
   §13.1's four-item bottom bar.
+- [ADR 0026](0026-eclipse-mini-map-pinch-zoom.md) — the fifth drawn view,
+  §13.3's eclipse mini-map, gains the touch gestures the other four have.
