@@ -16,11 +16,16 @@ import dev.fritze.skyward.core.model.GeoPoint
  *
  * The desktop app carries the same file for the same reason (ADR 0021):
  * §15.3 keeps Compose out of `:core`, so the projections speak
- * [ChartPoint]/[ChartSize] and each frontend converts where it draws. The
- * two copies cannot be one — the apps build against different Compose
- * distributions (the AndroidX BOM here, Compose Multiplatform there), and
- * §4.1 allows no module to hold shared UI code — but each is a page of
- * two-float conversions with no behaviour to drift.
+ * [ChartPoint]/[ChartSize] and each frontend converts where it draws.
+ *
+ * There are two copies because §4.1 forbade shared UI code when they were
+ * written. Design doc 1.3 removed that rule, which makes this pair a
+ * candidate for the repo's first shared source directory: the two Compose
+ * distributions (the AndroidX BOM here, Compose Multiplatform there) are
+ * different artifacts, but `androidx.compose.ui.geometry.Offset` and `Size`
+ * name the same API in both, so one source file would compile on each side.
+ * Until such a directory exists and is shown to build both apps, each keeps
+ * its page of two-float conversions — which have no behaviour to drift.
  */
 fun Offset.toChartPoint(): ChartPoint = ChartPoint(x, y)
 
