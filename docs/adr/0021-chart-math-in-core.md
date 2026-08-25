@@ -108,8 +108,9 @@ phone and a desktop are not the same surface.
 
 This is the §4.1 paragraph above applied at a larger size than "colors for
 quality levels", not a departure from it: the drawing is still not shared,
-and what moved is pure functions. §15.3's dependency list is unchanged —
-`:core` gains no dependency from this.
+and what moved is pure functions. [Historical — §4.1 no longer forbids
+sharing the drawing; see the *Update* at the top.] §15.3's dependency list is
+unchanged — `:core` gains no dependency from this.
 
 ### The geometry types
 
@@ -162,5 +163,6 @@ rendering code reads as it did before the move.
 - **Share the drawing too, via Compose Multiplatform in `androidApp`.** The
   two apps do not use the same Compose distribution (`androidApp` is on the
   AndroidX BOM, `desktopApp` on JetBrains Compose Multiplatform), and §4.1
-  says UI code is intentionally not shared. The phone layouts differ from
-  the desktop ones anyway (ADR 0022).
+  says UI code is intentionally not shared. [That second ground is
+  historical — see the *Update* at the top. The distribution difference
+  stands.] The phone layouts differ from the desktop ones anyway (ADR 0022).
