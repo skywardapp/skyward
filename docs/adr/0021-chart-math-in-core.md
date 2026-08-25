@@ -1,21 +1,46 @@
 # ADR 0021: The chart projections live in `:core`; only the drawing stays in the frontends
 
-**Status:** Accepted
+**Status:** Accepted. Its premise moved on 2026-08-25: design doc 1.3 removed
+§4.1's prohibition on sharing UI code (see the *Update* below). The decision
+recorded here — the maths in `:core`, tested once — is unaffected and stands.
+
+## Update (2026-08-25): §4.1 no longer forbids shared UI
+
+Design doc 1.3 withdrew the rule this ADR quotes below, at the owner's
+request, after the duplication it forced was measured on PR #127. UI code may
+now be shared between the two apps; the module count and §15.3's Compose-free
+`:core` are what remain.
+
+Everything below is left as written, as the record of why the maths moved. Two
+sentences in it are now historical rather than binding: "the drawing is still
+not shared" (Decision) described the rule as it then stood, and the
+*Alternatives considered* entry that rejects sharing the drawing rested partly
+on §4.1. That leg is gone. The other legs of that rejection are not: the two
+apps still build against different Compose distributions, and phone layouts
+still differ from desktop ones (ADR 0022). Anything that does share drawing
+code owes its own ADR — not because §4.1 demands one, which it no longer
+does for any shared UI, but because such a change supersedes the decision
+recorded here — and, per §4.1, a demonstration that it compiles under both
+distributions. That compile demonstration is the doc's requirement and it
+applies to every shared UI source, drawing or not.
 
 ## Context
 
-§4.1 is explicit that the frontends are not a shared layer:
+§4.1, as it stood at design doc 1.2, was explicit that the frontends are not a
+shared layer:
 
 > UI code is intentionally **not** shared between the two apps (D1 note:
 > frontends may differ) — only `:core` is shared. If, during implementation,
 > some small presentational helpers (formatting, colors for quality levels)
 > want sharing, put them in `:core/format/` as pure functions.
 
-(The `(D1 note: frontends may differ)` parenthetical is a dangling citation:
-`D1` appears exactly twice in the design doc — its §2 row and this reference —
-and its rationale column says nothing about frontends differing. Raised on PR
-#127; this ADR quotes §4.1 as written and does not depend on the parenthetical,
-only on the rule itself.)
+(The `(D1 note: frontends may differ)` parenthetical was a dangling citation:
+`D1` appeared exactly twice in the design doc — its §2 row and this reference —
+and its rationale column said nothing about frontends differing. Raised on
+PR #127; this ADR quotes §4.1 as it was written and does not depend on the
+parenthetical, only on the rule itself. Design doc 1.3 removed the whole
+sentence, citation included, so both the quote above and this note are now
+history.)
 
 When M6 built §14's four visualizations, everything they needed went into
 `:desktopApp` — including the parts that are not drawing at all. Five of
@@ -83,8 +108,9 @@ phone and a desktop are not the same surface.
 
 This is the §4.1 paragraph above applied at a larger size than "colors for
 quality levels", not a departure from it: the drawing is still not shared,
-and what moved is pure functions. §15.3's dependency list is unchanged —
-`:core` gains no dependency from this.
+and what moved is pure functions. [Historical — §4.1 no longer forbids
+sharing the drawing; see the *Update* at the top.] §15.3's dependency list is
+unchanged — `:core` gains no dependency from this.
 
 ### The geometry types
 
@@ -137,5 +163,6 @@ rendering code reads as it did before the move.
 - **Share the drawing too, via Compose Multiplatform in `androidApp`.** The
   two apps do not use the same Compose distribution (`androidApp` is on the
   AndroidX BOM, `desktopApp` on JetBrains Compose Multiplatform), and §4.1
-  says UI code is intentionally not shared. The phone layouts differ from
-  the desktop ones anyway (ADR 0022).
+  says UI code is intentionally not shared. [That second ground is
+  historical — see the *Update* at the top. The distribution difference
+  stands.] The phone layouts differ from the desktop ones anyway (ADR 0022).
