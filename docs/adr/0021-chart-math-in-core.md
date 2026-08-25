@@ -18,8 +18,11 @@ not shared" (Decision) described the rule as it then stood, and the
 on §4.1. That leg is gone. The other legs of that rejection are not: the two
 apps still build against different Compose distributions, and phone layouts
 still differ from desktop ones (ADR 0022). Anything that does share drawing
-code owes its own ADR, and a demonstration that it compiles under both
-distributions.
+code owes its own ADR — not because §4.1 demands one, which it no longer
+does for any shared UI, but because such a change supersedes the decision
+recorded here — and, per §4.1, a demonstration that it compiles under both
+distributions. That compile demonstration is the doc's requirement and it
+applies to every shared UI source, drawing or not.
 
 ## Context
 
@@ -33,8 +36,8 @@ shared layer:
 
 (The `(D1 note: frontends may differ)` parenthetical was a dangling citation:
 `D1` appeared exactly twice in the design doc — its §2 row and this reference —
-and its rationale column said nothing about frontends differing. Raised on PR
-#127; this ADR quotes §4.1 as it was written and does not depend on the
+and its rationale column said nothing about frontends differing. Raised on
+PR #127; this ADR quotes §4.1 as it was written and does not depend on the
 parenthetical, only on the rule itself. Design doc 1.3 removed the whole
 sentence, citation included, so both the quote above and this note are now
 history.)
