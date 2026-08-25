@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.semantics.contentDescription
@@ -182,26 +184,52 @@ private fun Modifier.pinchZoom(camera: MapCamera, onCameraChange: (MapCamera) ->
             awaitFirstDown(requireUnconsumed = false)
             while (true) {
                 val event = awaitPointerEvent()
-                // Somebody else took this drag (the list, almost always), or
-                // the last finger came off: either way the gesture is done.
-                if (event.changes.any { it.isConsumed }) break
-                val pressed = event.changes.count { it.pressed }
-                if (pressed == 0) break
-                if (pressed < 2) continue
-
-                val zoom = event.calculateZoom()
-                val pan = event.calculatePan()
-                if (zoom == 1f && pan == Offset.Zero) continue
-
-                // useCurrent = false: the centroid *before* this event is
-                // where the fingers were when the spread was measured, which
-                // is the point `transformed` has to hold still.
-                val centroid = event.calculateCentroid(useCurrent = false)
-                onCameraChange(currentCamera.value.transformed(zoom, centroid, pan, size.toSize()))
-                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                when (event.pinchStep()) {
+                    PinchStep.END -> break
+                    PinchStep.IGNORE -> continue
+                    PinchStep.APPLY -> onCameraChange(applyPinch(event, currentCamera.value))
+                }
             }
         }
     }
+}
+
+/** What one pointer event means to [pinchZoom]. */
+private enum class PinchStep { END, IGNORE, APPLY }
+
+private fun PointerEvent.pinchStep(): PinchStep = when {
+    // Somebody else took this drag — the list, almost always.
+    changes.any { it.isConsumed } -> PinchStep.END
+    // The last finger came off.
+    changes.none { it.pressed } -> PinchStep.END
+    // One finger is the list's; two are ours. This is the whole gate.
+    changes.count { it.pressed } < 2 -> PinchStep.IGNORE
+    // Two fingers resting still: nothing to apply, and nothing to consume
+    // either, or a two-finger tap would eat itself.
+    calculateZoom() == 1f && calculatePan() == Offset.Zero -> PinchStep.IGNORE
+    else -> PinchStep.APPLY
+}
+
+/**
+ * Folds one two-finger event into [camera] and claims it, so the list behind
+ * this canvas does not also act on it.
+ *
+ * The consumption happens last: `calculatePan` reads position *changes*, and
+ * a consumed change reports none, so consuming first would measure every
+ * pinch as motionless.
+ */
+private fun AwaitPointerEventScope.applyPinch(event: PointerEvent, camera: MapCamera): MapCamera {
+    // useCurrent = false: the centroid *before* this event is where the
+    // fingers were when the spread was measured, which is the point
+    // `transformed` has to hold still.
+    val moved = camera.transformed(
+        factor = event.calculateZoom(),
+        focus = event.calculateCentroid(useCurrent = false),
+        pan = event.calculatePan(),
+        size = size.toSize(),
+    )
+    event.changes.forEach { if (it.positionChanged()) it.consume() }
+    return moved
 }
 
 /**
