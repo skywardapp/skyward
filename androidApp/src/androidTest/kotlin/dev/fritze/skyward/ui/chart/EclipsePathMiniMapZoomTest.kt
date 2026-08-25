@@ -4,20 +4,22 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
-import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,6 +33,8 @@ import dev.fritze.skyward.core.model.SolarEclipsePayload
 import dev.fritze.skyward.core.model.TimeWindow
 import dev.fritze.skyward.ui.awaitText
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 import org.junit.Rule
 import org.junit.runner.RunWith
@@ -80,32 +84,50 @@ class EclipsePathMiniMapZoomTest {
         composeRule.onNodeWithText(RESET).assertDoesNotExist()
     }
 
+    /**
+     * Asserted against the list's own scroll position rather than against
+     * which row became visible. How far one swipe travels depends on the
+     * canvas height, which depends on the screen width, which differs across
+     * the API levels this suite runs on — and a deliberately slow swipe does
+     * not fling, so it moves the list by roughly the canvas height and no
+     * more. "Some row is now on screen" encodes all of that; "the list
+     * scrolled at all" is the actual proposition.
+     */
     @Test
     fun oneFingerOnTheMapStillScrollsThePageBehindIt() {
-        composeRule.setContent { DetailLikeList() }
+        lateinit var listState: LazyListState
+        composeRule.setContent {
+            listState = rememberLazyListState()
+            DetailLikeList(listState)
+        }
         composeRule.awaitText(TITLE)
-        composeRule.onNodeWithText(OFFSCREEN_ROW).assertDoesNotExist()
+        composeRule.runOnIdle {
+            assertEquals(0, listState.firstVisibleItemIndex)
+            assertEquals(0, listState.firstVisibleItemScrollOffset)
+        }
 
         // Dragged from inside the map, not from a row beside it: a detector
         // that claimed every drag would swallow exactly this gesture and
         // strand the reader on a screen that will not scroll.
         composeRule.onNodeWithContentDescription(MAP_DESCRIPTION, substring = true)
             .performTouchInput { swipeUp(durationMillis = SLOW_SWIPE_MILLIS) }
-        composeRule.awaitText(OFFSCREEN_ROW)
-
-        // Back to the top — the map has scrolled away, and the header is the
-        // only witness to whether that one-finger drag also zoomed it.
-        repeat(3) {
-            composeRule.onRoot().performTouchInput { swipeDown(durationMillis = SLOW_SWIPE_MILLIS) }
-            composeRule.waitForIdle()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            val scrolled = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+            assertTrue(scrolled, "the one-finger drag never reached the list behind the canvas")
         }
+
+        // …and it scrolled rather than zoomed. Back to the top by the list's
+        // own semantics action, so returning there is not a second swipe with
+        // its own geometry to get wrong.
+        composeRule.onNode(hasScrollAction()).performScrollToIndex(0)
         composeRule.awaitText(TITLE)
         composeRule.onNodeWithText(RESET).assertDoesNotExist()
     }
 
     @Composable
-    private fun DetailLikeList() {
-        LazyColumn(Modifier.fillMaxWidth()) {
+    private fun DetailLikeList(listState: LazyListState = rememberLazyListState()) {
+        LazyColumn(Modifier.fillMaxWidth(), state = listState) {
             item { EclipsePathMiniMap(TOTAL_ECLIPSE, locations = emptyList()) }
             items(FILLER_ROWS) { label -> Text(label, Modifier.height(ROW_HEIGHT)) }
         }
@@ -126,10 +148,9 @@ class EclipsePathMiniMapZoomTest {
         const val PINCH_END_PX = 160f
 
         val ROW_HEIGHT = 80.dp
-        val FILLER_ROWS = (0..29).map { "Filler row $it" }
 
-        /** Far enough down to be off-screen on any test device at start. */
-        val OFFSCREEN_ROW = FILLER_ROWS[12]
+        /** Enough rows that the list is scrollable on any test device. */
+        val FILLER_ROWS = (0..29).map { "Filler row $it" }
 
         /**
          * A short synthetic track rather than a fixture: this test is about
