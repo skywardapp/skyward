@@ -67,7 +67,8 @@ class MapCameraTest {
     }
 
     /**
-     * The reason `transformed` exists: a pinch reports its zoom and its
+     * ADR 0026's drift regression, and the reason [MapCamera.transformed]
+     * exists at all: a pinch reports its zoom and its
      * centroid movement in the same event, and folding the pan into the
      * offset before the zoom multiplies it by the scale factor. Two fingers
      * that spread by 2× while their centroid slides 100 px must move the map

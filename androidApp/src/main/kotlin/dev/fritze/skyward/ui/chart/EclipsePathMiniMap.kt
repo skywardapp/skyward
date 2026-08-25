@@ -124,8 +124,9 @@ fun EclipsePathMiniMap(occurrence: Occurrence, locations: List<SavedLocation>) {
 }
 
 /**
- * The title, and — only once the view has left the whole-world default — the
- * zoom factor and the way back to it. Hidden at 1× because there is nothing
+ * ADR 0026's zoom readout and way back: the title, and — only once the view
+ * has left §13.3's whole-world default — the zoom factor and a Reset.
+ * Hidden at 1× because there is nothing
  * to reset and the reading is always "1×": a permanent control for a state
  * that cannot be wrong is noise on a detail screen that is mostly tables.
  *
@@ -197,6 +198,14 @@ private fun Modifier.pinchZoom(camera: MapCamera, onCameraChange: (MapCamera) ->
 /** What one pointer event means to [pinchZoom]. */
 private enum class PinchStep { END, IGNORE, APPLY }
 
+/**
+ * ADR 0026's pointer-count gate, as a verdict on one event.
+ *
+ * The order of the branches is load-bearing: the two END cases are tested
+ * before the count, so a drag the list has already claimed ends this gesture
+ * rather than being ignored and then re-entered when a second finger lands
+ * on a scroll already in flight.
+ */
 private fun PointerEvent.pinchStep(): PinchStep = when {
     // Somebody else took this drag — the list, almost always.
     changes.any { it.isConsumed } -> PinchStep.END
@@ -237,10 +246,10 @@ private fun AwaitPointerEventScope.applyPinch(event: PointerEvent, camera: MapCa
  * actually shows — the latitude band the track crosses is the one fact the
  * drawing conveys that the times table above it does not.
  *
- * Deliberately silent about the zoom: the pinch that changes it is not a
- * gesture TalkBack can make, and announcing a state the listener cannot
- * reach or alter is worse than not mentioning it. The band described here is
- * the whole track's, at any zoom.
+ * Deliberately silent about the zoom (ADR 0026, Consequences): the pinch
+ * that changes it is not a gesture TalkBack can make, and announcing a state
+ * the listener cannot reach or alter is worse than not mentioning it. The
+ * band described here is the whole track's, at any zoom.
  */
 internal fun buildContentDescription(polyline: EclipsePathPolyline, locations: List<SavedLocation>): String {
     val points = polyline.allPoints

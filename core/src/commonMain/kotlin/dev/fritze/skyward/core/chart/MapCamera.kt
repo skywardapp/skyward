@@ -60,8 +60,9 @@ data class MapCamera(val zoom: Float = 1f, val offset: ChartPoint = ChartPoint.Z
     }
 
     /**
-     * One touch transform gesture — a pinch that also drags the centroid —
-     * applied as a single camera step.
+     * §14.1's "pan/zoom via transformable state" as one touch gesture: a
+     * pinch that also drags the centroid, applied as a single camera step.
+     * Shared by §14.1's map tab and §13.3's eclipse mini-map (ADR 0026).
      *
      * The order is the whole content of this function. [zoomed] solves
      * `offset = focus - (focus - offset) * scale`, so an offset that already
